@@ -1,28 +1,38 @@
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use std::sync::Arc;
 
-#[get("/")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
-}
-
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
-}
-
-async fn manual_hello() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
-}
+use actix_web::{middleware, App, HttpServer};
+use application::{config::Configuration, error::SeqError};
+use controller::routing::routing_config;
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| {
+async fn main() -> Result<(), SeqError> {
+    let app_config = Arc::new(init_config());
+    let app_config_internal = Arc::clone(&app_config);
+    Ok(HttpServer::new(move || {
         App::new()
-            .service(hello)
-            .service(echo)
-            .route("/hey", web::get().to(manual_hello))
+            .wrap(middleware::Logger::default())
+            .app_data(Arc::clone(&app_config_internal))
+            .configure(routing_config)
     })
-    .bind("127.0.0.1:8080")?
+    .bind(app_config.server_address_and_port())?
     .run()
-    .await
+    .await?)
 }
+
+fn init_config() -> Configuration {
+    let config = Configuration::load_from_file()
+        .map_err(|config_loading_error| {
+            println!("Configuration could not be loaded using default: {:?}", config_loading_error);
+            config_loading_error
+        })
+        .unwrap_or_default();
+    if !Configuration::exists() {
+        if let Err(config_save_error) = config.save_to_file() {
+            println!("Configuration could not be saved: {:?}", config_save_error);
+        }
+    }
+    config
+}
+
+mod application;
+mod controller;
