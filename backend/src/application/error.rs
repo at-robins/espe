@@ -53,6 +53,12 @@ impl InternalError {
     }
 }
 
+impl std::fmt::Display for InternalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {} - {}", self.uuid(), self.name(), self.internal_message())
+    }
+}
+
 #[derive(Debug, Serialize)]
 /// An informative error response for client side display
 /// containing a unique ID to correlate the error with the
@@ -93,7 +99,9 @@ impl SeqError {
 impl std::fmt::Display for SeqError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            _ => write!(f, "{:?}", self),
+            Self::InternalServerError(internal) => write!(f, "{}", internal),
+            Self::NotFoundError(internal) => write!(f, "{}", internal),
+            Self::BadRequestError(internal) => write!(f, "{}", internal),
         }
     }
 }

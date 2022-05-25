@@ -2,6 +2,8 @@
 
 /// The database location.
 pub const DATABASE_URL: &str = "DATABASE_URL";
+/// The logging level.
+pub const LOG_LEVEL: &str = "LOG_LEVEL";
 /// The address of the server.
 pub const SERVER_ADDRESS: &str = "SERVER_ADDRESS";
 /// The port of the server.

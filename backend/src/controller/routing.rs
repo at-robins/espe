@@ -1,10 +1,19 @@
 use actix_files::{Files, NamedFile};
 use actix_web::web::{self, ServiceConfig};
+use log::error;
 
-async fn index() -> actix_web::Result<NamedFile> {
-    Ok(NamedFile::open("./static_dist/index.html")?)
+use crate::application::error::SeqError;
+
+/// Serve the entry point to the single page web app.
+async fn index() -> Result<NamedFile, SeqError> {
+    NamedFile::open("./static_dist/index.html").map_err(|error| {
+        let internal_error: SeqError = error.into();
+        error!("{}", internal_error);
+        internal_error
+    })
 }
 
+/// Configures the routing.
 pub fn routing_config(cfg: &mut ServiceConfig) {
     cfg
 

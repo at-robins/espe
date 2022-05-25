@@ -16,7 +16,7 @@ use uuid::{
     Uuid,
 };
 
-use super::{environment::{DATABASE_URL, SERVER_PORT, SERVER_ADDRESS}, error::SeqError};
+use super::{environment::{DATABASE_URL, SERVER_PORT, SERVER_ADDRESS, LOG_LEVEL}, error::SeqError};
 
 #[derive(Debug, Getters, PartialEq, Serialize, Deserialize)]
 /// A configuration that defines basic parameters of the application.
@@ -24,6 +24,8 @@ pub struct Configuration {
     /// The path to the application database file.
     #[getset(get = "pub")]
     database_url: String,
+    #[getset(get = "pub")]
+    log_level: String,
     /// The address of the server.
     #[getset(get = "pub")]
     server_address: String,
@@ -37,6 +39,7 @@ impl Configuration {
     pub fn new() -> Result<Self, SeqError> {
         Ok(Self {
             database_url: std::env::var(DATABASE_URL)?,
+            log_level: std::env::var(LOG_LEVEL)?,
             server_address: std::env::var(SERVER_ADDRESS)?,
             server_port: std::env::var(SERVER_PORT)?,
         })
