@@ -151,3 +151,13 @@ impl From<std::io::Error> for SeqError {
         ))
     }
 }
+
+impl From<std::env::VarError> for SeqError {
+    fn from(error: std::env::VarError) -> Self {
+        Self::InternalServerError(InternalError::new(
+            "std::env::VarError",
+            error,
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        ))
+    }
+}

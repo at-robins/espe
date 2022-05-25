@@ -20,3 +20,11 @@ An actix-Rust-backend is used as a statically typed, fast and reliable backend.
 
 ### Database
 SQLite is used as it provides a simple, self-contained and fast database.
+Diesel is used for autmoated database migration.
+
+## Enviroment variables
+| Variable | Description |
+| --- | --- |
+| DATABASE_URL | the database location |
+| SERVER_ADDRESS | the address of the server |
+| SERVER_PORT | the port of the server |
