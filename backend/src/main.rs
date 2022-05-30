@@ -1,7 +1,10 @@
+#[macro_use]
+extern crate diesel;
+
 use std::sync::Arc;
 
 use actix_web::{middleware, App, HttpServer};
-use application::{config::Configuration, error::SeqError, environment::LOG_LEVEL};
+use application::{config::Configuration, environment::LOG_LEVEL, error::SeqError};
 use controller::routing::routing_config;
 use dotenv::dotenv;
 
@@ -32,3 +35,5 @@ async fn main() -> Result<(), SeqError> {
 
 mod application;
 mod controller;
+mod model;
+mod schema;
