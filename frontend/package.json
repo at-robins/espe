@@ -17,7 +17,8 @@
     "luxon": "^2.3.1",
     "quasar": "^2.5.5",
     "vue": "^3.2.29",
-    "vue-router": "^4.0.12"
+    "vue-router": "^4.0.12",
+    "vue3-click-away": "^1.2.4"
   },
   "devDependencies": {
     "@quasar/vite-plugin": "^1.0.4",

@@ -1,3 +1,4 @@
+import PipelineDetailsView from "@/views/PipelineDetailsView.vue";
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "../views/HomeView.vue";
 
@@ -12,6 +13,12 @@ const router = createRouter({
       path: "/ui/",
       name: "home",
       component: HomeView,
+    },
+    {
+      path: "/ui/pipeline/:id",
+      name: "pipeline_details",
+      component: PipelineDetailsView,
+      props: true,
     },
   ],
 });

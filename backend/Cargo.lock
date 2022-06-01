@@ -321,6 +321,7 @@ dependencies = [
  "getset",
  "log",
  "openssl",
+ "rand",
  "sanitize-filename",
  "serde",
  "serde_json",

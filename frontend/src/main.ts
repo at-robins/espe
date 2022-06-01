@@ -8,6 +8,8 @@ import { Quasar } from "quasar";
 import quasarLang from "quasar/lang/en-GB";
 import quasarIconSet from "quasar/icon-set/svg-material-icons";
 
+import VueClickAway from "vue3-click-away";
+
 const app = createApp(App);
 
 app.use(router);
@@ -17,5 +19,7 @@ app.use(Quasar, {
   lang: quasarLang,
   iconSet: quasarIconSet,
 });
+
+app.use(VueClickAway);
 
 app.mount("#app");
