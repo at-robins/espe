@@ -1,6 +1,6 @@
-use chrono::{DateTime, Utc};
-use diesel::{Identifiable, Queryable};
 use crate::schema::pipeline_step;
+use chrono::NaiveDateTime;
+use diesel::{Identifiable, Queryable};
 
 use super::pipeline::Pipeline;
 
@@ -9,10 +9,10 @@ use super::pipeline::Pipeline;
 #[table_name = "pipeline_step"]
 /// A pipeline database entry.
 pub struct PipelineStep {
-    pub id: i64,
-    pub pipeline_id: i64,
+    pub id: i32,
+    pub pipeline_id: i32,
     pub execution_type: String,
     pub execution_configuration: String,
-    pub ordering: i64,
-    pub creation_time: DateTime<Utc>,
+    pub ordering: i32,
+    pub creation_time: NaiveDateTime,
 }

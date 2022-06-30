@@ -3,9 +3,9 @@ table! {
         id -> Integer,
         experiment_name -> Text,
         mail -> Text,
-        pipeline_id -> Nullable<Integer>,
+        pipeline_id -> Integer,
         comment -> Text,
-        creation_time -> Text,
+        creation_time -> Timestamp,
     }
 }
 
@@ -14,18 +14,18 @@ table! {
         id -> Integer,
         pipeline_name -> Text,
         comment -> Text,
-        creation_time -> Text,
+        creation_time -> Timestamp,
     }
 }
 
 table! {
     pipeline_step (id) {
         id -> Integer,
-        pipeline_id -> Nullable<Integer>,
+        pipeline_id -> Integer,
         execution_type -> Text,
         execution_configuration -> Text,
         ordering -> Integer,
-        creation_time -> Text,
+        creation_time -> Timestamp,
     }
 }
 

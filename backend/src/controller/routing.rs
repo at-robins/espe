@@ -4,7 +4,7 @@ use log::error;
 
 use crate::application::error::SeqError;
 
-use super::pipeline_controller::get_pipeline;
+use super::{pipeline_controller::get_pipeline, sample_controller::upload_sample};
 
 /// Serve the entry point to the single page web app.
 async fn index() -> Result<NamedFile, SeqError> {
@@ -25,6 +25,7 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/ui/{rest:.*}", web::get().to(index))
 
     .route("/api/pipeline/{id}", web::get().to(get_pipeline))
+    .route("/api/experiment/", web::post().to(upload_sample))
 
     // Registers static frontend resources. Needs to be last to not overwrite other routes.
     .service(Files::new("/", "./static_dist").show_files_listing());

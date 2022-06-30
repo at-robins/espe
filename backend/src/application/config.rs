@@ -4,11 +4,16 @@
 const UUID_CONTEXT: Context = Context::new(0);
 /// The node ID for UUID generation.
 const UUID_NODE_ID: &[u8; 6] = &[12, 221, 33, 14, 35, 16];
+/// The path where temporary files are stored.
+pub const PATH_FILES_TEMPORARY: &str = "tmp/files/";
+/// The path where data related to specific experiments or samples is stored. 
+pub const PATH_FILES_EXPERIMENTS: &str = "experiments/"; 
 
 use std::{
     time::SystemTime,
 };
 
+use diesel::{SqliteConnection, Connection};
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 use uuid::{
@@ -43,6 +48,13 @@ impl Configuration {
             server_address: std::env::var(SERVER_ADDRESS)?,
             server_port: std::env::var(SERVER_PORT)?,
         })
+    }
+
+    /// Returns a connection to the database if possible.
+    pub fn database_connection(&self) -> Result<SqliteConnection, SeqError> {
+        let connection = SqliteConnection::establish(self.database_url())?;
+        connection.execute("PRAGMA foreign_keys = ON;")?;
+        Ok(connection)
     }
 
     /// Generates a V1 UUID.

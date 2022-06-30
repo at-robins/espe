@@ -169,3 +169,23 @@ impl From<std::env::VarError> for SeqError {
         ))
     }
 }
+
+impl From<diesel::ConnectionError> for SeqError {
+    fn from(error: diesel::ConnectionError) -> Self {
+        Self::InternalServerError(InternalError::new(
+            "diesel::ConnectionError",
+            error,
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        ))
+    }
+}
+
+impl From<diesel::result::Error> for SeqError {
+    fn from(error: diesel::result::Error) -> Self {
+        Self::InternalServerError(InternalError::new(
+            "diesel::result::Error",
+            error,
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        ))
+    }
+}
