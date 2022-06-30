@@ -55,7 +55,7 @@ impl Configuration {
     /// Returns a connection to the database if possible.
     pub fn database_connection(&self) -> Result<SqliteConnection, SeqError> {
         let connection = SqliteConnection::establish(self.database_url())?;
-        //connection.execute("PRAGMA foreign_keys = ON;")?;
+        connection.execute("PRAGMA foreign_keys = ON;")?;
         Ok(connection)
     }
 
