@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{diesel::ExpressionMethods, application::config::PATH_FILES_EXPERIMENTS};
+use crate::{diesel::ExpressionMethods, application::config::{PATH_FILES_EXPERIMENTS, PATH_FILES_EXPERIMENT_INITIAL_FASTQ}};
 use crate::{diesel::RunQueryDsl, model::db::experiment::Experiment};
 use actix_multipart::Multipart;
 use actix_web::{
@@ -13,7 +13,7 @@ use actix_web::{
 };
 use diesel::QueryDsl;
 use futures_util::{TryStreamExt};
-use log::warn;
+use log::{error, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -30,6 +30,16 @@ use crate::{
 const MAX_MULTIPART_FORM_SIZE: usize = 524_288;
 
 pub async fn upload_sample(
+    request: HttpRequest,
+    payload: Multipart,
+) -> Result<HttpResponse, SeqError> {
+    upload_sample_internal(request, payload).await.map_err(|error| {
+        error!("{}", error);
+        error
+    })
+}
+
+async fn upload_sample_internal(
     request: HttpRequest,
     mut payload: Multipart,
 ) -> Result<HttpResponse, SeqError> {
@@ -103,8 +113,9 @@ pub async fn upload_sample(
 
         // Create experiment folder and copy file to destination.
         let mut final_file_path: PathBuf = PATH_FILES_EXPERIMENTS.into();
-        std::fs::create_dir_all(&final_file_path)?;
         final_file_path.push(inserted_id.to_string());
+        std::fs::create_dir_all(&final_file_path)?;
+        final_file_path.push(PATH_FILES_EXPERIMENT_INITIAL_FASTQ);
         std::fs::rename(temp_file_path, final_file_path)?;
 
         // Return the UUID of the created attachment.

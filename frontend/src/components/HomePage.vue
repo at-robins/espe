@@ -42,10 +42,13 @@
         <q-icon name="cloud_upload" />
       </template>
     </q-file>
+    <q-btn color="primary" label="Upload" @click="uploadSample" />
   </div>
 </template>
 
 <script setup lang="ts">
+import type { ExperimentUpload } from "@/scripts/types";
+import axios from "axios";
 import { type Ref, ref } from "vue";
 
 const sampleName = ref("");
@@ -56,4 +59,34 @@ const isUploadingSample = ref(false);
 const uploadErrorMessage = ref("");
 const pipeline = ref("");
 const pipelineOptions = ref(["ATACseq", "ChIPseq", "RNAseq"]);
+
+function uploadSample() {
+  if (sample.value) {
+    isUploadingSample.value = true;
+    uploadErrorMessage.value = "";
+    const formData = new FormData();
+    formData.append("file", sample.value);
+    const uploadInfo: ExperimentUpload = {
+      name: sampleName.value,
+      mail: mail.value,
+      comment: comment.value,
+      pipelineId: 0,
+    };
+    formData.append("form", JSON.stringify(uploadInfo));
+    const config = {
+      headers: {
+        "content-type": "multipart/form-data",
+      },
+    };
+    axios
+      .post("/api/experiment", formData, config)
+      .catch((error) => {
+        uploadErrorMessage.value = error;
+      })
+      .finally(() => {
+        sample.value = null;
+        isUploadingSample.value = false;
+      });
+  }
+}
 </script>

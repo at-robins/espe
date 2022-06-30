@@ -5,9 +5,11 @@ const UUID_CONTEXT: Context = Context::new(0);
 /// The node ID for UUID generation.
 const UUID_NODE_ID: &[u8; 6] = &[12, 221, 33, 14, 35, 16];
 /// The path where temporary files are stored.
-pub const PATH_FILES_TEMPORARY: &str = "tmp/files/";
+pub const PATH_FILES_TEMPORARY: &str = "application/tmp/files/";
 /// The path where data related to specific experiments or samples is stored. 
-pub const PATH_FILES_EXPERIMENTS: &str = "experiments/"; 
+pub const PATH_FILES_EXPERIMENTS: &str = "application/experiments"; 
+/// The file name of the initially submitted sample before processing.
+pub const PATH_FILES_EXPERIMENT_INITIAL_FASTQ: &str = "00_initial.fastq";
 
 use std::{
     time::SystemTime,
@@ -53,7 +55,7 @@ impl Configuration {
     /// Returns a connection to the database if possible.
     pub fn database_connection(&self) -> Result<SqliteConnection, SeqError> {
         let connection = SqliteConnection::establish(self.database_url())?;
-        connection.execute("PRAGMA foreign_keys = ON;")?;
+        //connection.execute("PRAGMA foreign_keys = ON;")?;
         Ok(connection)
     }
 

@@ -11,3 +11,10 @@ export enum PipelineStepStatus {
   Success = "Success",
   Failed = "Failed",
 }
+
+export type ExperimentUpload = {
+  name: string;
+  mail: string;
+  comment: string;
+  pipelineId: number;
+};
