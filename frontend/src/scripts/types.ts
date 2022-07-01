@@ -18,3 +18,10 @@ export type ExperimentUpload = {
   comment: string;
   pipelineId: number;
 };
+
+export type ErrorResponse = {
+  code: number;
+  uuid: string;
+  name: string;
+  message: string;
+};
