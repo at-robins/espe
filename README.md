@@ -50,12 +50,15 @@ sudo apt install libssl-dev
 
 Conventional release build:
 ```bash
+cd backend
 cargo build --release
 ```
 
 Building for development:
 ```bash
+cd backend
 cargo build
+cd ../frontend
 npm install
 npm run build
 ```
@@ -75,11 +78,14 @@ diesel setup
 
 Running a release build:
 ```bash
+cd backend
 cargo run --release
 ```
 
 Running for development:
 ```bash
+cd backend
 cargo run
+cd ../frontend
 npm run build:dev
 ```
