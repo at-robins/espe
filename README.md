@@ -28,6 +28,7 @@ TODO: Insert once the Docker image is created.
 
 ## Enviroment variables
 Also see ```backend/.env```.
+
 | Variable | Description |
 | --- | --- |
 | DATABASE_URL | the database location |
