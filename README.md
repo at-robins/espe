@@ -37,6 +37,12 @@ Also see ```backend/.env```.
 ## Build (for developers)
 Prerequisites:
 ```bash
+# Install Rust.
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# Install Node.
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo bash -
+sudo apt update
+sudo apt install nodejs
 # Install the requirements for the openssl crate.
 sudo apt install libssl-dev
 ```
