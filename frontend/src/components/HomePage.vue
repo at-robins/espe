@@ -4,6 +4,7 @@
       v-model="sampleName"
       label="Sample name"
       hint="Add the sample's name."
+      :disable="isUploadingSample"
       counter
       :maxlength="128"
     />
@@ -11,6 +12,7 @@
       v-model="mail"
       label="E-mail (optional)"
       hint="E-mail address for notifications."
+      :disable="isUploadingSample"
       counter
       :maxlength="128"
     />
@@ -18,12 +20,14 @@
       v-model="comment"
       label="Description (optional)"
       hint="Add a comment or description for this sample."
+      :disable="isUploadingSample"
       counter
       :maxlength="256"
     />
     <q-select
       v-model="pipeline"
       :options="pipelineOptions"
+      :disable="isUploadingSample"
       label="Pipeline"
       hint="Select the pipeline to process the sample with."
     ></q-select>

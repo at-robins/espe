@@ -2,6 +2,7 @@
 
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use getset::{CopyGetters, Getters};
+use log::{error, warn};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -17,6 +18,38 @@ pub enum SeqError {
     NotFoundError(InternalError),
     /// A error representing an erroneous request.
     BadRequestError(InternalError),
+}
+
+impl SeqError {
+    /// Logs the specified error with level ERROR after transforming it
+    /// into the internal error respresentation.
+    /// This is a convenience function wrapping some logging functionality.
+    /// 
+    /// # Parameters
+    /// 
+    /// * `result` - the [`Result`] to log and transform in case of failure
+    pub fn log_error<T, E: Into<SeqError>>(result: Result<T, E>) -> Result<T, SeqError> {
+        result.map_err(|e| {
+            let seq_error: SeqError = e.into();
+            error!("{}", seq_error);
+            seq_error
+        })
+    }
+
+    /// Logs the specified error with level WARNING after transforming it
+    /// into the internal error respresentation.
+    /// This is a convenience function wrapping some logging functionality.
+    /// 
+    /// # Parameters
+    /// 
+    /// * `result` - the [`Result`] to log and transform in case of failure
+    pub fn log_warn<T, E: Into<SeqError>>(result: Result<T, E>) -> Result<T, SeqError> {
+        result.map_err(|e| {
+            let seq_error: SeqError = e.into();
+            warn!("{}", seq_error);
+            seq_error
+        })
+    }
 }
 
 #[derive(Debug, Clone, Getters, CopyGetters, Serialize, Deserialize)]

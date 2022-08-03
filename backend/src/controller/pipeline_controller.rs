@@ -1,12 +1,21 @@
-use actix_web::{web, Responder};
+use std::sync::Arc;
+
+use actix_web::{web, HttpRequest, Responder};
 use chrono::Utc;
+use diesel::{RunQueryDsl, OptionalExtension};
 use rand::{thread_rng, Rng};
 
 use crate::{
-    application::error::SeqError, model::{exchange::pipeline_step_details::PipelineStepDetails, internal::step::PipelineStepStatus},
+    application::{
+        config::Configuration,
+        error::{InternalError, SeqError},
+    },
+    model::{
+        exchange::pipeline_step_details::PipelineStepDetails, internal::step::PipelineStepStatus, db::pipeline::Pipeline,
+    },
 };
 
-pub async fn get_pipeline(wrapped_id: web::Path<u64>) -> Result<impl Responder, SeqError> {
+pub async fn get_pipeline_instance(wrapped_id: web::Path<u64>) -> Result<impl Responder, SeqError> {
     let id = wrapped_id.into_inner();
     let dummy_response: Vec<PipelineStepDetails> = vec![
         PipelineStepDetails {
@@ -89,6 +98,20 @@ pub async fn get_pipeline(wrapped_id: web::Path<u64>) -> Result<impl Responder, 
         },
     ];
     Ok(web::Json(dummy_response))
+}
+
+pub async fn get_pipeline_blueprints(request: HttpRequest) -> Result<impl Responder, SeqError> {
+    // Retrieve the app config.
+    let app_config = SeqError::log_error(request.app_data::<Arc<Configuration>>().ok_or_else(|| {
+        SeqError::InternalServerError(InternalError::new(
+            "Configuration",
+            "The server configuration could not be accessed.",
+            "Missing configuration.",
+        ))
+    }))?;
+    let connection = SeqError::log_error(app_config.database_connection())?;
+    let pipelines = SeqError::log_error(crate::schema::pipeline::table.load::<Pipeline>(&connection))?;
+    Ok(web::Json(pipelines.iter().map(|pipeline| pipeline.id).collect::<Vec<i32>>()))
 }
 
 fn random_status() -> PipelineStepStatus {

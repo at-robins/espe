@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+
+use crate::application::error::{InternalError, SeqError};
 
 pub trait PipelineStep {
     fn output(&self) -> PathBuf;
@@ -20,13 +22,36 @@ pub enum PipelineStepStatus {
     Failed,
 }
 
+const STATUS_FAILED: &str = "Failed";
+const STATUS_PENDING: &str = "Pending";
+const STATUS_RUNNING: &str = "Running";
+const STATUS_SUCCESS: &str = "Success";
+
 impl std::fmt::Display for PipelineStepStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PipelineStepStatus::Running => write!(f, "Running"),
-            PipelineStepStatus::Pending => write!(f, "Pending"),
-            PipelineStepStatus::Success => write!(f, "Success"),
-            PipelineStepStatus::Failed => write!(f, "Failed"),
+            PipelineStepStatus::Failed => write!(f, "{}", STATUS_FAILED),
+            PipelineStepStatus::Pending => write!(f, "{}", STATUS_PENDING),
+            PipelineStepStatus::Running => write!(f, "{}", STATUS_RUNNING),
+            PipelineStepStatus::Success => write!(f, "{}", STATUS_SUCCESS),
+        }
+    }
+}
+
+impl TryFrom<&str> for PipelineStepStatus {
+    type Error = SeqError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            STATUS_FAILED => Ok(PipelineStepStatus::Failed),
+            STATUS_PENDING => Ok(PipelineStepStatus::Pending),
+            STATUS_RUNNING => Ok(PipelineStepStatus::Running),
+            STATUS_SUCCESS => Ok(PipelineStepStatus::Success),
+            _ => Err(SeqError::InternalServerError(InternalError::new(
+                "PipelineStepStatus",
+                format!("{} cannot be converted into a status.", value),
+                "An invalid pipeline step was supplied.",
+            ))),
         }
     }
 }

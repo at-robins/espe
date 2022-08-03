@@ -4,7 +4,7 @@
       <q-card-section>
         <div class="text-h6">Pipeline {{ id }}</div>
       </q-card-section>
-      <div class="q-pa-md gutter-md wrap row">
+      <div class="q-pa-md gutter-md wrap row" v-if="!loadingError">
         <div
           v-for="(detail, index) in details"
           :key="detail.id"
@@ -30,6 +30,9 @@
           ></q-icon>
         </div>
       </div>
+      <div v-else>
+        <error-popup :error-response="loadingError" />
+      </div>
     </q-card>
     <q-card>
       <q-card-section>
@@ -45,22 +48,32 @@
         <q-btn label="Download output" class="row" />
       </div>
     </q-card>
+    <q-dialog v-model="showPollingError" v-if="pollingError">
+      <error-popup :error-response="pollingError" />
+    </q-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { PipelineStepStatus, type PipelineStepDetail } from "@/scripts/types";
+import {
+  PipelineStepStatus,
+  type ErrorResponse,
+  type PipelineStepDetail,
+} from "@/scripts/types";
 import axios from "axios";
 import { ref, onMounted, type Ref } from "vue";
+import ErrorPopup from "./ErrorPopup.vue";
 
+// The intervall in which pipeline updates are requested from the server.
 const POLLING_INTERVALL_MILLISECONDS = 30000;
 
 const details: Ref<Array<PipelineStepDetail>> = ref([]);
 const isLoadingPipelineDetails = ref(false);
-const loadingError = ref(null);
+const loadingError: Ref<ErrorResponse | null> = ref(null);
 const isPollingPipelineDetails = ref(false);
-const pollingError = ref(null);
+const pollingError: Ref<ErrorResponse | null> = ref(null);
 const selectedStep: Ref<PipelineStepDetail | null> = ref(null);
+const showPollingError = ref(false);
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -77,14 +90,14 @@ function loadPipelineDetails() {
   isLoadingPipelineDetails.value = true;
   loadingError.value = null;
   axios
-    .get("/api/pipeline/" + props.id)
+    .get("/api/pipeline/instance/" + props.id)
     .then((response) => {
       setPipelineDetails(response.data);
       setTimeout(pollDetailsChanges, POLLING_INTERVALL_MILLISECONDS);
     })
     .catch((error) => {
       details.value = [];
-      loadingError.value = error;
+      loadingError.value = error.response.data;
     })
     .finally(() => {
       isLoadingPipelineDetails.value = false;
@@ -108,7 +121,8 @@ function pollDetailsChanges() {
         setTimeout(pollDetailsChanges, POLLING_INTERVALL_MILLISECONDS);
       })
       .catch((error) => {
-        pollingError.value = error;
+        showPollingError.value = true;
+        pollingError.value = error.response.data;
       })
       .finally(() => {
         isPollingPipelineDetails.value = false;
@@ -126,6 +140,9 @@ function setPipelineDetails(response: PipelineStepDetail[]) {
   }
 }
 
+/**
+ * Returns the icon corresponding to the pipeline step status.
+ */
 function getDetailIcon(detail: PipelineStepDetail): string {
   switch (detail.status) {
     case PipelineStepStatus.Success:
@@ -141,6 +158,9 @@ function getDetailIcon(detail: PipelineStepDetail): string {
   }
 }
 
+/**
+ * Returns the icon colour corresponding to the pipeline step status.
+ */
 function getDetailIconColour(detail: PipelineStepDetail): string {
   switch (detail.status) {
     case PipelineStepStatus.Success:
@@ -156,10 +176,16 @@ function getDetailIconColour(detail: PipelineStepDetail): string {
   }
 }
 
+/**
+ * Convinience method to check if the pipeline step is currently being run by the server.
+ */
 function isStepRunning(detail: PipelineStepDetail): boolean {
   return detail.status === PipelineStepStatus.Running;
 }
 
+/**
+ * Selects the specified pipeline step to display related information.
+ */
 function selectStep(detail: PipelineStepDetail) {
   selectedStep.value = detail;
 }
