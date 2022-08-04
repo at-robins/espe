@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use actix_web::{web, HttpRequest, Responder};
 use chrono::Utc;
-use diesel::{RunQueryDsl, OptionalExtension};
+use diesel::{RunQueryDsl};
 use rand::{thread_rng, Rng};
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
 };
 
 pub async fn get_pipeline_instance(wrapped_id: web::Path<u64>) -> Result<impl Responder, SeqError> {
-    let id = wrapped_id.into_inner();
+    let _id = wrapped_id.into_inner();
     let dummy_response: Vec<PipelineStepDetails> = vec![
         PipelineStepDetails {
             id: 0,
