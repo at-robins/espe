@@ -115,7 +115,7 @@ function pollDetailsChanges() {
   ) {
     pollingError.value = null;
     axios
-      .get("/api/pipeline/" + props.id)
+      .get("/api/pipeline/instance/" + props.id)
       .then((response) => {
         setPipelineDetails(response.data);
         setTimeout(pollDetailsChanges, POLLING_INTERVALL_MILLISECONDS);
