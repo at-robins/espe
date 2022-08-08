@@ -44,6 +44,7 @@
       :loading="isUploadingSample"
       :readonly="isUploadingSample"
       max-files="1"
+      @update:model-value="setSampleNameIfNone"
     >
       <template v-slot:prepend>
         <q-icon name="cloud_upload" />
@@ -154,5 +155,15 @@ function loadPipelineBlueprints() {
     .finally(() => {
       isLoadingPipelineBlueprints.value = false;
     });
+}
+
+/**
+ * Sets the sample name to the file name without extension
+ * if no sample name was specified previously.
+ */
+function setSampleNameIfNone(file: File | undefined | null) {
+  if (file && !sampleName.value) {
+    sampleName.value = file.name.split(".")[0];
+  }
 }
 </script>
