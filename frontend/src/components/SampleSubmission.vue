@@ -28,8 +28,13 @@
       v-model="pipeline"
       :options="pipelineOptions"
       :disable="isUploadingSample"
+      :loading="isLoadingPipelineBlueprints"
+      option-value="id"
+      option-label="name"
       label="Pipeline"
       hint="Select the pipeline to process the sample with."
+      :error="!!loadPipelineBlueprintsError"
+      :error-message="getLoadPipelineBlueprintsErrorMessage()"
     ></q-select>
     <q-file
       color="teal"
@@ -39,6 +44,7 @@
       :loading="isUploadingSample"
       :readonly="isUploadingSample"
       max-files="1"
+      @update:model-value="setSampleNameIfNone"
     >
       <template v-slot:prepend>
         <q-icon name="cloud_upload" />
@@ -47,10 +53,11 @@
     <q-btn
       color="primary"
       label="Submit"
+      :disable="!isUploadAllowed()"
       @click="uploadSample"
       class="q-mt-md"
     />
-    <q-dialog v-model="showError" v-if="uploadError">
+    <q-dialog v-model="showUploadError" v-if="uploadError">
       <error-popup :error-response="uploadError" />
     </q-dialog>
   </div>
@@ -58,22 +65,49 @@
 
 <script setup lang="ts">
 import ErrorPopup from "@/components/ErrorPopup.vue";
-import type { ErrorResponse, ExperimentUpload } from "@/scripts/types";
+import type {
+  ErrorResponse,
+  ExperimentUpload,
+  PipelineBlueprintDetail,
+} from "@/scripts/types";
 import axios from "axios";
-import { type Ref, ref } from "vue";
+import { type Ref, ref, onMounted } from "vue";
 
+const isLoadingPipelineBlueprints = ref(false);
 const sampleName = ref("");
 const mail = ref("");
 const comment = ref("");
 const sample: Ref<File | null> = ref(null);
 const isUploadingSample = ref(false);
 const uploadError: Ref<ErrorResponse | null> = ref(null);
-const pipeline = ref(0);
-const pipelineOptions = ref(["ATACseq", "ChIPseq", "RNAseq"]);
-const showError = ref(false);
+const loadPipelineBlueprintsError: Ref<ErrorResponse | null> = ref(null);
+const pipeline: Ref<PipelineBlueprintDetail | null> = ref(null);
+const pipelineOptions: Ref<Array<PipelineBlueprintDetail>> = ref([]);
+const showUploadError = ref(false);
+
+onMounted(() => {
+  loadPipelineBlueprints();
+});
+
+function isUploadAllowed(): boolean {
+  return (
+    !!sample.value &&
+    !!sampleName.value &&
+    !!pipeline.value &&
+    !isUploadingSample.value &&
+    !isLoadingPipelineBlueprints.value
+  );
+}
+
+function getLoadPipelineBlueprintsErrorMessage(): string {
+  return loadPipelineBlueprintsError.value
+    ? "The pipelines could not be loaded due to an error with ID: " +
+        loadPipelineBlueprintsError.value.uuid
+    : "";
+}
 
 function uploadSample() {
-  if (sample.value && sampleName.value) {
+  if (isUploadAllowed() && sample.value && pipeline.value) {
     isUploadingSample.value = true;
     uploadError.value = null;
     const formData = new FormData();
@@ -82,7 +116,7 @@ function uploadSample() {
       name: sampleName.value,
       mail: mail.value,
       comment: comment.value,
-      pipelineId: pipeline.value,
+      pipelineId: pipeline.value.id,
     };
     formData.append("form", JSON.stringify(uploadInfo));
     const config = {
@@ -93,13 +127,43 @@ function uploadSample() {
     axios
       .post("/api/experiment", formData, config)
       .catch((error) => {
-        showError.value = true;
+        showUploadError.value = true;
         uploadError.value = error.response.data;
       })
       .finally(() => {
         sample.value = null;
         isUploadingSample.value = false;
       });
+  }
+}
+
+/**
+ * Initial loading of all available pipelines.
+ */
+function loadPipelineBlueprints() {
+  isLoadingPipelineBlueprints.value = true;
+  loadPipelineBlueprintsError.value = null;
+  axios
+    .get("/api/pipeline/blueprint")
+    .then((response) => {
+      pipelineOptions.value = response.data;
+    })
+    .catch((error) => {
+      pipelineOptions.value = [];
+      loadPipelineBlueprintsError.value = error.response.data;
+    })
+    .finally(() => {
+      isLoadingPipelineBlueprints.value = false;
+    });
+}
+
+/**
+ * Sets the sample name to the file name without extension
+ * if no sample name was specified previously.
+ */
+function setSampleNameIfNone(file: File | undefined | null) {
+  if (file && !sampleName.value) {
+    sampleName.value = file.name.split(".")[0];
   }
 }
 </script>

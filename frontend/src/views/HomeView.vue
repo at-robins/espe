@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import HomePage from "@/components/HomePage.vue";
+import SampleSubmission from "@/components/SampleSubmission.vue";
 </script>
 
 <template>
   <main>
-    <home-page />
+    <sample-submission />
   </main>
 </template>

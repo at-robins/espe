@@ -121,7 +121,7 @@ async fn upload_sample_internal(
         // Return the UUID of the created attachment.
         Ok(HttpResponse::Created().body(inserted_id.to_string()))
     } else {
-        deleteTemporaryFile(uuid)?;
+        delete_temporary_file(uuid)?;
         Err(SeqError::BadRequestError(InternalError::new("Missing multipart data",
          format!("For the experiment upload both a file ({}) and the according form data ({:?}) must be present.", is_file_provided, upload_info),
          "For the experiment upload both a file and the according form data must be present.")))
@@ -133,7 +133,7 @@ async fn upload_sample_internal(
 /// # Parameters
 ///
 /// `uuid` - the UUID of the temporary file
-fn deleteTemporaryFile(uuid: Uuid) -> Result<(), SeqError> {
+fn delete_temporary_file(uuid: Uuid) -> Result<(), SeqError> {
     let mut file_path: PathBuf = PATH_FILES_TEMPORARY.into();
     file_path.push(uuid.to_string());
     Ok(std::fs::remove_file(file_path)?)

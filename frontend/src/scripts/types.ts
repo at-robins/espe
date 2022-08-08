@@ -12,6 +12,12 @@ export enum PipelineStepStatus {
   Failed = "Failed",
 }
 
+export type PipelineBlueprintDetail = {
+  id: number;
+  name: string;
+  comment: PipelineStepStatus;
+};
+
 export type ExperimentUpload = {
   name: string;
   mail: string;
