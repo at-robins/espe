@@ -130,7 +130,7 @@ async fn upload_sample_internal(
         final_file_path.push(PATH_FILES_EXPERIMENT_INITIAL_FASTQ);
         std::fs::rename(temp_file_path, final_file_path)?;
 
-        // Return the UUID of the created attachment.
+        // Return the ID of the created attachment.
         Ok(HttpResponse::Created().body(inserted_id.to_string()))
     } else {
         delete_temporary_file(uuid)?;
@@ -149,4 +149,43 @@ fn delete_temporary_file(uuid: Uuid) -> Result<(), SeqError> {
     let mut file_path: PathBuf = PATH_FILES_TEMPORARY.into();
     file_path.push(uuid.to_string());
     Ok(std::fs::remove_file(file_path)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::controller::routing::routing_config;
+
+    use super::*;
+    use actix_web::{
+        http::{header::ContentType, StatusCode},
+        middleware, test, App,
+    };
+    use dotenv::dotenv;
+    use mime;
+
+    #[actix_web::test]
+    async fn test_upload_sample_post() {
+        dotenv().unwrap();
+        env_logger::try_init_from_env(env_logger::Env::new().filter("debug"));
+        let app = test::init_service(
+            App::new()
+                .wrap(middleware::Logger::default())
+                .app_data(Arc::clone(&Arc::new(Configuration::new().unwrap())))
+                .configure(routing_config),
+        )
+        .await;
+        let payload =
+            std::fs::read("../testing_resources/requests/sample_submission_multipart").unwrap();
+        let content_type: mime::Mime =
+            "multipart/form-data; boundary=---------------------------5851692324164894962235391524"
+                .parse()
+                .unwrap();
+        let req = test::TestRequest::post()
+            .uri("/api/experiment")
+            .insert_header(ContentType(content_type))
+            .set_payload(payload)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
 }

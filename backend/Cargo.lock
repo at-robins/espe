@@ -321,6 +321,7 @@ dependencies = [
  "getset",
  "lazy_static",
  "log",
+ "mime",
  "openssl",
  "rand",
  "regex",
