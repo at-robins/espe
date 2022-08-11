@@ -4,7 +4,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::{diesel::ExpressionMethods, application::config::{PATH_FILES_EXPERIMENTS, PATH_FILES_EXPERIMENT_INITIAL_FASTQ}};
+use crate::{
+    application::config::{PATH_FILES_EXPERIMENTS, PATH_FILES_EXPERIMENT_INITIAL_FASTQ},
+    diesel::ExpressionMethods,
+};
 use crate::{diesel::RunQueryDsl, model::db::experiment::Experiment};
 use actix_multipart::Multipart;
 use actix_web::{
@@ -12,7 +15,7 @@ use actix_web::{
     HttpRequest, HttpResponse,
 };
 use diesel::QueryDsl;
-use futures_util::{TryStreamExt};
+use futures_util::TryStreamExt;
 use log::{error, warn};
 use uuid::Uuid;
 
@@ -21,10 +24,7 @@ use crate::{
         config::{Configuration, PATH_FILES_TEMPORARY},
         error::{InternalError, SeqError},
     },
-    model::{
-        db::experiment::{NewExperiment},
-        exchange::experiment_upload::ExperimentUpload,
-    },
+    model::{db::experiment::NewExperiment, exchange::experiment_upload::ExperimentUpload},
 };
 
 const MAX_MULTIPART_FORM_SIZE: usize = 524_288;
@@ -33,10 +33,12 @@ pub async fn upload_sample(
     request: HttpRequest,
     payload: Multipart,
 ) -> Result<HttpResponse, SeqError> {
-    upload_sample_internal(request, payload).await.map_err(|error| {
-        error!("{}", error);
-        error
-    })
+    upload_sample_internal(request, payload)
+        .await
+        .map_err(|error| {
+            error!("{}", error);
+            error
+        })
 }
 
 async fn upload_sample_internal(
@@ -96,6 +98,16 @@ async fn upload_sample_internal(
 
     if upload_info.is_some() && is_file_provided {
         let upload_info = upload_info.unwrap();
+        upload_info.validate().map_err(|e| {
+            SeqError::BadRequestError(InternalError::new(
+                "Sample invalid",
+                format!(
+                    "Validation of sample information {:?} failed with error: {}",
+                    upload_info, e
+                ),
+                "The provided sample information is invalid.",
+            ))
+        })?;
         let new_experiment: NewExperiment = upload_info.into();
         // Write to database.
         diesel::insert_into(crate::schema::experiment::table)
