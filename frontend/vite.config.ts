@@ -22,4 +22,7 @@ export default defineConfig({
   build: {
     outDir: "../backend/static_dist",
   },
+  test: {
+    environment: "jsdom",
+  },
 });
