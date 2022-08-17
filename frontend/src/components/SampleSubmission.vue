@@ -3,6 +3,7 @@
     <q-form @submit="uploadSample">
       <q-input
         v-model="sampleName"
+        data-testid="sample-submission-input-name"
         label="Sample name"
         hint="Add the sample's name."
         :disable="isUploadingSample"
@@ -15,6 +16,7 @@
       />
       <q-input
         v-model="mail"
+        data-testid="sample-submission-input-mail"
         label="E-mail (optional)"
         hint="E-mail address for notifications."
         :disable="isUploadingSample"
@@ -25,6 +27,7 @@
       />
       <q-input
         v-model="comment"
+        data-testid="sample-submission-input-comment"
         label="Description (optional)"
         hint="Add a comment or description for this sample."
         :disable="isUploadingSample"
@@ -33,6 +36,7 @@
       />
       <q-select
         v-model="pipeline"
+        data-testid="sample-submission-input-pipeline"
         :options="pipelineOptions"
         :disable="isUploadingSample"
         :loading="isLoadingPipelineBlueprints"
@@ -46,6 +50,7 @@
         :rules="[(val) => !!val || 'A pipeline needs to be selected.']"
       ></q-select>
       <q-file
+        data-testid="sample-submission-input-file"
         color="teal"
         v-model="sample"
         label="Upload sample"
@@ -67,7 +72,13 @@
           <q-icon name="cloud_upload" />
         </template>
       </q-file>
-      <q-btn color="primary" label="Submit" type="submit" class="q-mt-md" />
+      <q-btn
+        data-testid="sample-submission-button-submit"
+        color="primary"
+        label="Submit"
+        type="submit"
+        class="q-mt-md"
+      />
     </q-form>
     <q-dialog v-model="showUploadError" v-if="uploadError">
       <error-popup :error-response="uploadError" />
