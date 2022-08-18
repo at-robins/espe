@@ -148,32 +148,28 @@ async fn upload_sample_internal(
 fn delete_temporary_file(uuid: Uuid) -> Result<(), SeqError> {
     let mut file_path: PathBuf = PATH_FILES_TEMPORARY.into();
     file_path.push(uuid.to_string());
-    Ok(std::fs::remove_file(file_path)?)
+    if file_path.exists() {
+        std::fs::remove_file(file_path)?;
+    } else {
+        warn!("Tried to delete non existing temporary file {:?}.", file_path)
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::controller::routing::routing_config;
+    use crate::test_utility::create_test_app;
 
     use super::*;
     use actix_web::{
         http::{header::ContentType, StatusCode},
-        middleware, test, App,
+        test,
     };
-    use dotenv::dotenv;
     use mime;
 
     #[actix_web::test]
     async fn test_upload_sample_post() {
-        dotenv().unwrap();
-        env_logger::try_init_from_env(env_logger::Env::new().filter("debug"));
-        let app = test::init_service(
-            App::new()
-                .wrap(middleware::Logger::default())
-                .app_data(Arc::clone(&Arc::new(Configuration::new().unwrap())))
-                .configure(routing_config),
-        )
-        .await;
+        let app = test::init_service(create_test_app()).await;
         let payload =
             std::fs::read("../testing_resources/requests/sample_submission_multipart").unwrap();
         let content_type: mime::Mime =
@@ -185,6 +181,7 @@ mod tests {
             .insert_header(ContentType(content_type))
             .set_payload(payload)
             .to_request();
+        error!("{:?}", req);
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
     }
