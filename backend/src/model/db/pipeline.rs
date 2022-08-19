@@ -32,10 +32,10 @@ impl NewPipeline {
     ///
     /// * `name` - the pipeline's name
     /// * `comment` - the comment describing the pipeline
-    pub fn new(name: String, comment: String) -> Self {
+    pub fn new<T: Into<String>, S: Into<String>>(name: T, comment: S) -> Self {
         Self {
-            pipeline_name: name,
-            comment,
+            pipeline_name: name.into(),
+            comment: comment.into(),
             creation_time: Utc::now().naive_utc(),
         }
     }

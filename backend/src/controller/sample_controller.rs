@@ -160,7 +160,7 @@ fn delete_temporary_file(uuid: Uuid) -> Result<(), SeqError> {
 mod tests {
     use crate::{
         model::db::pipeline::NewPipeline,
-        test_utility::{create_test_app, TestDatabaseContext},
+        test_utility::{create_test_app, TestContext},
     };
 
     use super::*;
@@ -172,22 +172,15 @@ mod tests {
 
     #[actix_web::test]
     async fn test_upload_sample_post() {
-        let db_context = TestDatabaseContext::new();
+        let db_context = TestContext::new();
         let connection = db_context.get_connection();
         let dummy_pipeline =
-            NewPipeline::new("test pipeline".to_string(), "test comment".to_string());
+            NewPipeline::new("test pipeline", "test comment");
         diesel::insert_into(crate::schema::pipeline::table)
             .values(dummy_pipeline)
             .execute(&connection)
             .unwrap();
-        let app = test::init_service(create_test_app(
-            db_context
-                .path_to_test_database()
-                .into_os_string()
-                .into_string()
-                .unwrap(),
-        ))
-        .await;
+        let app = test::init_service(create_test_app(db_context.database_url())).await;
         let payload =
             std::fs::read("../testing_resources/requests/sample_submission_multipart").unwrap();
         let content_type: mime::Mime =
