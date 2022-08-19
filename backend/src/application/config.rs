@@ -6,16 +6,14 @@ const UUID_CONTEXT: Context = Context::new(0);
 const UUID_NODE_ID: &[u8; 6] = &[12, 221, 33, 14, 35, 16];
 /// The path where temporary files are stored.
 pub const PATH_FILES_TEMPORARY: &str = "application/tmp/files/";
-/// The path where data related to specific experiments or samples is stored. 
-pub const PATH_FILES_EXPERIMENTS: &str = "application/experiments"; 
+/// The path where data related to specific experiments or samples is stored.
+pub const PATH_FILES_EXPERIMENTS: &str = "application/experiments";
 /// The file name of the initially submitted sample before processing.
 pub const PATH_FILES_EXPERIMENT_INITIAL_FASTQ: &str = "00_initial.fastq";
 
-use std::{
-    time::SystemTime,
-};
+use std::time::SystemTime;
 
-use diesel::{SqliteConnection, Connection};
+use diesel::{Connection, SqliteConnection};
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 use uuid::{
@@ -23,7 +21,10 @@ use uuid::{
     Uuid,
 };
 
-use super::{environment::{DATABASE_URL, SERVER_PORT, SERVER_ADDRESS, LOG_LEVEL}, error::SeqError};
+use super::{
+    environment::{DATABASE_URL, LOG_LEVEL, SERVER_ADDRESS, SERVER_PORT},
+    error::SeqError,
+};
 
 #[derive(Debug, Getters, PartialEq, Serialize, Deserialize)]
 /// A configuration that defines basic parameters of the application.
@@ -42,8 +43,30 @@ pub struct Configuration {
 }
 
 impl Configuration {
-    /// Creates a new configuration if all enviroment variables are setup correctly. 
-    pub fn new() -> Result<Self, SeqError> {
+    /// Creates a new configuration with the specified parameters.
+    ///
+    /// # Parameters
+    ///
+    /// * `database_url` - the URL  / URI of the database  
+    /// * `log_level` - the logging level
+    /// * `server_address` - the address of the server
+    /// * `server_port` - the port of the server  
+    pub fn new(
+        database_url: String,
+        log_level: String,
+        server_address: String,
+        server_port: String,
+    ) -> Self {
+        Self {
+            database_url,
+            log_level,
+            server_address,
+            server_port,
+        }
+    }
+
+    /// Creates a new configuration if all enviroment variables are setup correctly.
+    pub fn create_from_environment() -> Result<Self, SeqError> {
         Ok(Self {
             database_url: std::env::var(DATABASE_URL)?,
             log_level: std::env::var(LOG_LEVEL)?,

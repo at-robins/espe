@@ -158,7 +158,10 @@ fn delete_temporary_file(uuid: Uuid) -> Result<(), SeqError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utility::create_test_app;
+    use crate::{
+        model::db::pipeline::NewPipeline,
+        test_utility::{create_test_app, TestDatabaseContext},
+    };
 
     use super::*;
     use actix_web::{
@@ -169,7 +172,22 @@ mod tests {
 
     #[actix_web::test]
     async fn test_upload_sample_post() {
-        let app = test::init_service(create_test_app()).await;
+        let db_context = TestDatabaseContext::new();
+        let connection = db_context.get_connection();
+        let dummy_pipeline =
+            NewPipeline::new("test pipeline".to_string(), "test comment".to_string());
+        diesel::insert_into(crate::schema::pipeline::table)
+            .values(dummy_pipeline)
+            .execute(&connection)
+            .unwrap();
+        let app = test::init_service(create_test_app(
+            db_context
+                .path_to_test_database()
+                .into_os_string()
+                .into_string()
+                .unwrap(),
+        ))
+        .await;
         let payload =
             std::fs::read("../testing_resources/requests/sample_submission_multipart").unwrap();
         let content_type: mime::Mime =
@@ -181,8 +199,7 @@ mod tests {
             .insert_header(ContentType(content_type))
             .set_payload(payload)
             .to_request();
-        error!("{:?}", req);
         let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.status(), StatusCode::CREATED);
     }
 }
