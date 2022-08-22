@@ -89,3 +89,17 @@ cargo run
 cd ../frontend
 npm run build:dev
 ```
+
+## Testing
+Backend testing:
+```bash
+cd backend
+cargo test
+```
+
+
+Frontend testing:
+```bash
+cd frontend
+TODO: add code
+```

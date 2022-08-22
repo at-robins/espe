@@ -4,7 +4,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::{diesel::ExpressionMethods, application::config::{PATH_FILES_EXPERIMENTS, PATH_FILES_EXPERIMENT_INITIAL_FASTQ}};
+use crate::{
+    application::config::{PATH_FILES_EXPERIMENTS, PATH_FILES_EXPERIMENT_INITIAL_FASTQ},
+    diesel::ExpressionMethods,
+};
 use crate::{diesel::RunQueryDsl, model::db::experiment::Experiment};
 use actix_multipart::Multipart;
 use actix_web::{
@@ -12,7 +15,7 @@ use actix_web::{
     HttpRequest, HttpResponse,
 };
 use diesel::QueryDsl;
-use futures_util::{TryStreamExt};
+use futures_util::TryStreamExt;
 use log::{error, warn};
 use uuid::Uuid;
 
@@ -21,10 +24,7 @@ use crate::{
         config::{Configuration, PATH_FILES_TEMPORARY},
         error::{InternalError, SeqError},
     },
-    model::{
-        db::experiment::{NewExperiment},
-        exchange::experiment_upload::ExperimentUpload,
-    },
+    model::{db::experiment::NewExperiment, exchange::experiment_upload::ExperimentUpload},
 };
 
 const MAX_MULTIPART_FORM_SIZE: usize = 524_288;
@@ -33,10 +33,12 @@ pub async fn upload_sample(
     request: HttpRequest,
     payload: Multipart,
 ) -> Result<HttpResponse, SeqError> {
-    upload_sample_internal(request, payload).await.map_err(|error| {
-        error!("{}", error);
-        error
-    })
+    upload_sample_internal(request, payload)
+        .await
+        .map_err(|error| {
+            error!("{}", error);
+            error
+        })
 }
 
 async fn upload_sample_internal(
@@ -96,6 +98,16 @@ async fn upload_sample_internal(
 
     if upload_info.is_some() && is_file_provided {
         let upload_info = upload_info.unwrap();
+        upload_info.validate().map_err(|e| {
+            SeqError::BadRequestError(InternalError::new(
+                "Sample invalid",
+                format!(
+                    "Validation of sample information {:?} failed with error: {}",
+                    upload_info, e
+                ),
+                "The provided sample information is invalid.",
+            ))
+        })?;
         let new_experiment: NewExperiment = upload_info.into();
         // Write to database.
         diesel::insert_into(crate::schema::experiment::table)
@@ -118,7 +130,7 @@ async fn upload_sample_internal(
         final_file_path.push(PATH_FILES_EXPERIMENT_INITIAL_FASTQ);
         std::fs::rename(temp_file_path, final_file_path)?;
 
-        // Return the UUID of the created attachment.
+        // Return the ID of the created attachment.
         Ok(HttpResponse::Created().body(inserted_id.to_string()))
     } else {
         delete_temporary_file(uuid)?;
@@ -136,5 +148,51 @@ async fn upload_sample_internal(
 fn delete_temporary_file(uuid: Uuid) -> Result<(), SeqError> {
     let mut file_path: PathBuf = PATH_FILES_TEMPORARY.into();
     file_path.push(uuid.to_string());
-    Ok(std::fs::remove_file(file_path)?)
+    if file_path.exists() {
+        std::fs::remove_file(file_path)?;
+    } else {
+        warn!("Tried to delete non existing temporary file {:?}.", file_path)
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        model::db::pipeline::NewPipeline,
+        test_utility::{create_test_app, TestContext},
+    };
+
+    use super::*;
+    use actix_web::{
+        http::{header::ContentType, StatusCode},
+        test,
+    };
+    use mime;
+
+    #[actix_web::test]
+    async fn test_upload_sample_post() {
+        let db_context = TestContext::new();
+        let connection = db_context.get_connection();
+        let dummy_pipeline =
+            NewPipeline::new("test pipeline", "test comment");
+        diesel::insert_into(crate::schema::pipeline::table)
+            .values(dummy_pipeline)
+            .execute(&connection)
+            .unwrap();
+        let app = test::init_service(create_test_app(db_context.database_url())).await;
+        let payload =
+            std::fs::read("../testing_resources/requests/sample_submission_multipart").unwrap();
+        let content_type: mime::Mime =
+            "multipart/form-data; boundary=---------------------------5851692324164894962235391524"
+                .parse()
+                .unwrap();
+        let req = test::TestRequest::post()
+            .uri("/api/experiment")
+            .insert_header(ContentType(content_type))
+            .set_payload(payload)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+    }
 }

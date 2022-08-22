@@ -1,9 +1,9 @@
 {
   "extends": "@vue/tsconfig/tsconfig.web.json",
-  "include": ["env.d.ts", "src/**/*", "src/**/*.vue"],
+  "include": ["types", "env.d.ts", "src/**/*", "src/**/*.vue", "src/shims-vue.d.ts"],
   "exclude": ["src/**/__tests__/*"],
   "compilerOptions": {
-    "lib": ["es2021"],
+    "lib": ["es2021","DOM"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
