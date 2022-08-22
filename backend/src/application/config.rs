@@ -4,10 +4,10 @@
 const UUID_CONTEXT: Context = Context::new(0);
 /// The node ID for UUID generation.
 const UUID_NODE_ID: &[u8; 6] = &[12, 221, 33, 14, 35, 16];
-/// The path where temporary files are stored.
-pub const PATH_FILES_TEMPORARY: &str = "application/tmp/files/";
-/// The path where data related to specific experiments or samples is stored.
-pub const PATH_FILES_EXPERIMENTS: &str = "application/experiments";
+/// The context path where temporary files are stored.
+const PATH_FILES_TEMPORARY: &str = "tmp/files";
+/// The context path where data related to specific experiments or samples is stored.
+const PATH_FILES_EXPERIMENTS: &str = "experiments";
 /// The file name of the initially submitted sample before processing.
 pub const PATH_FILES_EXPERIMENT_INITIAL_FASTQ: &str = "00_initial.fastq.gz";
 
@@ -22,7 +22,7 @@ use uuid::{
 };
 
 use super::{
-    environment::{DATABASE_URL, LOG_LEVEL, SERVER_ADDRESS, SERVER_PORT, CONTEXT_FOLDER},
+    environment::{CONTEXT_FOLDER, DATABASE_URL, LOG_LEVEL, SERVER_ADDRESS, SERVER_PORT},
     error::SeqError,
 };
 
@@ -94,6 +94,16 @@ impl Configuration {
         let connection = SqliteConnection::establish(self.database_url())?;
         connection.execute("PRAGMA foreign_keys = ON;")?;
         Ok(connection)
+    }
+
+    /// The context path where temporary files are stored.
+    pub fn temporary_file_path(&self) -> String {
+        format!("{}/{}", self.context_folder(), PATH_FILES_TEMPORARY)
+    }
+
+    /// The context path where data related to specific experiments or samples is stored.
+    pub fn experiment_path(&self) -> String {
+        format!("{}/{}", self.context_folder(), PATH_FILES_EXPERIMENTS)
     }
 
     /// Generates a V1 UUID.
