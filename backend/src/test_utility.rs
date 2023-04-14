@@ -12,14 +12,12 @@ use uuid::Uuid;
 
 const TEST_RESOURCES_PATH: &str = "../testing_resources";
 
-///
 /// Creates a fully configured app for testing purposes
 /// for testing against the specified test database.
 ///
 /// # Parameters
 ///
 /// * `database_url` - the URL / URI of the test database
-///
 pub fn create_test_app(
     context: &TestContext,
 ) -> App<
@@ -45,18 +43,14 @@ pub fn create_test_app(
         .configure(routing_config)
 }
 
-///
 /// A test context that provides clean test resources (e.g. test databases) and according
 /// initialisation and cleanup on a per test basis.
-///
 pub struct TestContext {
     id: Uuid,
 }
 
 impl TestContext {
-    ///
     /// Creates a new `TestContext`.
-    ///
     pub fn new() -> TestContext {
         let id = Configuration::generate_uuid();
         let context = TestContext { id };
@@ -65,23 +59,17 @@ impl TestContext {
         context
     }
 
-    ///
     /// Returns the URL / URI of the test database.
-    ///
     pub fn database_url(&self) -> String {
         format!("{}/test_database.db", self.context_folder())
     }
 
-    ///
     /// Returns the context folder that stores all context information.
-    ///
     pub fn context_folder(&self) -> String {
         format!("{}/{}", TEST_RESOURCES_PATH, self.id)
     }
 
-    ///
     /// Opens a connection to the test database.
-    ///
     pub fn get_connection(&self) -> SqliteConnection {
         let connection = SqliteConnection::establish(&self.database_url()).unwrap();
         connection.execute("PRAGMA foreign_keys = ON;").unwrap();

@@ -81,12 +81,22 @@ impl Configuration {
     /// Creates a new configuration if all enviroment variables are setup correctly.
     pub fn create_from_environment() -> Result<Self, SeqError> {
         Ok(Self {
-            database_url: std::env::var(DATABASE_URL)?,
-            log_level: std::env::var(LOG_LEVEL)?,
-            server_address: std::env::var(SERVER_ADDRESS)?,
-            server_port: std::env::var(SERVER_PORT)?,
-            context_folder: std::env::var(CONTEXT_FOLDER)?,
+            database_url: Self::get_environment_variable(DATABASE_URL)?,
+            log_level: Self::get_environment_variable(LOG_LEVEL)?,
+            server_address: Self::get_environment_variable(SERVER_ADDRESS)?,
+            server_port: Self::get_environment_variable(SERVER_PORT)?,
+            context_folder: Self::get_environment_variable(CONTEXT_FOLDER)?,
         })
+    }
+
+    /// Retrieves an environment variable by name and returns an error in case of it not being set or being invalid.
+    ///
+    /// # Parameters
+    ///
+    /// * `environment_variable` - the environment variable to retrieve
+    fn get_environment_variable(environment_variable: &str) -> Result<String, SeqError> {
+        std::env::var(environment_variable)
+            .map_err(|error| SeqError::from_var_error(error, environment_variable))
     }
 
     /// Returns a connection to the database if possible.

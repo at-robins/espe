@@ -73,7 +73,7 @@ async fn upload_sample_internal(
                         return Err(SeqError::BadRequestError(InternalError::new(
                             "Multipart overflow", 
                             format!("The maximum length for multipart form data is {} bytes, but the current chunk adds up to {} bytes.", MAX_MULTIPART_FORM_SIZE, current_length), 
-                            "The multipart body is to large.")));
+                            "The multipart body is too large.")));
                     } else {
                         body.extend_from_slice(&chunk);
                     }
