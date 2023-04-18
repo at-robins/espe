@@ -8,6 +8,7 @@
     "paths": {
       "@/*": ["./src/*"]
     },
+    "types": ["vitest/globals"],
     // Workaround for https://github.com/vuejs/tsconfig/issues/6
     "preserveValueImports": false,
     "importsNotUsedAsValues": "remove",
