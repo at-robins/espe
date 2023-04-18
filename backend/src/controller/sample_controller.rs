@@ -4,10 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    application::config::{PATH_FILES_EXPERIMENTS, PATH_FILES_EXPERIMENT_INITIAL_FASTQ},
-    diesel::ExpressionMethods,
-};
+use crate::{application::config::PATH_FILES_EXPERIMENT_INITIAL_FASTQ, diesel::ExpressionMethods};
 use crate::{diesel::RunQueryDsl, model::db::experiment::Experiment};
 use actix_multipart::Multipart;
 use actix_web::{
@@ -21,7 +18,7 @@ use uuid::Uuid;
 
 use crate::{
     application::{
-        config::{Configuration, PATH_FILES_TEMPORARY},
+        config::Configuration,
         error::{InternalError, SeqError},
     },
     model::{db::experiment::NewExperiment, exchange::experiment_upload::ExperimentUpload},
@@ -60,7 +57,7 @@ async fn upload_sample_internal(
     let uuid = Configuration::generate_uuid();
 
     // Create the temporary folder.
-    let mut temp_file_path: PathBuf = PATH_FILES_TEMPORARY.into();
+    let mut temp_file_path: PathBuf = app_config.temporary_file_path().into();
     std::fs::create_dir_all(&temp_file_path)?;
     temp_file_path.push(uuid.to_string());
     let temp_file_path: Arc<Path> = temp_file_path.into();
@@ -76,7 +73,7 @@ async fn upload_sample_internal(
                         return Err(SeqError::BadRequestError(InternalError::new(
                             "Multipart overflow", 
                             format!("The maximum length for multipart form data is {} bytes, but the current chunk adds up to {} bytes.", MAX_MULTIPART_FORM_SIZE, current_length), 
-                            "The multipart body is to large.")));
+                            "The multipart body is too large.")));
                     } else {
                         body.extend_from_slice(&chunk);
                     }
@@ -124,7 +121,7 @@ async fn upload_sample_internal(
         let inserted_id = inserted.id;
 
         // Create experiment folder and copy file to destination.
-        let mut final_file_path: PathBuf = PATH_FILES_EXPERIMENTS.into();
+        let mut final_file_path: PathBuf = app_config.experiment_path().into();
         final_file_path.push(inserted_id.to_string());
         std::fs::create_dir_all(&final_file_path)?;
         final_file_path.push(PATH_FILES_EXPERIMENT_INITIAL_FASTQ);
@@ -133,7 +130,7 @@ async fn upload_sample_internal(
         // Return the ID of the created attachment.
         Ok(HttpResponse::Created().body(inserted_id.to_string()))
     } else {
-        delete_temporary_file(uuid)?;
+        delete_temporary_file(uuid, Arc::clone(app_config))?;
         Err(SeqError::BadRequestError(InternalError::new("Missing multipart data",
          format!("For the experiment upload both a file ({}) and the according form data ({:?}) must be present.", is_file_provided, upload_info),
          "For the experiment upload both a file and the according form data must be present.")))
@@ -145,8 +142,8 @@ async fn upload_sample_internal(
 /// # Parameters
 ///
 /// `uuid` - the UUID of the temporary file
-fn delete_temporary_file(uuid: Uuid) -> Result<(), SeqError> {
-    let mut file_path: PathBuf = PATH_FILES_TEMPORARY.into();
+fn delete_temporary_file(uuid: Uuid, app_config: Arc<Configuration>) -> Result<(), SeqError> {
+    let mut file_path: PathBuf = app_config.temporary_file_path().into();
     file_path.push(uuid.to_string());
     if file_path.exists() {
         std::fs::remove_file(file_path)?;
@@ -174,13 +171,12 @@ mod tests {
     async fn test_upload_sample_post() {
         let db_context = TestContext::new();
         let connection = db_context.get_connection();
-        let dummy_pipeline =
-            NewPipeline::new("test pipeline", "test comment");
+        let dummy_pipeline = NewPipeline::new("test pipeline", "test comment");
         diesel::insert_into(crate::schema::pipeline::table)
             .values(dummy_pipeline)
             .execute(&connection)
             .unwrap();
-        let app = test::init_service(create_test_app(db_context.database_url())).await;
+        let app = test::init_service(create_test_app(&db_context)).await;
         let payload =
             std::fs::read("../testing_resources/requests/sample_submission_multipart").unwrap();
         let content_type: mime::Mime =

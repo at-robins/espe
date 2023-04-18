@@ -4,10 +4,10 @@
 const UUID_CONTEXT: Context = Context::new(0);
 /// The node ID for UUID generation.
 const UUID_NODE_ID: &[u8; 6] = &[12, 221, 33, 14, 35, 16];
-/// The path where temporary files are stored.
-pub const PATH_FILES_TEMPORARY: &str = "application/tmp/files/";
-/// The path where data related to specific experiments or samples is stored.
-pub const PATH_FILES_EXPERIMENTS: &str = "application/experiments";
+/// The context path where temporary files are stored.
+const PATH_FILES_TEMPORARY: &str = "tmp/files";
+/// The context path where data related to specific experiments or samples is stored.
+const PATH_FILES_EXPERIMENTS: &str = "experiments";
 /// The file name of the initially submitted sample before processing.
 pub const PATH_FILES_EXPERIMENT_INITIAL_FASTQ: &str = "00_initial.fastq.gz";
 
@@ -22,7 +22,7 @@ use uuid::{
 };
 
 use super::{
-    environment::{DATABASE_URL, LOG_LEVEL, SERVER_ADDRESS, SERVER_PORT, CONTEXT_FOLDER},
+    environment::{CONTEXT_FOLDER, DATABASE_URL, LOG_LEVEL, SERVER_ADDRESS, SERVER_PORT},
     error::SeqError,
 };
 
@@ -81,12 +81,22 @@ impl Configuration {
     /// Creates a new configuration if all enviroment variables are setup correctly.
     pub fn create_from_environment() -> Result<Self, SeqError> {
         Ok(Self {
-            database_url: std::env::var(DATABASE_URL)?,
-            log_level: std::env::var(LOG_LEVEL)?,
-            server_address: std::env::var(SERVER_ADDRESS)?,
-            server_port: std::env::var(SERVER_PORT)?,
-            context_folder: std::env::var(CONTEXT_FOLDER)?,
+            database_url: Self::get_environment_variable(DATABASE_URL)?,
+            log_level: Self::get_environment_variable(LOG_LEVEL)?,
+            server_address: Self::get_environment_variable(SERVER_ADDRESS)?,
+            server_port: Self::get_environment_variable(SERVER_PORT)?,
+            context_folder: Self::get_environment_variable(CONTEXT_FOLDER)?,
         })
+    }
+
+    /// Retrieves an environment variable by name and returns an error in case of it not being set or being invalid.
+    ///
+    /// # Parameters
+    ///
+    /// * `environment_variable` - the environment variable to retrieve
+    fn get_environment_variable(environment_variable: &str) -> Result<String, SeqError> {
+        std::env::var(environment_variable)
+            .map_err(|error| SeqError::from_var_error(error, environment_variable))
     }
 
     /// Returns a connection to the database if possible.
@@ -94,6 +104,16 @@ impl Configuration {
         let connection = SqliteConnection::establish(self.database_url())?;
         connection.execute("PRAGMA foreign_keys = ON;")?;
         Ok(connection)
+    }
+
+    /// The context path where temporary files are stored.
+    pub fn temporary_file_path(&self) -> String {
+        format!("{}/{}", self.context_folder(), PATH_FILES_TEMPORARY)
+    }
+
+    /// The context path where data related to specific experiments or samples is stored.
+    pub fn experiment_path(&self) -> String {
+        format!("{}/{}", self.context_folder(), PATH_FILES_EXPERIMENTS)
     }
 
     /// Generates a V1 UUID.

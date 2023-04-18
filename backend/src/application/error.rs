@@ -24,9 +24,9 @@ impl SeqError {
     /// Logs the specified error with level ERROR after transforming it
     /// into the internal error respresentation.
     /// This is a convenience function wrapping some logging functionality.
-    /// 
+    ///
     /// # Parameters
-    /// 
+    ///
     /// * `result` - the [`Result`] to log and transform in case of failure
     pub fn log_error<T, E: Into<SeqError>>(result: Result<T, E>) -> Result<T, SeqError> {
         result.map_err(|e| {
@@ -39,9 +39,9 @@ impl SeqError {
     /// Logs the specified error with level WARNING after transforming it
     /// into the internal error respresentation.
     /// This is a convenience function wrapping some logging functionality.
-    /// 
+    ///
     /// # Parameters
-    /// 
+    ///
     /// * `result` - the [`Result`] to log and transform in case of failure
     pub fn log_warn<T, E: Into<SeqError>>(result: Result<T, E>) -> Result<T, SeqError> {
         result.map_err(|e| {
@@ -127,6 +127,19 @@ impl SeqError {
             },
         }
     }
+
+    /// Converts a [`VarError`](std::env::VarError) into a [`SeqError`].
+    ///
+    /// # Parameters
+    ///
+    /// * `environment_variable` - the environment variable that caused the error
+    pub fn from_var_error<T: ToString>(error: std::env::VarError, enviroment_variable: T) -> Self {
+        Self::InternalServerError(InternalError::new(
+            "std::env::VarError",
+            format!("{}: {}", enviroment_variable.to_string(), error),
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        ))
+    }
 }
 
 impl std::fmt::Display for SeqError {
@@ -187,16 +200,6 @@ impl From<std::io::Error> for SeqError {
     fn from(error: std::io::Error) -> Self {
         Self::InternalServerError(InternalError::new(
             "std::io::Error",
-            error,
-            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
-        ))
-    }
-}
-
-impl From<std::env::VarError> for SeqError {
-    fn from(error: std::env::VarError) -> Self {
-        Self::InternalServerError(InternalError::new(
-            "std::env::VarError",
             error,
             DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
         ))

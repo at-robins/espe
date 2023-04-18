@@ -7,19 +7,19 @@ use actix_web::{
 use diesel::{Connection, SqliteConnection};
 use dotenv::dotenv;
 use log::{error, warn};
-use std::{path::{PathBuf}, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use uuid::Uuid;
 
-/**
- * Creates a fully configured app for testing purposes
- * for testing against the specified test database.
- *
- * # Parameters
- *
- * * `database_url` - the URL / URI of the test database
- */
-pub fn create_test_app<T: Into<String>>(
-    database_url: T,
+const TEST_RESOURCES_PATH: &str = "../testing_resources";
+
+/// Creates a fully configured app for testing purposes
+/// for testing against the specified test database.
+///
+/// # Parameters
+///
+/// * `database_url` - the URL / URI of the test database
+pub fn create_test_app(
+    context: &TestContext,
 ) -> App<
     impl ServiceFactory<
         ServiceRequest,
@@ -34,43 +34,42 @@ pub fn create_test_app<T: Into<String>>(
     App::new()
         .wrap(middleware::Logger::default())
         .app_data(Arc::clone(&Arc::new(Configuration::new(
-            database_url,
+            context.database_url(),
             "info",
             "127.0.0.1",
             "8080",
+            context.context_folder(),
         ))))
         .configure(routing_config)
 }
 
-/**
- * A test context that provides clean test resources (e.g. test databases) and according
- * initialisation and cleanup on a per test basis.
- */
+/// A test context that provides clean test resources (e.g. test databases) and according
+/// initialisation and cleanup on a per test basis.
 pub struct TestContext {
     id: Uuid,
 }
 
 impl TestContext {
-    /**
-     * Creates a new `TestContext`.
-     */
+    /// Creates a new `TestContext`.
     pub fn new() -> TestContext {
         let id = Configuration::generate_uuid();
         let context = TestContext { id };
+        std::fs::create_dir_all(context.context_folder()).unwrap();
         diesel_migrations::run_pending_migrations(&context.get_connection()).unwrap();
         context
     }
 
-    /**
-     * Returns the URL / URI of the test database.
-     */
+    /// Returns the URL / URI of the test database.
     pub fn database_url(&self) -> String {
-        format!("../testing_resources/databases/{}", self.id)
+        format!("{}/test_database.db", self.context_folder())
     }
 
-    /**
-     * Opens a connection to the test database.
-     */
+    /// Returns the context folder that stores all context information.
+    pub fn context_folder(&self) -> String {
+        format!("{}/{}", TEST_RESOURCES_PATH, self.id)
+    }
+
+    /// Opens a connection to the test database.
     pub fn get_connection(&self) -> SqliteConnection {
         let connection = SqliteConnection::establish(&self.database_url()).unwrap();
         connection.execute("PRAGMA foreign_keys = ON;").unwrap();
@@ -80,13 +79,13 @@ impl TestContext {
 
 impl Drop for TestContext {
     fn drop(&mut self) {
-        let file_path: PathBuf = self.database_url().into();
-        if file_path.exists() {
-            if let Err(e) = std::fs::remove_file(file_path) {
-                error!("Dropping test database context {} failed with error: {}", self.id, e);
+        let context_path: PathBuf = self.context_folder().into();
+        if context_path.exists() {
+            if let Err(e) = std::fs::remove_dir_all(context_path) {
+                error!("Dropping test context {} failed with error: {}", self.id, e);
             }
         } else {
-            warn!("Tried to delete non existing temporary file {:?}.", file_path)
+            warn!("Tried to delete non existing temporary context folder {:?}.", context_path)
         }
     }
 }
