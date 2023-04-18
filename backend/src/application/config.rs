@@ -122,7 +122,7 @@ impl Configuration {
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("The UNIX epoch must be the earliest possible time point.");
         let timestamp = Timestamp::from_unix(UUID_CONTEXT, now.as_secs(), now.subsec_nanos());
-        Uuid::new_v1(timestamp, UUID_NODE_ID).expect("The node ID must be of length 6.")
+        Uuid::new_v1(timestamp, UUID_NODE_ID)
     }
 
     /// Returns the full server address including port information.
