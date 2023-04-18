@@ -3,6 +3,11 @@
   "include": ["types", "src/**/__tests__/**/*"],
   "compilerOptions": {
     "composite": true,
-    "types": ["node", "jsdom"]
+    "types": ["node", "jsdom"],
+    // Workaround for https://github.com/vuejs/tsconfig/issues/6
+    "preserveValueImports": false,
+    "importsNotUsedAsValues": "remove",
+    "verbatimModuleSyntax": true,
+    // End of the workaround
   }
 }

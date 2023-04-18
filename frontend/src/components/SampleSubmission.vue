@@ -1,6 +1,6 @@
 <template>
   <div class="q-pa-md gutter-md">
-    <q-form @submit="uploadSample">
+    <q-form @submit="uploadSample" :greedy="true">
       <q-input
         v-model="sampleName"
         data-testid="sample-submission-input-name"
@@ -11,7 +11,7 @@
         :maxlength="MAX_SAMPLE_NAME_LENGTH"
         lazy-rules
         :rules="[
-          (val) => (val && val.length > 0) || 'A sample name is required.',
+          (val: string | null) => (val && val.length > 0) || 'A sample name is required.',
         ]"
       />
       <q-input
@@ -47,7 +47,7 @@
         :error="!!loadPipelineBlueprintsError"
         :error-message="getLoadPipelineBlueprintsErrorMessage()"
         lazy-rules
-        :rules="[(val) => !!val || 'A pipeline needs to be selected.']"
+        :rules="[(val: PipelineBlueprintDetail | null) => !!val || 'A pipeline needs to be selected.']"
       ></q-select>
       <q-file
         data-testid="sample-submission-input-file"
@@ -61,7 +61,7 @@
         accept=".fastq.gz"
         lazy-rules
         :rules="[
-          (val) =>
+          (val: File | null) =>
             (val && val.name.endsWith('.fastq.gz')) ||
             'A compressed FASTQ file is required (.fastq.gz).',
         ]"
@@ -191,7 +191,7 @@ function loadPipelineBlueprints() {
     })
     .catch((error) => {
       pipelineOptions.value = [];
-      loadPipelineBlueprintsError.value = error.response.data;
+      loadPipelineBlueprintsError.value = error?.response?.data;
     })
     .finally(() => {
       isLoadingPipelineBlueprints.value = false;
