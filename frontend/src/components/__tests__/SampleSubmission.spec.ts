@@ -1,9 +1,15 @@
-import SampleSubmission from "../SampleSubmission.vue";
-import { describe, it, expect } from "vitest";
+import SampleSubmission from "@/components/SampleSubmission.vue";
+import { describe, it, expect, vi } from "vitest";
 
-import { VueWrapper, mount } from "@vue/test-utils";
+import { VueWrapper, flushPromises, mount } from "@vue/test-utils";
 import { Quasar } from "quasar";
 import { type ComponentPublicInstance } from "vue";
+import axios from "axios";
+import vitest from "vitest";
+
+// ----------------------------
+// Convenience functions
+// ----------------------------
 
 function mountWrapper(): VueWrapper<ComponentPublicInstance> {
   return mount(SampleSubmission, {
@@ -30,10 +36,6 @@ function findNameInput(wrapper: VueWrapper<ComponentPublicInstance>) {
   return wrapper.find("#sample-submission-input-name");
 }
 
-function findPipelineInput(wrapper: VueWrapper<ComponentPublicInstance>) {
-  return wrapper.find("#sample-submission-input-pipeline");
-}
-
 function findAllErrors(wrapper: VueWrapper<ComponentPublicInstance>) {
   return wrapper.findAll(".q-field--error");
 }
@@ -44,40 +46,100 @@ function triggerSubmit(
   return findSubmitButton(wrapper).trigger("submit");
 }
 
-describe("no error if everything is correct", () => {
-  it("renders properly", async () => {
+// ----------------------------
+// Mocks
+// ----------------------------
+
+vi.mock("axios");
+
+// ----------------------------
+// Test constants
+// ----------------------------
+
+const TEST_NAME = "sample name";
+const TEST_FILE = new File(["content"], "file.fastq.gz");
+const TEST_MAIL_VALID = "fritz.strassner@brandner.by";
+const TEST_PIPELINE = {
+  id: 0,
+  name: "test",
+  comment: "",
+};
+
+// ----------------------------
+// Tests
+// ----------------------------
+
+describe("correct upload if", () => {
+  it("has no errors", async () => {
+    (axios.get as vitest.Mock).mockResolvedValue({
+      status: 200,
+      data: [TEST_PIPELINE],
+    });
+    (axios.post as vitest.Mock).mockResolvedValue({
+      status: 201,
+    });
+
     const wrapper = mountWrapper();
 
     expect(findAllErrors(wrapper)).toHaveLength(0);
 
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(axios.get).toHaveBeenCalledWith("/api/pipeline/blueprint");
+    expect(axios.post).toHaveBeenCalledTimes(0);
+
+    await flushPromises();
+
     const inputName = findNameInput(wrapper);
-    await inputName.setValue("Dummy name");
+    await inputName.setValue(TEST_NAME);
 
     const inputMail = findMailInput(wrapper);
-    await inputMail.setValue("a.valid@mail.com");
+    await inputMail.setValue(TEST_MAIL_VALID);
 
-    const inputPipeline = findPipelineInput(wrapper);
-    await inputPipeline.setValue({
-      id: 0,
-      name: "test",
-      comment: "",
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (wrapper.vm as any).pipeline = TEST_PIPELINE;
+    await flushPromises();
 
     const inputFile = findFileInput(wrapper);
     const fileElement = inputFile.element as HTMLInputElement;
-    const testFile = new File(["foo"], "programmatically_created.fastq.gz");
-    const list = new FileList();
-    list[0] = testFile;
-    fileElement.files = list;
+
+    Object.defineProperty(fileElement, "files", {
+      value: [TEST_FILE],
+    });
     await inputFile.trigger("change");
 
     await triggerSubmit(wrapper);
+    await flushPromises();
+
     expect(findAllErrors(wrapper)).toHaveLength(0);
+    expect(axios.post).toHaveBeenCalledTimes(1);
+
+    const formData = new FormData();
+    formData.append("file", TEST_FILE);
+    formData.append(
+      "form",
+      JSON.stringify({
+        name: TEST_NAME,
+        mail: TEST_MAIL_VALID,
+        comment: "",
+        pipelineId: TEST_PIPELINE.id,
+      })
+    );
+    const config = {
+      headers: {
+        "content-type": "multipart/form-data",
+      },
+    };
+
+    expect(axios.post).toHaveBeenCalledWith(
+      "/api/experiment",
+      formData,
+      config
+    );
   });
 });
 
-describe("error if name is empty", () => {
-  it("renders properly", async () => {
+describe("error if", () => {
+  it("has an empty name field", async () => {
     const wrapper = mountWrapper();
     expect(findAllErrors(wrapper)).toHaveLength(0);
     await triggerSubmit(wrapper);
@@ -85,27 +147,21 @@ describe("error if name is empty", () => {
       wrapper.findAll("label").at(0)?.classes().includes("q-field--error")
     ).toBe(true);
   });
-});
-
-describe("error if pipeline is not set", () => {
-  it("renders properly", async () => {
+  it("has an empty pipeline field", async () => {
     const wrapper = mountWrapper();
     expect(findAllErrors(wrapper)).toHaveLength(0);
     const inputName = findNameInput(wrapper);
-    await inputName.setValue("Dummy name");
+    await inputName.setValue(TEST_NAME);
     await triggerSubmit(wrapper);
     expect(
       wrapper.findAll("label").at(3)?.classes().includes("q-field--error")
     ).toBe(true);
   });
-});
-
-describe("error if e-mail incorrect", () => {
-  it("renders properly", async () => {
+  it("has an erroneous mail field", async () => {
     const wrapper = mountWrapper();
     expect(findAllErrors(wrapper)).toHaveLength(0);
     const inputName = findNameInput(wrapper);
-    await inputName.setValue("Dummy name");
+    await inputName.setValue(TEST_NAME);
     const inputMail = findMailInput(wrapper);
     await inputMail.setValue("not an e-mail address");
     await triggerSubmit(wrapper);
