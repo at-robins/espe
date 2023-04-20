@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::application::error::{InternalError, SeqError};
+use crate::application::error::{SeqError, SeqErrorType};
 
 pub trait PipelineStep {
     fn output(&self) -> PathBuf;
@@ -47,11 +47,12 @@ impl TryFrom<&str> for PipelineStepStatus {
             STATUS_PENDING => Ok(PipelineStepStatus::Pending),
             STATUS_RUNNING => Ok(PipelineStepStatus::Running),
             STATUS_SUCCESS => Ok(PipelineStepStatus::Success),
-            _ => Err(SeqError::InternalServerError(InternalError::new(
+            _ => Err(SeqError::new(
                 "PipelineStepStatus",
+                SeqErrorType::InternalServerError,
                 format!("{} cannot be converted into a status.", value),
                 "An invalid pipeline step was supplied.",
-            ))),
+            )),
         }
     }
 }

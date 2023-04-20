@@ -4,7 +4,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::{application::config::PATH_FILES_EXPERIMENT_INITIAL_FASTQ, diesel::ExpressionMethods};
+use crate::{
+    application::{config::PATH_FILES_EXPERIMENT_INITIAL_FASTQ, error::SeqErrorType},
+    diesel::ExpressionMethods,
+};
 use crate::{diesel::RunQueryDsl, model::db::experiment::Experiment};
 use actix_multipart::Multipart;
 use actix_web::{
@@ -17,10 +20,7 @@ use log::{error, warn};
 use uuid::Uuid;
 
 use crate::{
-    application::{
-        config::Configuration,
-        error::{InternalError, SeqError},
-    },
+    application::{config::Configuration, error::SeqError},
     model::{db::experiment::NewExperiment, exchange::experiment_upload::ExperimentUpload},
 };
 
@@ -70,10 +70,11 @@ async fn upload_sample_internal(
                 while let Some(chunk) = field.try_next().await? {
                     let current_length = body.len() + chunk.len();
                     if (current_length) > MAX_MULTIPART_FORM_SIZE {
-                        return Err(SeqError::BadRequestError(InternalError::new(
+                        return Err(SeqError::new(
                             "Multipart overflow", 
+                            SeqErrorType::BadRequestError,
                             format!("The maximum length for multipart form data is {} bytes, but the current chunk adds up to {} bytes.", MAX_MULTIPART_FORM_SIZE, current_length), 
-                            "The multipart body is too large.")));
+                            "The multipart body is too large."));
                     } else {
                         body.extend_from_slice(&chunk);
                     }
@@ -96,14 +97,15 @@ async fn upload_sample_internal(
     if upload_info.is_some() && is_file_provided {
         let upload_info = upload_info.unwrap();
         upload_info.validate().map_err(|e| {
-            SeqError::BadRequestError(InternalError::new(
+            SeqError::new(
                 "Sample invalid",
+                SeqErrorType::BadRequestError,
                 format!(
                     "Validation of sample information {:?} failed with error: {}",
                     upload_info, e
                 ),
                 "The provided sample information is invalid.",
-            ))
+            )
         })?;
         let pipeline_exists: bool = diesel::select(exists(
             crate::schema::pipeline::dsl::pipeline
@@ -111,14 +113,15 @@ async fn upload_sample_internal(
         ))
         .get_result(&connection)?;
         if !pipeline_exists {
-            return Err(SeqError::BadRequestError(InternalError::new(
+            return Err(SeqError::new(
                 "Pipeline invalid",
+                SeqErrorType::BadRequestError,
                 format!(
                     "Validation of sample information {:?} failed with error: Pipeline with ID {} does not exist.",
                     upload_info, upload_info.pipeline_id
                 ),
                 "The provided sample information is invalid.",
-            )));
+            ));
         }
         let new_experiment: NewExperiment = upload_info.into();
         // Write to database.
@@ -146,9 +149,11 @@ async fn upload_sample_internal(
         Ok(HttpResponse::Created().body(inserted_id.to_string()))
     } else {
         delete_temporary_file(uuid, Arc::clone(app_config))?;
-        Err(SeqError::BadRequestError(InternalError::new("Missing multipart data",
-         format!("For the experiment upload both a file ({}) and the according form data ({:?}) must be present.", is_file_provided, upload_info),
-         "For the experiment upload both a file and the according form data must be present.")))
+        Err(SeqError::new(
+            "Missing multipart data",
+            SeqErrorType::BadRequestError,
+            format!("For the experiment upload both a file ({}) and the according form data ({:?}) must be present.", is_file_provided, upload_info),
+            "For the experiment upload both a file and the according form data must be present."))
     }
 }
 

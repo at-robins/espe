@@ -8,7 +8,7 @@ use rand::{thread_rng, Rng};
 use crate::{
     application::{
         config::Configuration,
-        error::{InternalError, SeqError},
+        error::{SeqError, SeqErrorType},
     },
     model::{
         db::pipeline::Pipeline,
@@ -108,17 +108,16 @@ pub async fn get_pipeline_instance(wrapped_id: web::Path<u64>) -> Result<impl Re
 /// Return all pipeline blueprints that are present in the database.
 pub async fn get_pipeline_blueprints(request: HttpRequest) -> Result<impl Responder, SeqError> {
     // Retrieve the app config.
-    let app_config =
-        SeqError::log_error(request.app_data::<Arc<Configuration>>().ok_or_else(|| {
-            SeqError::InternalServerError(InternalError::new(
-                "Configuration",
-                "The server configuration could not be accessed.",
-                "Missing configuration.",
-            ))
-        }))?;
-    let connection = SeqError::log_error(app_config.database_connection())?;
-    let pipelines =
-        SeqError::log_error(crate::schema::pipeline::table.load::<Pipeline>(&connection))?;
+    let app_config = request.app_data::<Arc<Configuration>>().ok_or_else(|| {
+        SeqError::new(
+            "Configuration",
+            SeqErrorType::InternalServerError,
+            "The server configuration could not be accessed.",
+            "Missing configuration.",
+        )
+    })?;
+    let connection = app_config.database_connection()?;
+    let pipelines = crate::schema::pipeline::table.load::<Pipeline>(&connection)?;
     Ok(web::Json(
         pipelines
             .iter()
