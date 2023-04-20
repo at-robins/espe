@@ -11,7 +11,7 @@ use actix_web::{
     web::{self},
     HttpRequest, HttpResponse,
 };
-use diesel::QueryDsl;
+use diesel::{dsl::exists, QueryDsl};
 use futures_util::TryStreamExt;
 use log::{error, warn};
 use uuid::Uuid;
@@ -105,6 +105,21 @@ async fn upload_sample_internal(
                 "The provided sample information is invalid.",
             ))
         })?;
+        let pipeline_exists: bool = diesel::select(exists(
+            crate::schema::pipeline::dsl::pipeline
+                .filter(crate::schema::pipeline::id.eq(upload_info.pipeline_id)),
+        ))
+        .get_result(&connection)?;
+        if !pipeline_exists {
+            return Err(SeqError::BadRequestError(InternalError::new(
+                "Pipeline invalid",
+                format!(
+                    "Validation of sample information {:?} failed with error: Pipeline with ID {} does not exist.",
+                    upload_info, upload_info.pipeline_id
+                ),
+                "The provided sample information is invalid.",
+            )));
+        }
         let new_experiment: NewExperiment = upload_info.into();
         // Write to database.
         diesel::insert_into(crate::schema::experiment::table)
@@ -154,41 +169,4 @@ fn delete_temporary_file(uuid: Uuid, app_config: Arc<Configuration>) -> Result<(
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::{
-        model::db::pipeline::NewPipeline,
-        test_utility::{create_test_app, TestContext},
-    };
-
-    use super::*;
-    use actix_web::{
-        http::{header::ContentType, StatusCode},
-        test,
-    };
-    use mime;
-
-    #[actix_web::test]
-    async fn test_upload_sample_post() {
-        let db_context = TestContext::new();
-        let connection = db_context.get_connection();
-        let dummy_pipeline = NewPipeline::new("test pipeline", "test comment");
-        diesel::insert_into(crate::schema::pipeline::table)
-            .values(dummy_pipeline)
-            .execute(&connection)
-            .unwrap();
-        let app = test::init_service(create_test_app(&db_context)).await;
-        let payload =
-            std::fs::read("../testing_resources/requests/sample_submission_multipart").unwrap();
-        let content_type: mime::Mime =
-            "multipart/form-data; boundary=---------------------------5851692324164894962235391524"
-                .parse()
-                .unwrap();
-        let req = test::TestRequest::post()
-            .uri("/api/experiment")
-            .insert_header(ContentType(content_type))
-            .set_payload(payload)
-            .to_request();
-        let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), StatusCode::CREATED);
-    }
-}
+mod tests;

@@ -15,9 +15,9 @@ use super::pipeline::Pipeline;
 pub struct Experiment {
     pub id: i32,
     pub experiment_name: String,
-    pub mail: String,
+    pub mail: Option<String>,
     pub pipeline_id: i32,
-    pub comment: String,
+    pub comment: Option<String>,
     pub creation_time: NaiveDateTime,
 }
 
@@ -28,11 +28,11 @@ pub struct NewExperiment {
     #[getset(get = "pub")]
     experiment_name: String,
     #[getset(get = "pub")]
-    mail: String,
+    mail: Option<String>,
     #[getset(get_copy = "pub")]
     pipeline_id: i32,
     #[getset(get = "pub")]
-    comment: String,
+    comment: Option<String>,
     #[getset(get = "pub")]
     creation_time: NaiveDateTime,
 }
@@ -43,10 +43,10 @@ impl NewExperiment {
     /// # Parameters
     ///
     /// * `name` - the experiment's name
-    /// * `mail` - the E-mail address to notifiy on pipeline updates
+    /// * `mail` - the optional E-mail address to notifiy on pipeline updates
     /// * `pipeline_id` - the referenced pipeline
-    /// * `comment` - the comment describing the experiment
-    pub fn new(name: String, mail: String, pipeline_id: i32, comment: String) -> Self {
+    /// * `comment` - the optional comment describing the experiment
+    pub fn new(name: String, mail: Option<String>, pipeline_id: i32, comment: Option<String>) -> Self {
         Self {
             experiment_name: name,
             mail,

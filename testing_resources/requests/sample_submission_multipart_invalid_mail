@@ -7,5 +7,5 @@ test content
 -----------------------------5851692324164894962235391524
 Content-Disposition: form-data; name="form"
 
-{"name":"20220810_Exp17_NN","mail":"gustl.bayrhammer@test.by","comment":"Test description","pipelineId":1}
+{"name":"20220810_Exp17_NN","mail":"not a valid mail","comment":"Test description","pipelineId":1}
 -----------------------------5851692324164894962235391524--

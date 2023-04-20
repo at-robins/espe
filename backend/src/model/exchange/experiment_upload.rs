@@ -1,4 +1,4 @@
-use regex::{Regex};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 const MAX_LENGTH_NAME: usize = 128;
@@ -13,29 +13,52 @@ lazy_static! {
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentUpload {
     pub name: String,
-    pub mail: String,
-    pub comment: String,
+    pub mail: Option<String>,
+    pub comment: Option<String>,
     pub pipeline_id: i32,
 }
 
 impl ExperimentUpload {
     /**
      * Checks if the recieved upload data is valid and returns a corresponding
-     * error message of not. 
+     * error message of not.
      */
     pub fn validate(&self) -> Result<(), String> {
+        self.validate_name()
+            .and(self.validate_mail())
+            .and(self.validate_comment())
+    }
+
+    fn validate_name(&self) -> Result<(), String> {
         if self.name.is_empty() {
             Err("A sample name must be set.".to_string())
         } else if self.name.len() > MAX_LENGTH_NAME {
             Err(format!("The sample name may only contain {} letters.", MAX_LENGTH_NAME))
-        } else if self.mail.len() > MAX_LENGTH_MAIL {
-            Err(format!("The mail may only contain {} letters.", MAX_LENGTH_MAIL))
-        } else if !self.mail.is_empty() && !MAIL_VALIDATION_PATTERN.is_match(&self.mail) {
-            Err("The mail is invalid.".to_string())  
-        } else if self.comment.len() > MAX_LENGTH_COMMENT {
-            Err(format!("The comment may only contain {} letters.", MAX_LENGTH_COMMENT))
         } else {
             Ok(())
         }
+    }
+
+    fn validate_mail(&self) -> Result<(), String> {
+        if let Some(email) = &self.mail {
+            if !MAIL_VALIDATION_PATTERN.is_match(email) {
+                return Err("The mail is invalid.".to_string());
+            } else if email.len() > MAX_LENGTH_MAIL {
+                return Err(format!("The mail may only contain {} letters.", MAX_LENGTH_MAIL));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_comment(&self) -> Result<(), String> {
+        if let Some(comm) = &self.comment {
+            if comm.len() > MAX_LENGTH_COMMENT {
+                return Err(format!(
+                    "The comment may only contain {} letters.",
+                    MAX_LENGTH_COMMENT
+                ));
+            }
+        }
+        Ok(())
     }
 }
