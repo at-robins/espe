@@ -43,20 +43,55 @@ pub enum SeqErrorType {
 }
 
 impl SeqError {
-    /// Creates a new error.
+    /// Creates a new error and automatically logs the error.
     pub fn new<T: ToString, U: ToString, V: ToString>(
         name: T,
         error_type: SeqErrorType,
         internal_message: U,
         external_message: V,
     ) -> Self {
-        SeqError {
+        let error = SeqError {
             uuid: Uuid::new_v4(),
             error_type,
             name: name.to_string(),
             internal_message: internal_message.to_string(),
             external_message: external_message.to_string(),
+        };
+        error.log_default();
+        error
+    }
+
+    /// Logs the error on its default level.
+    fn log_default(&self) {
+        match self.error_type() {
+            SeqErrorType::InternalServerError => error!("{}", self),
+            SeqErrorType::NotFoundError => warn!("{}", self),
+            SeqErrorType::BadRequestError => error!("{}", self),
         }
+    }
+
+    /// Returns a respective error response.
+    fn error_response(&self) -> ErrorResponse {
+        ErrorResponse {
+            code: self.status_code().as_u16(),
+            uuid: self.uuid(),
+            name: self.status_code().to_string(),
+            message: self.external_message().clone(),
+        }
+    }
+
+    /// Converts a [`VarError`](std::env::VarError) into a [`SeqError`].
+    ///
+    /// # Parameters
+    ///
+    /// * `environment_variable` - the environment variable that caused the error
+    pub fn from_var_error<T: ToString>(error: std::env::VarError, enviroment_variable: T) -> Self {
+        Self::new(
+            "std::env::VarError",
+            SeqErrorType::InternalServerError,
+            format!("{}: {}", enviroment_variable.to_string(), error),
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        )
     }
 }
 
@@ -83,31 +118,6 @@ struct ErrorResponse {
     uuid: Uuid,
     name: String,
     message: String,
-}
-
-impl SeqError {
-    fn error_response(&self) -> ErrorResponse {
-        ErrorResponse {
-            code: self.status_code().as_u16(),
-            uuid: self.uuid(),
-            name: self.status_code().to_string(),
-            message: self.external_message().clone(),
-        }
-    }
-
-    /// Converts a [`VarError`](std::env::VarError) into a [`SeqError`].
-    ///
-    /// # Parameters
-    ///
-    /// * `environment_variable` - the environment variable that caused the error
-    pub fn from_var_error<T: ToString>(error: std::env::VarError, enviroment_variable: T) -> Self {
-        Self::new(
-            "std::env::VarError",
-            SeqErrorType::InternalServerError,
-            format!("{}: {}", enviroment_variable.to_string(), error),
-            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
-        )
-    }
 }
 
 impl ResponseError for SeqError {
