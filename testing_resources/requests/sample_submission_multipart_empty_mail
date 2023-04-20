@@ -1,0 +1,11 @@
+-----------------------------5851692324164894962235391524
+Content-Disposition: form-data; name="file"; filename="20220810_Exp17_NN.fastq.gz"
+Content-Type: application/gzip
+
+test content
+
+-----------------------------5851692324164894962235391524
+Content-Disposition: form-data; name="form"
+
+{"name":"20220810_Exp17_NN","mail":"","comment":"Test description","pipelineId":1}
+-----------------------------5851692324164894962235391524--

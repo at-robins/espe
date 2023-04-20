@@ -1,9 +1,9 @@
 CREATE TABLE experiment (
     id INTEGER PRIMARY KEY NOT NULL,
     experiment_name TEXT NOT NULL,
-    mail TEXT NOT NULL,
+    mail TEXT,
     pipeline_id INTEGER NOT NULL,
-    comment TEXT NOT NULL,
+    comment TEXT,
     creation_time DATETIME NOT NULL,
     FOREIGN KEY (pipeline_id) REFERENCES pipeline (id) ON UPDATE CASCADE ON DELETE
     SET NULL

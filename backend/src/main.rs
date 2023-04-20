@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate lazy_static;
 
 use std::sync::Arc;
 
@@ -19,7 +21,7 @@ async fn main() -> Result<(), SeqError> {
         log::error!("{}", enviroment_error);
     }
     // Setup the configuration.
-    let app_config = Arc::new(Configuration::new()?);
+    let app_config = Arc::new(Configuration::create_from_environment()?);
     let app_config_internal = Arc::clone(&app_config);
     // Setup the application.
     Ok(HttpServer::new(move || {
@@ -37,3 +39,5 @@ mod application;
 mod controller;
 mod model;
 mod schema;
+#[cfg(test)]
+mod test_utility;

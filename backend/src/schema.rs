@@ -2,9 +2,9 @@ table! {
     experiment (id) {
         id -> Integer,
         experiment_name -> Text,
-        mail -> Text,
+        mail -> Nullable<Text>,
         pipeline_id -> Integer,
-        comment -> Text,
+        comment -> Nullable<Text>,
         creation_time -> Timestamp,
     }
 }

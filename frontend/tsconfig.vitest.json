@@ -1,8 +1,13 @@
 {
   "extends": "@vue/tsconfig/tsconfig.node.json",
-  "include": ["src/**/__tests__/*"],
+  "include": ["types", "src/**/__tests__/**/*"],
   "compilerOptions": {
     "composite": true,
-    "types": ["node", "jsdom"]
+    "types": ["node", "jsdom", "vitest/globals"],
+    // Workaround for https://github.com/vuejs/tsconfig/issues/6
+    "preserveValueImports": false,
+    "importsNotUsedAsValues": "remove",
+    "verbatimModuleSyntax": true,
+    // End of the workaround
   }
 }

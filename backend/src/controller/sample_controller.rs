@@ -4,27 +4,24 @@ use std::{
     sync::Arc,
 };
 
-use crate::{diesel::ExpressionMethods, application::config::{PATH_FILES_EXPERIMENTS, PATH_FILES_EXPERIMENT_INITIAL_FASTQ}};
+use crate::{application::config::PATH_FILES_EXPERIMENT_INITIAL_FASTQ, diesel::ExpressionMethods};
 use crate::{diesel::RunQueryDsl, model::db::experiment::Experiment};
 use actix_multipart::Multipart;
 use actix_web::{
     web::{self},
     HttpRequest, HttpResponse,
 };
-use diesel::QueryDsl;
-use futures_util::{TryStreamExt};
+use diesel::{dsl::exists, QueryDsl};
+use futures_util::TryStreamExt;
 use log::{error, warn};
 use uuid::Uuid;
 
 use crate::{
     application::{
-        config::{Configuration, PATH_FILES_TEMPORARY},
+        config::Configuration,
         error::{InternalError, SeqError},
     },
-    model::{
-        db::experiment::{NewExperiment},
-        exchange::experiment_upload::ExperimentUpload,
-    },
+    model::{db::experiment::NewExperiment, exchange::experiment_upload::ExperimentUpload},
 };
 
 const MAX_MULTIPART_FORM_SIZE: usize = 524_288;
@@ -33,10 +30,12 @@ pub async fn upload_sample(
     request: HttpRequest,
     payload: Multipart,
 ) -> Result<HttpResponse, SeqError> {
-    upload_sample_internal(request, payload).await.map_err(|error| {
-        error!("{}", error);
-        error
-    })
+    upload_sample_internal(request, payload)
+        .await
+        .map_err(|error| {
+            error!("{}", error);
+            error
+        })
 }
 
 async fn upload_sample_internal(
@@ -58,7 +57,7 @@ async fn upload_sample_internal(
     let uuid = Configuration::generate_uuid();
 
     // Create the temporary folder.
-    let mut temp_file_path: PathBuf = PATH_FILES_TEMPORARY.into();
+    let mut temp_file_path: PathBuf = app_config.temporary_file_path().into();
     std::fs::create_dir_all(&temp_file_path)?;
     temp_file_path.push(uuid.to_string());
     let temp_file_path: Arc<Path> = temp_file_path.into();
@@ -74,7 +73,7 @@ async fn upload_sample_internal(
                         return Err(SeqError::BadRequestError(InternalError::new(
                             "Multipart overflow", 
                             format!("The maximum length for multipart form data is {} bytes, but the current chunk adds up to {} bytes.", MAX_MULTIPART_FORM_SIZE, current_length), 
-                            "The multipart body is to large.")));
+                            "The multipart body is too large.")));
                     } else {
                         body.extend_from_slice(&chunk);
                     }
@@ -96,6 +95,31 @@ async fn upload_sample_internal(
 
     if upload_info.is_some() && is_file_provided {
         let upload_info = upload_info.unwrap();
+        upload_info.validate().map_err(|e| {
+            SeqError::BadRequestError(InternalError::new(
+                "Sample invalid",
+                format!(
+                    "Validation of sample information {:?} failed with error: {}",
+                    upload_info, e
+                ),
+                "The provided sample information is invalid.",
+            ))
+        })?;
+        let pipeline_exists: bool = diesel::select(exists(
+            crate::schema::pipeline::dsl::pipeline
+                .filter(crate::schema::pipeline::id.eq(upload_info.pipeline_id)),
+        ))
+        .get_result(&connection)?;
+        if !pipeline_exists {
+            return Err(SeqError::BadRequestError(InternalError::new(
+                "Pipeline invalid",
+                format!(
+                    "Validation of sample information {:?} failed with error: Pipeline with ID {} does not exist.",
+                    upload_info, upload_info.pipeline_id
+                ),
+                "The provided sample information is invalid.",
+            )));
+        }
         let new_experiment: NewExperiment = upload_info.into();
         // Write to database.
         diesel::insert_into(crate::schema::experiment::table)
@@ -112,16 +136,16 @@ async fn upload_sample_internal(
         let inserted_id = inserted.id;
 
         // Create experiment folder and copy file to destination.
-        let mut final_file_path: PathBuf = PATH_FILES_EXPERIMENTS.into();
+        let mut final_file_path: PathBuf = app_config.experiment_path().into();
         final_file_path.push(inserted_id.to_string());
         std::fs::create_dir_all(&final_file_path)?;
         final_file_path.push(PATH_FILES_EXPERIMENT_INITIAL_FASTQ);
         std::fs::rename(temp_file_path, final_file_path)?;
 
-        // Return the UUID of the created attachment.
+        // Return the ID of the created attachment.
         Ok(HttpResponse::Created().body(inserted_id.to_string()))
     } else {
-        delete_temporary_file(uuid)?;
+        delete_temporary_file(uuid, Arc::clone(app_config))?;
         Err(SeqError::BadRequestError(InternalError::new("Missing multipart data",
          format!("For the experiment upload both a file ({}) and the according form data ({:?}) must be present.", is_file_provided, upload_info),
          "For the experiment upload both a file and the according form data must be present.")))
@@ -133,8 +157,16 @@ async fn upload_sample_internal(
 /// # Parameters
 ///
 /// `uuid` - the UUID of the temporary file
-fn delete_temporary_file(uuid: Uuid) -> Result<(), SeqError> {
-    let mut file_path: PathBuf = PATH_FILES_TEMPORARY.into();
+fn delete_temporary_file(uuid: Uuid, app_config: Arc<Configuration>) -> Result<(), SeqError> {
+    let mut file_path: PathBuf = app_config.temporary_file_path().into();
     file_path.push(uuid.to_string());
-    Ok(std::fs::remove_file(file_path)?)
+    if file_path.exists() {
+        std::fs::remove_file(file_path)?;
+    } else {
+        warn!("Tried to delete non existing temporary file {:?}.", file_path)
+    }
+    Ok(())
 }
+
+#[cfg(test)]
+mod tests;
