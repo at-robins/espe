@@ -1,6 +1,8 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
+use crate::service::multipart_service::UploadForm;
+
 const MAX_LENGTH_NAME: usize = 128;
 const MAX_LENGTH_MAIL: usize = 128;
 const MAX_LENGTH_COMMENT: usize = 256;
@@ -19,16 +21,6 @@ pub struct ExperimentUpload {
 }
 
 impl ExperimentUpload {
-    /**
-     * Checks if the recieved upload data is valid and returns a corresponding
-     * error message of not.
-     */
-    pub fn validate(&self) -> Result<(), String> {
-        self.validate_name()
-            .and(self.validate_mail())
-            .and(self.validate_comment())
-    }
-
     fn validate_name(&self) -> Result<(), String> {
         if self.name.is_empty() {
             Err("A sample name must be set.".to_string())
@@ -60,5 +52,17 @@ impl ExperimentUpload {
             }
         }
         Ok(())
+    }
+}
+
+impl UploadForm for ExperimentUpload {
+    /**
+     * Checks if the recieved upload data is valid and returns a corresponding
+     * error message of not.
+     */
+    fn validate(&self) -> Result<(), String> {
+        self.validate_name()
+            .and(self.validate_mail())
+            .and(self.validate_comment())
     }
 }
