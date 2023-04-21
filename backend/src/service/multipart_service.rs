@@ -1,5 +1,4 @@
 use std::{
-    borrow::Borrow,
     io::Write,
     path::{Path, PathBuf},
     sync::Arc,
@@ -24,7 +23,7 @@ pub trait UploadForm: std::fmt::Debug + DeserializeOwned {
 
 const MAX_MULTIPART_FORM_SIZE: usize = 524_288;
 
-pub async fn parse_multipart_file<T: UploadForm, P: Borrow<Path>>(
+pub async fn parse_multipart_file<T: UploadForm, P: AsRef<Path>>(
     mut payload: Multipart,
     temporary_file_path: P,
 ) -> Result<(T, Arc<Path>), SeqError> {
@@ -32,7 +31,7 @@ pub async fn parse_multipart_file<T: UploadForm, P: Borrow<Path>>(
     let mut is_file_provided = false;
     let mut upload_info: Option<T> = None;
 
-    let temp_file_path: Arc<Path> = temporary_file_path.borrow().into();
+    let temp_file_path: Arc<Path> = temporary_file_path.as_ref().into();
 
     // Iterate over the multipart stream and save the file.
     while let Some(mut field) = payload.try_next().await? {

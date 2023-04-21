@@ -1,5 +1,4 @@
 use std::{
-    borrow::Borrow,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -52,7 +51,7 @@ pub async fn upload_sample(
     Ok(HttpResponse::Created().body(inserted_id.to_string()))
 }
 
-async fn persist_multipart<P: Borrow<Path>>(
+async fn persist_multipart<P: AsRef<Path>>(
     payload: Multipart,
     temporary_file_path: P,
     app_config: Arc<Configuration>,
@@ -96,14 +95,38 @@ async fn persist_multipart<P: Borrow<Path>>(
     let inserted_id = inserted.id;
 
     // Create experiment folder and copy file to destination.
+    temp_file_to_experiment(inserted_id, temp_file_path, app_config).map_err(|error| {
+        // Roll back database if there is an error while moving the temporary file.
+        if let Err(e) = diesel::delete(
+            crate::schema::experiment::dsl::experiment
+                .filter(crate::schema::experiment::id.eq(inserted_id)),
+        )
+        .execute(&connection)
+        {
+            log::error!(
+                "Roll back of database after insertion of experiment {} failed with error: {}.",
+                inserted_id,
+                e
+            );
+        }
+        error
+    })?;
+
+    // Return the ID of the created attachment.
+    Ok(inserted_id)
+}
+
+fn temp_file_to_experiment<P: AsRef<Path>>(
+    inserted_id: i32,
+    temp_file_path: P,
+    app_config: Arc<Configuration>,
+) -> Result<(), SeqError> {
     let mut final_file_path: PathBuf = app_config.experiment_path().into();
     final_file_path.push(inserted_id.to_string());
     std::fs::create_dir_all(&final_file_path)?;
     final_file_path.push(PATH_FILES_EXPERIMENT_INITIAL_FASTQ);
     std::fs::rename(temp_file_path, final_file_path)?;
-
-    // Return the ID of the created attachment.
-    Ok(inserted_id)
+    Ok(())
 }
 
 #[cfg(test)]
