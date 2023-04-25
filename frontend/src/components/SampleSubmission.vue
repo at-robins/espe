@@ -72,7 +72,13 @@
           <q-icon name="cloud_upload" />
         </template>
       </q-file>
-      <q-btn color="primary" label="Submit" type="submit" class="q-mt-md" />
+      <q-btn
+        color="primary"
+        label="Submit"
+        type="submit"
+        class="q-mt-md"
+        :loading="isUploadingSample"
+      />
     </q-form>
     <q-dialog v-model="showUploadError" v-if="uploadError">
       <error-popup :error-response="uploadError" />
@@ -150,8 +156,8 @@ function uploadSample() {
     formData.append("file", sample.value);
     const uploadInfo: ExperimentUpload = {
       name: sampleName.value,
-      mail: mail.value,
-      comment: comment.value,
+      mail: mail.value ? mail.value : undefined,
+      comment: comment.value ? comment.value : undefined,
       pipelineId: pipeline.value.id,
     };
     formData.append("form", JSON.stringify(uploadInfo));

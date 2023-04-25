@@ -39,5 +39,6 @@ mod application;
 mod controller;
 mod model;
 mod schema;
+mod service;
 #[cfg(test)]
 mod test_utility;

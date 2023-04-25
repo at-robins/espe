@@ -20,8 +20,8 @@ export type PipelineBlueprintDetail = {
 
 export type ExperimentUpload = {
   name: string;
-  mail: string;
-  comment: string;
+  mail: string | undefined;
+  comment: string | undefined;
   pipelineId: number;
 };
 

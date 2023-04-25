@@ -9,54 +9,15 @@ use uuid::Uuid;
 pub const DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE: &str =
     "An unforseen error occurred. Please check the logs for further information.";
 
-/// An application wide error type.
-#[derive(Debug)]
-pub enum SeqError {
-    /// A generic error implying an internal problem.
-    InternalServerError(InternalError),
-    /// A error representing a missing resource.
-    NotFoundError(InternalError),
-    /// A error representing an erroneous request.
-    BadRequestError(InternalError),
-}
-
-impl SeqError {
-    /// Logs the specified error with level ERROR after transforming it
-    /// into the internal error respresentation.
-    /// This is a convenience function wrapping some logging functionality.
-    ///
-    /// # Parameters
-    ///
-    /// * `result` - the [`Result`] to log and transform in case of failure
-    pub fn log_error<T, E: Into<SeqError>>(result: Result<T, E>) -> Result<T, SeqError> {
-        result.map_err(|e| {
-            let seq_error: SeqError = e.into();
-            error!("{}", seq_error);
-            seq_error
-        })
-    }
-
-    /// Logs the specified error with level WARNING after transforming it
-    /// into the internal error respresentation.
-    /// This is a convenience function wrapping some logging functionality.
-    ///
-    /// # Parameters
-    ///
-    /// * `result` - the [`Result`] to log and transform in case of failure
-    pub fn log_warn<T, E: Into<SeqError>>(result: Result<T, E>) -> Result<T, SeqError> {
-        result.map_err(|e| {
-            let seq_error: SeqError = e.into();
-            warn!("{}", seq_error);
-            seq_error
-        })
-    }
-}
-
+/// An application wide error.
 #[derive(Debug, Clone, Getters, CopyGetters, Serialize, Deserialize)]
-pub struct InternalError {
+pub struct SeqError {
     /// The error ID.
     #[getset(get_copy = "pub")]
     uuid: Uuid,
+    /// The error type.
+    #[getset(get_copy = "pub")]
+    error_type: SeqErrorType,
     /// The identifier, name or type of the error.
     #[getset(get = "pub")]
     name: String,
@@ -70,25 +31,80 @@ pub struct InternalError {
     external_message: String,
 }
 
-impl InternalError {
-    /// Creates a new internal error.
+/// An application wide error type.
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub enum SeqErrorType {
+    /// A generic error implying an internal problem.
+    InternalServerError,
+    /// A error representing a missing resource.
+    NotFoundError,
+    /// A error representing an erroneous request.
+    BadRequestError,
+}
+
+impl SeqError {
+    /// Creates a new error and automatically logs the error.
     pub fn new<T: ToString, U: ToString, V: ToString>(
         name: T,
+        error_type: SeqErrorType,
         internal_message: U,
         external_message: V,
     ) -> Self {
-        InternalError {
+        let error = SeqError {
             uuid: Uuid::new_v4(),
+            error_type,
             name: name.to_string(),
             internal_message: internal_message.to_string(),
             external_message: external_message.to_string(),
+        };
+        error.log_default();
+        error
+    }
+
+    /// Logs the error on its default level.
+    fn log_default(&self) {
+        match self.error_type() {
+            SeqErrorType::InternalServerError => error!("{}", self),
+            SeqErrorType::NotFoundError => warn!("{}", self),
+            SeqErrorType::BadRequestError => error!("{}", self),
         }
+    }
+
+    /// Returns a respective error response.
+    fn error_response(&self) -> ErrorResponse {
+        ErrorResponse {
+            code: self.status_code().as_u16(),
+            uuid: self.uuid(),
+            name: self.status_code().to_string(),
+            message: self.external_message().clone(),
+        }
+    }
+
+    /// Converts a [`VarError`](std::env::VarError) into a [`SeqError`].
+    ///
+    /// # Parameters
+    ///
+    /// * `environment_variable` - the environment variable that caused the error
+    pub fn from_var_error<T: ToString>(error: std::env::VarError, enviroment_variable: T) -> Self {
+        Self::new(
+            "std::env::VarError",
+            SeqErrorType::InternalServerError,
+            format!("{}: {}", enviroment_variable.to_string(), error),
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        )
     }
 }
 
-impl std::fmt::Display for InternalError {
+impl std::fmt::Display for SeqError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {} - {}", self.uuid(), self.name(), self.internal_message())
+        write!(
+            f,
+            "{}: {} - {} - {}",
+            self.uuid(),
+            self.status_code(),
+            self.name(),
+            self.internal_message()
+        )
     }
 }
 
@@ -104,124 +120,82 @@ struct ErrorResponse {
     message: String,
 }
 
-impl SeqError {
-    fn error_response(&self) -> ErrorResponse {
-        match self {
-            Self::InternalServerError(internal) => ErrorResponse {
-                code: self.status_code().as_u16(),
-                uuid: internal.uuid(),
-                name: self.status_code().to_string(),
-                message: internal.external_message().clone(),
-            },
-            Self::NotFoundError(internal) => ErrorResponse {
-                code: self.status_code().as_u16(),
-                uuid: internal.uuid(),
-                name: self.status_code().to_string(),
-                message: internal.external_message().clone(),
-            },
-            Self::BadRequestError(internal) => ErrorResponse {
-                code: self.status_code().as_u16(),
-                uuid: internal.uuid(),
-                name: self.status_code().to_string(),
-                message: internal.external_message().clone(),
-            },
-        }
-    }
-
-    /// Converts a [`VarError`](std::env::VarError) into a [`SeqError`].
-    ///
-    /// # Parameters
-    ///
-    /// * `environment_variable` - the environment variable that caused the error
-    pub fn from_var_error<T: ToString>(error: std::env::VarError, enviroment_variable: T) -> Self {
-        Self::InternalServerError(InternalError::new(
-            "std::env::VarError",
-            format!("{}: {}", enviroment_variable.to_string(), error),
-            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
-        ))
-    }
-}
-
-impl std::fmt::Display for SeqError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::InternalServerError(internal) => write!(f, "{}", internal),
-            Self::NotFoundError(internal) => write!(f, "{}", internal),
-            Self::BadRequestError(internal) => write!(f, "{}", internal),
-        }
-    }
-}
-
 impl ResponseError for SeqError {
     fn error_response(&self) -> HttpResponse {
         HttpResponse::build(self.status_code()).json(self.error_response())
     }
 
     fn status_code(&self) -> StatusCode {
-        match self {
-            Self::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::NotFoundError(_) => StatusCode::NOT_FOUND,
-            Self::BadRequestError(_) => StatusCode::BAD_REQUEST,
+        match self.error_type() {
+            SeqErrorType::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
+            SeqErrorType::NotFoundError => StatusCode::NOT_FOUND,
+            SeqErrorType::BadRequestError => StatusCode::BAD_REQUEST,
         }
     }
 }
 
 impl From<serde_json::Error> for SeqError {
     fn from(error: serde_json::Error) -> Self {
-        Self::InternalServerError(InternalError::new(
+        Self::new(
             "serde_json::Error",
+            SeqErrorType::InternalServerError,
             error,
             DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
-        ))
+        )
     }
 }
 
 impl From<actix_web::error::BlockingError> for SeqError {
     fn from(error: actix_web::error::BlockingError) -> Self {
-        Self::InternalServerError(InternalError::new(
+        Self::new(
             "actix_web::error::BlockingError",
+            SeqErrorType::InternalServerError,
             error,
             DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
-        ))
+        )
     }
 }
 
 impl From<actix_multipart::MultipartError> for SeqError {
     fn from(error: actix_multipart::MultipartError) -> Self {
-        Self::InternalServerError(InternalError::new(
+        Self::new(
             "actix_multipart::MultipartError",
+            SeqErrorType::InternalServerError,
             error,
             DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
-        ))
+        )
     }
 }
 
 impl From<std::io::Error> for SeqError {
     fn from(error: std::io::Error) -> Self {
-        Self::InternalServerError(InternalError::new(
+        Self::new(
             "std::io::Error",
+            SeqErrorType::InternalServerError,
             error,
             DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
-        ))
+        )
     }
 }
 
 impl From<diesel::ConnectionError> for SeqError {
     fn from(error: diesel::ConnectionError) -> Self {
-        Self::InternalServerError(InternalError::new(
+        Self::new(
             "diesel::ConnectionError",
+            SeqErrorType::InternalServerError,
             error,
             DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
-        ))
+        )
     }
 }
 
 impl From<diesel::result::Error> for SeqError {
     fn from(error: diesel::result::Error) -> Self {
-        Self::InternalServerError(InternalError::new(
+        Self::new(
             "diesel::result::Error",
+            SeqErrorType::InternalServerError,
             error,
             DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
-        ))
+        )
     }
 }
