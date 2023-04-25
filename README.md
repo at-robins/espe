@@ -31,7 +31,9 @@ Also see ```backend/.env```.
 
 | Variable | Description |
 | --- | --- |
+| CONTEXT_FOLDER | the context folder of the application where all relevant data is stored |
 | DATABASE_URL | the database location |
+| LOG_LEVEL | the minimum log level of the application (```debug```, ```info```, ```warn```, ```error```) |
 | SERVER_ADDRESS | the address of the server |
 | SERVER_PORT | the port of the server |
 
@@ -101,5 +103,5 @@ cargo test
 Frontend testing:
 ```bash
 cd frontend
-TODO: add code
+npm run test:unit
 ```

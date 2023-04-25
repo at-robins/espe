@@ -6,7 +6,6 @@ use actix_web::{
 };
 use diesel::{Connection, SqliteConnection};
 use dotenv::dotenv;
-use log::{error, warn};
 use std::{path::PathBuf, sync::Arc};
 use uuid::Uuid;
 
@@ -33,13 +32,7 @@ pub fn create_test_app(
     env_logger::try_init_from_env(env_logger::Env::new().filter("debug")).ok();
     App::new()
         .wrap(middleware::Logger::default())
-        .app_data(Arc::clone(&Arc::new(Configuration::new(
-            context.database_url(),
-            "info",
-            "127.0.0.1",
-            "8080",
-            context.context_folder(),
-        ))))
+        .app_data(Arc::clone(&Arc::<Configuration>::new(context.into())))
         .configure(routing_config)
 }
 
@@ -61,7 +54,7 @@ impl TestContext {
 
     /// Returns the URL / URI of the test database.
     pub fn database_url(&self) -> String {
-        format!("{}/test_database.db", self.context_folder())
+        format!("{}/{}.db", self.context_folder(), self.id)
     }
 
     /// Returns the context folder that stores all context information.
@@ -81,11 +74,31 @@ impl Drop for TestContext {
     fn drop(&mut self) {
         let context_path: PathBuf = self.context_folder().into();
         if context_path.exists() {
-            if let Err(e) = std::fs::remove_dir_all(context_path) {
-                error!("Dropping test context {} failed with error: {}", self.id, e);
+            if let Err(e) = std::fs::remove_dir_all(&context_path) {
+                log::error!("Dropping test context {} failed with error: {}", self.id, e);
+            } else {
+                log::info!("Removed test context {}.", context_path.display());
             }
         } else {
-            warn!("Tried to delete non existing temporary context folder {:?}.", context_path)
+            log::warn!("Tried to delete non existing temporary context folder {}.", context_path.display());
         }
+    }
+}
+
+impl From<&TestContext> for Configuration {
+    fn from(context: &TestContext) -> Self {
+        Configuration::new(
+            context.database_url(),
+            "info",
+            "127.0.0.1",
+            "8080",
+            context.context_folder(),
+        )
+    }
+}
+
+impl From<TestContext> for Configuration {
+    fn from(context: TestContext) -> Self {
+        (&context).into()
     }
 }

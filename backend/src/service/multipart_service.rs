@@ -128,3 +128,48 @@ pub fn create_temporary_file(app_config: Arc<Configuration>) -> Result<(PathBuf,
     temp_file_path.push(uuid.to_string());
     Ok((temp_file_path, uuid))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use serial_test::serial;
+
+    use crate::{application::config::Configuration, test_utility::TestContext};
+
+    use super::*;
+
+    // The tests need to be serial to prevent the same context UUID to be issued
+    // to different tests at the same time.
+
+    #[test]
+    #[serial]
+    fn test_create_temporary_file() {
+        let context = TestContext::new();
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let app_config: Arc<Configuration> = Arc::new((&context).into());
+        let (path, id) = create_temporary_file(Arc::clone(&app_config)).unwrap();
+        assert!(path.ends_with(id.to_string()));
+        assert!(path.starts_with(app_config.temporary_file_path()));
+        assert!(!path.exists());
+    }
+
+    #[test]
+    #[serial]
+    fn test_delete_temporary_file() {
+        let context = TestContext::new();
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let app_config: Arc<Configuration> = Arc::new((&context).into());
+        let (path, id) = create_temporary_file(Arc::clone(&app_config)).unwrap();
+        std::fs::File::create(&path).unwrap();
+        assert!(path.exists());
+        assert!(path.is_file());
+        delete_temporary_file(id, Arc::clone(&app_config)).unwrap();
+        assert!(!path.exists());
+        // Deleting a non existant file should not throw an error.
+        delete_temporary_file(id, app_config).unwrap();
+        assert!(!path.exists());
+    }
+}
