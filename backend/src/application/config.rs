@@ -22,7 +22,7 @@ use uuid::{
 };
 
 use super::{
-    environment::{CONTEXT_FOLDER, DATABASE_URL, LOG_LEVEL, SERVER_ADDRESS, SERVER_PORT},
+    environment::{CONTEXT_FOLDER, DATABASE_URL, LOG_LEVEL, SERVER_ADDRESS, SERVER_PORT, PIPELINE_FOLDER},
     error::SeqError,
 };
 
@@ -44,6 +44,9 @@ pub struct Configuration {
     /// The folder where all context relevant data is stored.
     #[getset(get = "pub")]
     context_folder: String,
+    /// The folder where all pipeline definitions are stored.
+    #[getset(get = "pub")]
+    pipeline_folder: String,
 }
 
 impl Configuration {
@@ -56,18 +59,21 @@ impl Configuration {
     /// * `server_address` - the address of the server
     /// * `server_port` - the port of the server
     /// * `context_folder` - the folder, in which all context related resources are stored
+    /// * `pipeline_folder` - the folder, in which all pipeline definitions are stored
     pub fn new<
         DatabaseUrlType: Into<String>,
         LogLevelType: Into<String>,
         ServerAddressType: Into<String>,
         ServerPortType: Into<String>,
         ContextFolderType: Into<String>,
+        PipelineFolderType: Into<String>,
     >(
         database_url: DatabaseUrlType,
         log_level: LogLevelType,
         server_address: ServerAddressType,
         server_port: ServerPortType,
         context_folder: ContextFolderType,
+        pipeline_folder: PipelineFolderType,
     ) -> Self {
         Self {
             database_url: database_url.into(),
@@ -75,6 +81,7 @@ impl Configuration {
             server_address: server_address.into(),
             server_port: server_port.into(),
             context_folder: context_folder.into(),
+            pipeline_folder: pipeline_folder.into(),
         }
     }
 
@@ -86,6 +93,7 @@ impl Configuration {
             server_address: Self::get_environment_variable(SERVER_ADDRESS)?,
             server_port: Self::get_environment_variable(SERVER_PORT)?,
             context_folder: Self::get_environment_variable(CONTEXT_FOLDER)?,
+            pipeline_folder: Self::get_environment_variable(PIPELINE_FOLDER)?,
         })
     }
 

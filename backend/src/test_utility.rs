@@ -62,6 +62,11 @@ impl TestContext {
         format!("{}/{}", TEST_RESOURCES_PATH, self.id)
     }
 
+    /// Returns the pipeline definition folder.
+    pub fn pipeline_folder(&self) -> String {
+        format!("{}/{}_pipelines", self.context_folder(), self.id)
+    }
+
     /// Opens a connection to the test database.
     pub fn get_connection(&self) -> SqliteConnection {
         let connection = SqliteConnection::establish(&self.database_url()).unwrap();
@@ -93,6 +98,7 @@ impl From<&TestContext> for Configuration {
             "127.0.0.1",
             "8080",
             context.context_folder(),
+            context.pipeline_folder(),
         )
     }
 }
@@ -101,4 +107,7 @@ impl From<TestContext> for Configuration {
     fn from(context: TestContext) -> Self {
         (&context).into()
     }
+}/// Returns the context folder that stores all context information.
+pub fn context_folder(&self) -> String {
+    format!("{}/{}", TEST_RESOURCES_PATH, self.id)
 }
