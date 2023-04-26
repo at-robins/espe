@@ -107,7 +107,4 @@ impl From<TestContext> for Configuration {
     fn from(context: TestContext) -> Self {
         (&context).into()
     }
-}/// Returns the context folder that stores all context information.
-pub fn context_folder(&self) -> String {
-    format!("{}/{}", TEST_RESOURCES_PATH, self.id)
 }
