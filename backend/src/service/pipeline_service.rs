@@ -5,7 +5,7 @@ use crate::{
         config::{Configuration, PIPELINE_DEFINITION_FILE},
         error::{SeqError, SeqErrorType},
     },
-    model::internal::step_blueprint::{ContextualisedPipelineBlueprint, PipelineBlueprint},
+    model::internal::pipeline_blueprint::{ContextualisedPipelineBlueprint, PipelineBlueprint},
 };
 
 /// Returns all pipelines defined in the respective directory.
