@@ -9,7 +9,8 @@ use dotenv::dotenv;
 use std::{path::PathBuf, sync::Arc};
 use uuid::Uuid;
 
-const TEST_RESOURCES_PATH: &str = "../testing_resources";
+/// The test resource path.
+pub const TEST_RESOURCES_PATH: &str = "../testing_resources";
 
 /// Creates a fully configured app for testing purposes
 /// for testing against the specified test database.

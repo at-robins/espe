@@ -10,6 +10,8 @@ const PATH_FILES_TEMPORARY: &str = "tmp/files";
 const PATH_FILES_EXPERIMENTS: &str = "experiments";
 /// The file name of the initially submitted sample before processing.
 pub const PATH_FILES_EXPERIMENT_INITIAL_FASTQ: &str = "00_initial.fastq.gz";
+/// The file inside each pipeline folder defining the pipeline.
+pub const PIPELINE_DEFINITION_FILE: &str = "pipeline.json";
 
 use std::time::SystemTime;
 

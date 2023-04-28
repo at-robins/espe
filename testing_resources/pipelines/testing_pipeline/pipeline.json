@@ -1,0 +1,14 @@
+{
+    "id": "testing_pipeline",
+    "name": "Testing pipeline",
+    "description": "This pipeline is for testing purposes.",
+    "steps": [
+        {
+            "id": "fastqc",
+            "name": "FastQC",
+            "description": "Performs a quality control.",
+            "container": "fastqc",
+            "dependencies": []
+        } 
+    ]
+} 
