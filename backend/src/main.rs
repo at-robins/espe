@@ -3,12 +3,13 @@ extern crate diesel;
 #[macro_use]
 extern crate lazy_static;
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use actix_web::{middleware, App, HttpServer};
 use application::{config::Configuration, environment::LOG_LEVEL, error::SeqError};
 use controller::routing::routing_config;
 use dotenv::dotenv;
+use service::pipeline_service::load_pipelines;
 
 #[actix_web::main]
 async fn main() -> Result<(), SeqError> {
@@ -23,11 +24,26 @@ async fn main() -> Result<(), SeqError> {
     // Setup the configuration.
     let app_config = Arc::new(Configuration::create_from_environment()?);
     let app_config_internal = Arc::clone(&app_config);
+    // Load all pipelines into memory.
+    let pipelines = load_pipelines(Arc::clone(&app_config))?;
+    let mut pipeline_map = HashMap::new();
+    for pipeline in pipelines {
+        let duplicate = pipeline_map.insert(pipeline.pipeline().id().clone(), pipeline);
+        if let Some(duplicate_pipeline) = duplicate {
+            log::warn!(
+                "The pipeline {:?} was overwritten due to pipeline ID {} not being unique.",
+                duplicate_pipeline,
+                duplicate_pipeline.pipeline().id()
+            );
+        }
+    }
+    let pipeline_map = Arc::new(pipeline_map);
     // Setup the application.
     Ok(HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
             .app_data(Arc::clone(&app_config_internal))
+            .app_data(Arc::clone(&pipeline_map))
             .configure(routing_config)
     })
     .bind(app_config.server_address_and_port())?

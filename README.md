@@ -23,6 +23,10 @@ An actix-Rust-backend is used as a statically typed, fast and reliable backend.
 SQLite is used as it provides a simple, self-contained and fast database.
 Diesel is used for automated database migration.
 
+### Containerisation
+Docker was selected as tool for running and managing containers due to 
+its ease of use and widespread adoption.
+
 ## Usage
 TODO: Insert once the Docker image is created.
 
