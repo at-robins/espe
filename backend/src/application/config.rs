@@ -12,6 +12,10 @@ const PATH_FILES_EXPERIMENTS: &str = "experiments";
 pub const PATH_FILES_EXPERIMENT_INITIAL_FASTQ: &str = "00_initial.fastq.gz";
 /// The file inside each pipeline folder defining the pipeline.
 pub const PIPELINE_DEFINITION_FILE: &str = "pipeline.json";
+/// The sub-folder where pipeline step output is stored.
+pub const PATH_FILES_EXPERIMENTS_STEPS: &str = "steps";
+/// The sub-folder where initial pipeline input samples are stored.
+pub const PATH_FILES_EXPERIMENTS_SAMPLES: &str = "samples";
 
 use std::{path::PathBuf, time::SystemTime};
 
@@ -132,6 +136,41 @@ impl Configuration {
         path
     }
 
+    /// The context path where data related to the specified experiment is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    pub fn experiment_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
+        let mut path: PathBuf = self.experiments_path();
+        path.push(experiment_id.as_ref());
+        path
+    }
+
+    /// The context path where data related to the pipeline execution steps
+    /// of a specified experiment is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    pub fn experiment_steps_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
+        let mut path: PathBuf = self.experiment_path(experiment_id);
+        path.push(PATH_FILES_EXPERIMENTS_STEPS);
+        path
+    }
+
+    /// The context path where data related to the initial pipeline input samples
+    /// of a specified experiment is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    pub fn experiment_samples_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
+        let mut path: PathBuf = self.experiment_path(experiment_id);
+        path.push(PATH_FILES_EXPERIMENTS_SAMPLES);
+        path
+    }
+
     /// Generates a V1 UUID.
     pub fn generate_uuid() -> Uuid {
         let now = SystemTime::now()
@@ -144,5 +183,52 @@ impl Configuration {
     /// Returns the full server address including port information.
     pub fn server_address_and_port(&self) -> String {
         format!("{}:{}", self.server_address(), self.server_port())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_server_address_and_port() {
+        let config = Configuration::new("", "", "127.0.0.1", "8080", "", "");
+        assert_eq!(&config.server_address_and_port(), "127.0.0.1:8080");
+    }
+
+    #[test]
+    fn test_temporary_file_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/tmp/files".into();
+        assert_eq!(config.temporary_file_path(), path);
+    }
+
+    #[test]
+    fn test_experiments_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/experiments".into();
+        assert_eq!(config.experiments_path(), path);
+    }
+
+    #[test]
+    fn test_experiment_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/experiments/test_id".into();
+        assert_eq!(config.experiment_path("test_id"), path);
+    }
+
+    #[test]
+    fn test_experiment_steps_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/experiments/test_id/steps".into();
+        assert_eq!(config.experiment_steps_path("test_id"), path);
+    }
+
+    #[test]
+    fn test_experiment_samples_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/experiments/test_id/samples".into();
+        assert_eq!(config.experiment_samples_path("test_id"), path);
     }
 }
