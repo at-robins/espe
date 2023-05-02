@@ -13,7 +13,7 @@ pub const PATH_FILES_EXPERIMENT_INITIAL_FASTQ: &str = "00_initial.fastq.gz";
 /// The file inside each pipeline folder defining the pipeline.
 pub const PIPELINE_DEFINITION_FILE: &str = "pipeline.json";
 
-use std::time::SystemTime;
+use std::{path::PathBuf, time::SystemTime};
 
 use diesel::{Connection, SqliteConnection};
 use getset::Getters;
@@ -24,7 +24,9 @@ use uuid::{
 };
 
 use super::{
-    environment::{CONTEXT_FOLDER, DATABASE_URL, LOG_LEVEL, SERVER_ADDRESS, SERVER_PORT, PIPELINE_FOLDER},
+    environment::{
+        CONTEXT_FOLDER, DATABASE_URL, LOG_LEVEL, PIPELINE_FOLDER, SERVER_ADDRESS, SERVER_PORT,
+    },
     error::SeqError,
 };
 
@@ -45,10 +47,10 @@ pub struct Configuration {
     server_port: String,
     /// The folder where all context relevant data is stored.
     #[getset(get = "pub")]
-    context_folder: String,
+    context_folder: PathBuf,
     /// The folder where all pipeline definitions are stored.
     #[getset(get = "pub")]
-    pipeline_folder: String,
+    pipeline_folder: PathBuf,
 }
 
 impl Configuration {
@@ -67,8 +69,8 @@ impl Configuration {
         LogLevelType: Into<String>,
         ServerAddressType: Into<String>,
         ServerPortType: Into<String>,
-        ContextFolderType: Into<String>,
-        PipelineFolderType: Into<String>,
+        ContextFolderType: Into<PathBuf>,
+        PipelineFolderType: Into<PathBuf>,
     >(
         database_url: DatabaseUrlType,
         log_level: LogLevelType,
@@ -89,14 +91,14 @@ impl Configuration {
 
     /// Creates a new configuration if all enviroment variables are setup correctly.
     pub fn create_from_environment() -> Result<Self, SeqError> {
-        Ok(Self {
-            database_url: Self::get_environment_variable(DATABASE_URL)?,
-            log_level: Self::get_environment_variable(LOG_LEVEL)?,
-            server_address: Self::get_environment_variable(SERVER_ADDRESS)?,
-            server_port: Self::get_environment_variable(SERVER_PORT)?,
-            context_folder: Self::get_environment_variable(CONTEXT_FOLDER)?,
-            pipeline_folder: Self::get_environment_variable(PIPELINE_FOLDER)?,
-        })
+        Ok(Self::new(
+            Self::get_environment_variable(DATABASE_URL)?,
+            Self::get_environment_variable(LOG_LEVEL)?,
+            Self::get_environment_variable(SERVER_ADDRESS)?,
+            Self::get_environment_variable(SERVER_PORT)?,
+            Self::get_environment_variable(CONTEXT_FOLDER)?,
+            Self::get_environment_variable(PIPELINE_FOLDER)?,
+        ))
     }
 
     /// Retrieves an environment variable by name and returns an error in case of it not being set or being invalid.
@@ -117,13 +119,17 @@ impl Configuration {
     }
 
     /// The context path where temporary files are stored.
-    pub fn temporary_file_path(&self) -> String {
-        format!("{}/{}", self.context_folder(), PATH_FILES_TEMPORARY)
+    pub fn temporary_file_path(&self) -> PathBuf {
+        let mut path: PathBuf = self.context_folder().clone();
+        path.push(PATH_FILES_TEMPORARY);
+        path
     }
 
     /// The context path where data related to specific experiments or samples is stored.
-    pub fn experiment_path(&self) -> String {
-        format!("{}/{}", self.context_folder(), PATH_FILES_EXPERIMENTS)
+    pub fn experiments_path(&self) -> PathBuf {
+        let mut path: PathBuf = self.context_folder().clone();
+        path.push(PATH_FILES_EXPERIMENTS);
+        path
     }
 
     /// Generates a V1 UUID.

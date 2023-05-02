@@ -121,7 +121,7 @@ fn temp_file_to_experiment<P: AsRef<Path>>(
     temp_file_path: P,
     app_config: Arc<Configuration>,
 ) -> Result<(), SeqError> {
-    let mut final_file_path: PathBuf = app_config.experiment_path().into();
+    let mut final_file_path: PathBuf = app_config.experiments_path();
     final_file_path.push(inserted_id.to_string());
     std::fs::create_dir_all(&final_file_path)?;
     final_file_path.push(PATH_FILES_EXPERIMENT_INITIAL_FASTQ);
