@@ -148,7 +148,7 @@ impl Configuration {
     }
 
     /// The context path where data related to the pipeline execution steps
-    /// of a specified experiment is stored.
+    /// of the specified experiment is stored.
     ///
     /// # Parameters
     ///
@@ -156,6 +156,23 @@ impl Configuration {
     pub fn experiment_steps_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
         let mut path: PathBuf = self.experiment_path(experiment_id);
         path.push(PATH_FILES_EXPERIMENTS_STEPS);
+        path
+    }
+
+    /// The context path where data related to the pipeline execution step
+    /// of the specified experiment is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    /// * `step_id` - the ID of the step
+    pub fn experiment_step_path<P: AsRef<str>, Q: AsRef<str>>(
+        &self,
+        experiment_id: P,
+        step_id: Q,
+    ) -> PathBuf {
+        let mut path: PathBuf = self.experiment_steps_path(experiment_id);
+        path.push(step_id.as_ref());
         path
     }
 
@@ -223,6 +240,13 @@ mod tests {
         let config = Configuration::new("", "", "", "", "./application/context", "");
         let path: PathBuf = "./application/context/experiments/test_id/steps".into();
         assert_eq!(config.experiment_steps_path("test_id"), path);
+    }
+
+    #[test]
+    fn test_experiment_step_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/experiments/experiment_id/steps/step_id".into();
+        assert_eq!(config.experiment_step_path("experiment_id", "step_id"), path);
     }
 
     #[test]
