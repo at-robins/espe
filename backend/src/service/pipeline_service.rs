@@ -180,6 +180,7 @@ mod tests {
 
     use crate::{
         application::config::Configuration,
+        model::internal::pipeline_blueprint::PipelineStepVariableCategory,
         test_utility::{TestContext, TEST_RESOURCES_PATH},
     };
 
@@ -264,6 +265,35 @@ mod tests {
         assert_eq!(step.name(), "FastQC");
         assert_eq!(step.description(), "Performs a quality control.");
         assert_eq!(step.container(), "fastqc");
-        assert!(step.dependencies().is_empty())
+        assert_eq!(step.dependencies(), &vec!["123", "456"]);
+        assert_eq!(step.variables().len(), 5);
+        assert_eq!(step.variables()[0].id(), "bool");
+        assert_eq!(step.variables()[0].name(), "Boolean");
+        assert_eq!(step.variables()[0].description(), "A boolean checkbox.");
+        assert_eq!(step.variables()[0].category(), &PipelineStepVariableCategory::Boolean);
+        assert_eq!(step.variables()[1].id(), "global");
+        assert_eq!(step.variables()[1].name(), "Global");
+        assert_eq!(step.variables()[1].description(), "A global data reference.");
+        assert_eq!(step.variables()[1].category(), &PipelineStepVariableCategory::Global);
+        assert_eq!(step.variables()[2].id(), "number");
+        assert_eq!(step.variables()[2].name(), "Number");
+        assert_eq!(step.variables()[2].description(), "A number field.");
+        assert_eq!(step.variables()[2].category(), &PipelineStepVariableCategory::Number);
+        assert_eq!(step.variables()[3].id(), "option");
+        assert_eq!(step.variables()[3].name(), "Option");
+        assert_eq!(step.variables()[3].description(), "An option dropdown.");
+        if let PipelineStepVariableCategory::Option(options) = step.variables()[3].category() {
+            assert_eq!(options.len(), 2);
+            assert_eq!(options[0].name(), "Option 1");
+            assert_eq!(options[0].value(), "option1");
+            assert_eq!(options[1].name(), "Option 2");
+            assert_eq!(options[1].value(), "option2");
+        } else {
+            panic!("Not an option variable!");
+        }
+        assert_eq!(step.variables()[4].id(), "string");
+        assert_eq!(step.variables()[4].name(), "String");
+        assert_eq!(step.variables()[4].description(), "A string text field.");
+        assert_eq!(step.variables()[4].category(), &PipelineStepVariableCategory::String);
     }
 }
