@@ -10,8 +10,16 @@ const PATH_FILES_TEMPORARY: &str = "tmp/files";
 const PATH_FILES_EXPERIMENTS: &str = "experiments";
 /// The file name of the initially submitted sample before processing.
 pub const PATH_FILES_EXPERIMENT_INITIAL_FASTQ: &str = "00_initial.fastq.gz";
+/// The file inside each pipeline folder defining the pipeline.
+pub const PIPELINE_DEFINITION_FILE: &str = "pipeline.json";
+/// The sub-folder where pipeline step output is stored.
+pub const PATH_FILES_EXPERIMENTS_STEPS: &str = "steps";
+/// The sub-folder where initial pipeline input samples are stored.
+pub const PATH_FILES_EXPERIMENTS_SAMPLES: &str = "samples";
+/// The folder where global data is stored.
+pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
 
-use std::time::SystemTime;
+use std::{path::PathBuf, time::SystemTime};
 
 use diesel::{Connection, SqliteConnection};
 use getset::Getters;
@@ -22,7 +30,9 @@ use uuid::{
 };
 
 use super::{
-    environment::{CONTEXT_FOLDER, DATABASE_URL, LOG_LEVEL, SERVER_ADDRESS, SERVER_PORT},
+    environment::{
+        CONTEXT_FOLDER, DATABASE_URL, LOG_LEVEL, PIPELINE_FOLDER, SERVER_ADDRESS, SERVER_PORT,
+    },
     error::SeqError,
 };
 
@@ -43,7 +53,10 @@ pub struct Configuration {
     server_port: String,
     /// The folder where all context relevant data is stored.
     #[getset(get = "pub")]
-    context_folder: String,
+    context_folder: PathBuf,
+    /// The folder where all pipeline definitions are stored.
+    #[getset(get = "pub")]
+    pipeline_folder: PathBuf,
 }
 
 impl Configuration {
@@ -56,18 +69,21 @@ impl Configuration {
     /// * `server_address` - the address of the server
     /// * `server_port` - the port of the server
     /// * `context_folder` - the folder, in which all context related resources are stored
+    /// * `pipeline_folder` - the folder, in which all pipeline definitions are stored
     pub fn new<
         DatabaseUrlType: Into<String>,
         LogLevelType: Into<String>,
         ServerAddressType: Into<String>,
         ServerPortType: Into<String>,
-        ContextFolderType: Into<String>,
+        ContextFolderType: Into<PathBuf>,
+        PipelineFolderType: Into<PathBuf>,
     >(
         database_url: DatabaseUrlType,
         log_level: LogLevelType,
         server_address: ServerAddressType,
         server_port: ServerPortType,
         context_folder: ContextFolderType,
+        pipeline_folder: PipelineFolderType,
     ) -> Self {
         Self {
             database_url: database_url.into(),
@@ -75,18 +91,20 @@ impl Configuration {
             server_address: server_address.into(),
             server_port: server_port.into(),
             context_folder: context_folder.into(),
+            pipeline_folder: pipeline_folder.into(),
         }
     }
 
     /// Creates a new configuration if all enviroment variables are setup correctly.
     pub fn create_from_environment() -> Result<Self, SeqError> {
-        Ok(Self {
-            database_url: Self::get_environment_variable(DATABASE_URL)?,
-            log_level: Self::get_environment_variable(LOG_LEVEL)?,
-            server_address: Self::get_environment_variable(SERVER_ADDRESS)?,
-            server_port: Self::get_environment_variable(SERVER_PORT)?,
-            context_folder: Self::get_environment_variable(CONTEXT_FOLDER)?,
-        })
+        Ok(Self::new(
+            Self::get_environment_variable(DATABASE_URL)?,
+            Self::get_environment_variable(LOG_LEVEL)?,
+            Self::get_environment_variable(SERVER_ADDRESS)?,
+            Self::get_environment_variable(SERVER_PORT)?,
+            Self::get_environment_variable(CONTEXT_FOLDER)?,
+            Self::get_environment_variable(PIPELINE_FOLDER)?,
+        ))
     }
 
     /// Retrieves an environment variable by name and returns an error in case of it not being set or being invalid.
@@ -107,13 +125,87 @@ impl Configuration {
     }
 
     /// The context path where temporary files are stored.
-    pub fn temporary_file_path(&self) -> String {
-        format!("{}/{}", self.context_folder(), PATH_FILES_TEMPORARY)
+    pub fn temporary_file_path(&self) -> PathBuf {
+        let mut path: PathBuf = self.context_folder().clone();
+        path.push(PATH_FILES_TEMPORARY);
+        path
+    }
+
+    /// The context path where all global data is stored.
+    pub fn globals_path(&self) -> PathBuf {
+        let mut path: PathBuf = self.context_folder().clone();
+        path.push(PATH_FILES_GLOBAL_DATA);
+        path
+    }
+
+    /// The context path where the specified global data is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `global_id` - the ID of the global data
+    pub fn global_data_path<P: AsRef<str>>(&self, global_id: P) -> PathBuf {
+        let mut path: PathBuf = self.globals_path();
+        path.push(global_id.as_ref());
+        path
     }
 
     /// The context path where data related to specific experiments or samples is stored.
-    pub fn experiment_path(&self) -> String {
-        format!("{}/{}", self.context_folder(), PATH_FILES_EXPERIMENTS)
+    pub fn experiments_path(&self) -> PathBuf {
+        let mut path: PathBuf = self.context_folder().clone();
+        path.push(PATH_FILES_EXPERIMENTS);
+        path
+    }
+
+    /// The context path where data related to the specified experiment is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    pub fn experiment_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
+        let mut path: PathBuf = self.experiments_path();
+        path.push(experiment_id.as_ref());
+        path
+    }
+
+    /// The context path where data related to the pipeline execution steps
+    /// of the specified experiment is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    pub fn experiment_steps_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
+        let mut path: PathBuf = self.experiment_path(experiment_id);
+        path.push(PATH_FILES_EXPERIMENTS_STEPS);
+        path
+    }
+
+    /// The context path where data related to the pipeline execution step
+    /// of the specified experiment is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    /// * `step_id` - the ID of the step
+    pub fn experiment_step_path<P: AsRef<str>, Q: AsRef<str>>(
+        &self,
+        experiment_id: P,
+        step_id: Q,
+    ) -> PathBuf {
+        let mut path: PathBuf = self.experiment_steps_path(experiment_id);
+        path.push(step_id.as_ref());
+        path
+    }
+
+    /// The context path where data related to the initial pipeline input samples
+    /// of a specified experiment is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    pub fn experiment_samples_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
+        let mut path: PathBuf = self.experiment_path(experiment_id);
+        path.push(PATH_FILES_EXPERIMENTS_SAMPLES);
+        path
     }
 
     /// Generates a V1 UUID.
@@ -128,5 +220,73 @@ impl Configuration {
     /// Returns the full server address including port information.
     pub fn server_address_and_port(&self) -> String {
         format!("{}:{}", self.server_address(), self.server_port())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_server_address_and_port() {
+        let config = Configuration::new("", "", "127.0.0.1", "8080", "", "");
+        assert_eq!(&config.server_address_and_port(), "127.0.0.1:8080");
+    }
+
+    #[test]
+    fn test_temporary_file_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/tmp/files".into();
+        assert_eq!(config.temporary_file_path(), path);
+    }
+
+    #[test]
+    fn test_globals_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/globals".into();
+        assert_eq!(config.globals_path(), path);
+    }
+
+    #[test]
+    fn test_global_data_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/globals/global_id".into();
+        assert_eq!(config.global_data_path("global_id"), path);
+    }
+
+    #[test]
+    fn test_experiments_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/experiments".into();
+        assert_eq!(config.experiments_path(), path);
+    }
+
+    #[test]
+    fn test_experiment_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/experiments/test_id".into();
+        assert_eq!(config.experiment_path("test_id"), path);
+    }
+
+    #[test]
+    fn test_experiment_steps_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/experiments/test_id/steps".into();
+        assert_eq!(config.experiment_steps_path("test_id"), path);
+    }
+
+    #[test]
+    fn test_experiment_step_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/experiments/experiment_id/steps/step_id".into();
+        assert_eq!(config.experiment_step_path("experiment_id", "step_id"), path);
+    }
+
+    #[test]
+    fn test_experiment_samples_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/experiments/test_id/samples".into();
+        assert_eq!(config.experiment_samples_path("test_id"), path);
     }
 }

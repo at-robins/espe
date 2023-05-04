@@ -1,0 +1,24 @@
+{
+    "id": "wiedemann_atac_paired_end",
+    "name": "Wiedemann ATAC paired end pipeline",
+    "description": "This pipeline processes paired end ATAC data.",
+    "steps": [
+        {
+            "id": "fastqc_initial",
+            "name": "FastQC",
+            "description": "Performs an initial quality control of sequenced reads.",
+            "container": "fastqc",
+            "dependencies": [],
+            "variables": [
+                {
+                    "id": "SVG",
+                    "name": "SVG images",
+                    "description": "Saves all images as vector files instead of bitmaps.",
+                    "category": {
+                        "tag": "Boolean"
+                    }
+                }
+            ]
+        } 
+    ]
+} 

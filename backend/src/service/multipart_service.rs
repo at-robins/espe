@@ -101,7 +101,7 @@ pub async fn parse_multipart_file<T: UploadForm, P: AsRef<Path>>(
 /// * `uuid` - the UUID of the temporary file
 /// * `app_config` - the app [`Configuration`]
 pub fn delete_temporary_file(uuid: Uuid, app_config: Arc<Configuration>) -> Result<(), SeqError> {
-    let mut file_path: PathBuf = app_config.temporary_file_path().into();
+    let mut file_path: PathBuf = app_config.temporary_file_path();
     file_path.push(uuid.to_string());
     if file_path.exists() {
         std::fs::remove_file(&file_path)?;
@@ -123,7 +123,7 @@ pub fn create_temporary_file(app_config: Arc<Configuration>) -> Result<(PathBuf,
     let uuid = Configuration::generate_uuid();
 
     // Create the temporary folder.
-    let mut temp_file_path: PathBuf = app_config.temporary_file_path().into();
+    let mut temp_file_path: PathBuf = app_config.temporary_file_path();
     std::fs::create_dir_all(&temp_file_path)?;
     temp_file_path.push(uuid.to_string());
     Ok((temp_file_path, uuid))

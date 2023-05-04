@@ -9,7 +9,8 @@ use dotenv::dotenv;
 use std::{path::PathBuf, sync::Arc};
 use uuid::Uuid;
 
-const TEST_RESOURCES_PATH: &str = "../testing_resources";
+/// The test resource path.
+pub const TEST_RESOURCES_PATH: &str = "../testing_resources";
 
 /// Creates a fully configured app for testing purposes
 /// for testing against the specified test database.
@@ -62,6 +63,11 @@ impl TestContext {
         format!("{}/{}", TEST_RESOURCES_PATH, self.id)
     }
 
+    /// Returns the pipeline definition folder.
+    pub fn pipeline_folder(&self) -> String {
+        format!("{}/{}_pipelines", self.context_folder(), self.id)
+    }
+
     /// Opens a connection to the test database.
     pub fn get_connection(&self) -> SqliteConnection {
         let connection = SqliteConnection::establish(&self.database_url()).unwrap();
@@ -93,6 +99,7 @@ impl From<&TestContext> for Configuration {
             "127.0.0.1",
             "8080",
             context.context_folder(),
+            context.pipeline_folder(),
         )
     }
 }

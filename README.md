@@ -23,6 +23,10 @@ An actix-Rust-backend is used as a statically typed, fast and reliable backend.
 SQLite is used as it provides a simple, self-contained and fast database.
 Diesel is used for automated database migration.
 
+### Containerisation
+Docker was selected as tool for running and managing containers due to 
+its ease of use and widespread adoption.
+
 ## Usage
 TODO: Insert once the Docker image is created.
 
@@ -34,6 +38,7 @@ Also see ```backend/.env```.
 | CONTEXT_FOLDER | the context folder of the application where all relevant data is stored |
 | DATABASE_URL | the database location |
 | LOG_LEVEL | the minimum log level of the application (```debug```, ```info```, ```warn```, ```error```) |
+| PIPELINE_FOLDER | the folder storing pipeline definitions |
 | SERVER_ADDRESS | the address of the server |
 | SERVER_PORT | the port of the server |
 
@@ -76,6 +81,8 @@ cargo install diesel_cli --no-default-features --features sqlite
 cd backend
 mkdir application # without the sub-folder Diesel will fail to create the database
 diesel setup
+# Install docker for containerisation of the pipeline.
+sudo apt install docker.io
 ```
 
 Running a release build:

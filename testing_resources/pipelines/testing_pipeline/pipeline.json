@@ -1,0 +1,66 @@
+{
+    "id": "testing_pipeline",
+    "name": "Testing pipeline",
+    "description": "This pipeline is for testing purposes.",
+    "steps": [
+        {
+            "id": "fastqc",
+            "name": "FastQC",
+            "description": "Performs a quality control.",
+            "container": "fastqc",
+            "dependencies": ["123", "456"],
+            "variables": [
+                {
+                    "id": "bool",
+                    "name": "Boolean",
+                    "description": "A boolean checkbox.",
+                    "category": {
+                        "tag": "Boolean"
+                    }
+                },
+                {
+                    "id": "global",
+                    "name": "Global",
+                    "description": "A global data reference.",
+                    "category": {
+                        "tag": "Global"
+                    }
+                },
+                {
+                    "id": "number",
+                    "name": "Number",
+                    "description": "A number field.",
+                    "category": {
+                        "tag": "Number"
+                    }
+                },
+                {
+                    "id": "option",
+                    "name": "Option",
+                    "description": "An option dropdown.",
+                    "category": {
+                        "tag": "Option",
+                        "content": [
+                            {
+                                "name": "Option 1",
+                                "value": "option1"
+                            },
+                            {
+                                "name": "Option 2",
+                                "value": "option2"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "id": "string",
+                    "name": "String",
+                    "description": "A string text field.",
+                    "category": {
+                        "tag": "String"
+                    }
+                }
+            ]
+        } 
+    ]
+} 

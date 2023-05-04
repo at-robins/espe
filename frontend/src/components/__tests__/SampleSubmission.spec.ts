@@ -120,7 +120,6 @@ describe("correct upload if", () => {
       JSON.stringify({
         name: TEST_NAME,
         mail: TEST_MAIL_VALID,
-        comment: "",
         pipelineId: TEST_PIPELINE.id,
       })
     );
