@@ -16,6 +16,8 @@ pub const PIPELINE_DEFINITION_FILE: &str = "pipeline.json";
 pub const PATH_FILES_EXPERIMENTS_STEPS: &str = "steps";
 /// The sub-folder where initial pipeline input samples are stored.
 pub const PATH_FILES_EXPERIMENTS_SAMPLES: &str = "samples";
+/// The folder where global data is stored.
+pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
 
 use std::{path::PathBuf, time::SystemTime};
 
@@ -129,6 +131,24 @@ impl Configuration {
         path
     }
 
+    /// The context path where all global data is stored.
+    pub fn globals_path(&self) -> PathBuf {
+        let mut path: PathBuf = self.context_folder().clone();
+        path.push(PATH_FILES_GLOBAL_DATA);
+        path
+    }
+
+    /// The context path where the specified global data is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `global_id` - the ID of the global data
+    pub fn global_data_path<P: AsRef<str>>(&self, global_id: P) -> PathBuf {
+        let mut path: PathBuf = self.globals_path();
+        path.push(global_id.as_ref());
+        path
+    }
+
     /// The context path where data related to specific experiments or samples is stored.
     pub fn experiments_path(&self) -> PathBuf {
         let mut path: PathBuf = self.context_folder().clone();
@@ -219,6 +239,20 @@ mod tests {
         let config = Configuration::new("", "", "", "", "./application/context", "");
         let path: PathBuf = "./application/context/tmp/files".into();
         assert_eq!(config.temporary_file_path(), path);
+    }
+
+    #[test]
+    fn test_globals_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/globals".into();
+        assert_eq!(config.globals_path(), path);
+    }
+
+    #[test]
+    fn test_global_data_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/globals/global_id".into();
+        assert_eq!(config.global_data_path("global_id"), path);
     }
 
     #[test]

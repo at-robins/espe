@@ -10,8 +10,11 @@ use crate::{
         config::{Configuration, PIPELINE_DEFINITION_FILE},
         error::{SeqError, SeqErrorType},
     },
-    model::internal::pipeline_blueprint::{
-        ContextualisedPipelineBlueprint, PipelineBlueprint, PipelineStepBlueprint,
+    model::{
+        exchange::pipeline_step_details::PipelineStepVariableInstance,
+        internal::pipeline_blueprint::{
+            ContextualisedPipelineBlueprint, PipelineBlueprint, PipelineStepBlueprint,
+        },
     },
 };
 
@@ -105,10 +108,12 @@ pub fn build_pipeline_step<P: AsRef<Path>>(
 /// # Parameters
 ///
 /// * `step` - the [`PipelineStepBlueprint`] to run
+/// * `variables` - the variables that were specified for step execution
 /// * `experiment_id` - the ID of the experiment
 /// * `app_cofig` - the app [`Configuration`]
 pub fn run_pipeline_step<P: AsRef<str>>(
     step: &PipelineStepBlueprint,
+    variables: &Vec<PipelineStepVariableInstance>,
     experiment_id: P,
     app_config: Arc<Configuration>,
 ) -> Result<std::process::Output, SeqError> {
@@ -141,8 +146,25 @@ pub fn run_pipeline_step<P: AsRef<str>>(
             true,
         ));
     }
-    // Set variables.
-    todo!();
+    // Set global mounts.
+    variables
+        .iter()
+        .filter(|var_instance| var_instance.isGlobalDateReference())
+        .for_each(|global_var| {
+            arguments.push(pipeline_step_mount(
+                app_config.global_data_path(&global_var.value),
+                format!("/input/globals/{}", &global_var.id),
+                true,
+            ));
+        });
+
+    // Set other variables.
+    variables
+        .iter()
+        .filter(|var_instance| !var_instance.isGlobalDateReference())
+        .for_each(|other_var| {
+            arguments.push(format!("--env {}='{}'", other_var.id, other_var.value).into());
+        });
 
     // Set container to run.
     arguments.push(step.id().into());
