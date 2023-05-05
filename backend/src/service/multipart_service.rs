@@ -65,7 +65,7 @@ pub async fn parse_multipart_file<T: UploadForm, P: AsRef<Path>>(
         }
     }
 
-    let upload_info = upload_info.ok_or(SeqError::new(
+    let upload_info = upload_info.ok_or_else(|| SeqError::new(
         "Missing multipart data",
         SeqErrorType::BadRequestError,
         "The multipart upload did not provide form data.",

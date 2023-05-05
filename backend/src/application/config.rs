@@ -121,6 +121,9 @@ impl Configuration {
     pub fn database_connection(&self) -> Result<SqliteConnection, SeqError> {
         let connection = SqliteConnection::establish(self.database_url())?;
         connection.execute("PRAGMA foreign_keys = ON;")?;
+        connection.execute("PRAGMA journal_mode = WAL;")?;
+        connection.execute("PRAGMA synchronous = NORMAL;")?;
+        connection.execute("PRAGMA busy_timeout = 10000;")?;
         Ok(connection)
     }
 
