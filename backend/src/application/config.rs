@@ -21,7 +21,7 @@ pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
 
 use std::{path::PathBuf, time::SystemTime};
 
-use diesel::{Connection, SqliteConnection};
+use diesel::{connection::SimpleConnection, Connection, SqliteConnection};
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 use uuid::{
@@ -119,11 +119,13 @@ impl Configuration {
 
     /// Returns a connection to the database if possible.
     pub fn database_connection(&self) -> Result<SqliteConnection, SeqError> {
-        let connection = SqliteConnection::establish(self.database_url())?;
-        connection.execute("PRAGMA foreign_keys = ON;")?;
-        connection.execute("PRAGMA journal_mode = WAL;")?;
-        connection.execute("PRAGMA synchronous = NORMAL;")?;
-        connection.execute("PRAGMA busy_timeout = 10000;")?;
+        let mut connection = SqliteConnection::establish(self.database_url())?;
+        connection.batch_execute(
+            "PRAGMA foreign_keys = ON;
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
+            PRAGMA busy_timeout = 10000;",
+        )?;
         Ok(connection)
     }
 

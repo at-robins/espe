@@ -4,7 +4,8 @@ use actix_web::{
     dev::{ServiceFactory, ServiceRequest, ServiceResponse},
     middleware, App, Error,
 };
-use diesel::{Connection, SqliteConnection};
+use diesel::{connection::SimpleConnection, Connection, SqliteConnection};
+use diesel_migrations::MigrationHarness;
 use dotenv::dotenv;
 use std::{path::PathBuf, sync::Arc};
 use uuid::Uuid;
@@ -49,7 +50,11 @@ impl TestContext {
         let id = Configuration::generate_uuid();
         let context = TestContext { id };
         std::fs::create_dir_all(context.context_folder()).unwrap();
-        diesel_migrations::run_pending_migrations(&context.get_connection()).unwrap();
+        let con = &mut context.get_connection();
+        con.run_pending_migrations(
+            diesel_migrations::FileBasedMigrations::find_migrations_directory().unwrap(),
+        )
+        .unwrap();
         context
     }
 
@@ -70,8 +75,15 @@ impl TestContext {
 
     /// Opens a connection to the test database.
     pub fn get_connection(&self) -> SqliteConnection {
-        let connection = SqliteConnection::establish(&self.database_url()).unwrap();
-        connection.execute("PRAGMA foreign_keys = ON;").unwrap();
+        let mut connection = SqliteConnection::establish(&self.database_url()).unwrap();
+        connection
+            .batch_execute(
+                "PRAGMA foreign_keys = ON;
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
+            PRAGMA busy_timeout = 10000;",
+            )
+            .unwrap();
         connection
     }
 }
@@ -86,7 +98,10 @@ impl Drop for TestContext {
                 log::info!("Removed test context {}.", context_path.display());
             }
         } else {
-            log::warn!("Tried to delete non existing temporary context folder {}.", context_path.display());
+            log::warn!(
+                "Tried to delete non existing temporary context folder {}.",
+                context_path.display()
+            );
         }
     }
 }

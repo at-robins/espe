@@ -149,7 +149,7 @@ pub fn run_pipeline_step<P: AsRef<str>>(
     // Set global mounts.
     variables
         .iter()
-        .filter(|var_instance| var_instance.isGlobalDateReference())
+        .filter(|var_instance| var_instance.is_global_data_reference())
         .for_each(|global_var| {
             arguments.push(pipeline_step_mount(
                 app_config.global_data_path(&global_var.value),
@@ -161,7 +161,7 @@ pub fn run_pipeline_step<P: AsRef<str>>(
     // Set other variables.
     variables
         .iter()
-        .filter(|var_instance| !var_instance.isGlobalDateReference())
+        .filter(|var_instance| !var_instance.is_global_data_reference())
         .for_each(|other_var| {
             arguments.push(format!("--env {}='{}'", other_var.id, other_var.value).into());
         });
