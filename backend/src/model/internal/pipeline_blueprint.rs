@@ -56,9 +56,9 @@ pub struct ContextualisedPipelineBlueprint {
 
 impl ContextualisedPipelineBlueprint {
     /// Creates a new `ContextualisedPipelineBlueprint`
-    /// 
+    ///
     /// # Parameters
-    /// 
+    ///
     /// * `pipeline` - the underlying [`PipelineBlueprint`] definition
     /// * `context` - the directory in which the pipeline definition resides
     pub fn new<P: Into<PathBuf>>(pipeline: PipelineBlueprint, context: P) -> Self {

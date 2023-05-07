@@ -14,11 +14,7 @@ use serial_test::serial;
 #[actix_web::test]
 #[serial]
 async fn test_upload_sample_post() {
-    expect_dummy_request_response(
-        "sample_submission_multipart",
-        StatusCode::CREATED,
-    )
-    .await;
+    expect_dummy_request_response("sample_submission_multipart", StatusCode::CREATED).await;
 }
 
 #[actix_web::test]

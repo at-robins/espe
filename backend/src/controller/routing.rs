@@ -4,7 +4,14 @@ use log::error;
 
 use crate::application::error::SeqError;
 
-use super::{pipeline_controller::{get_pipeline_instance, get_pipeline_blueprints}, sample_controller::upload_sample, global_data_controller::{create_global_data, list_global_data, delete_global_data}};
+use super::{
+    global_data_controller::{
+        create_global_data, delete_global_data, get_global_data, list_global_data,
+        patch_global_data_comment, patch_global_data_name,
+    },
+    pipeline_controller::{get_pipeline_blueprints, get_pipeline_instance},
+    sample_controller::upload_sample,
+};
 
 /// Serve the entry point to the single page web app.
 async fn index() -> Result<NamedFile, SeqError> {
@@ -29,6 +36,9 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/experiment", web::post().to(upload_sample))
     .route("/api/globals", web::get().to(list_global_data))
     .route("/api/globals", web::post().to(create_global_data))
+    .route("/api/globals/{id}", web::get().to(get_global_data))
+    .route("/api/globals/{id}/comment", web::patch().to(patch_global_data_comment))
+    .route("/api/globals/{id}/name", web::patch().to(patch_global_data_name))
     .route("/api/globals/{id}", web::delete().to(delete_global_data))
 
     // Registers static frontend resources. Needs to be last to not overwrite other routes.
