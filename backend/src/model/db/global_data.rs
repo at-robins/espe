@@ -4,7 +4,7 @@ use diesel::{Identifiable, Insertable, Queryable};
 use getset::{CopyGetters, Getters};
 
 #[derive(Identifiable, Queryable, Insertable, PartialEq, Debug)]
-#[table_name = "global_data"]
+#[diesel(table_name = global_data)]
 /// A queryable global data database entry.
 pub struct GlobalData {
     pub id: i32,
@@ -14,7 +14,7 @@ pub struct GlobalData {
 }
 
 #[derive(Insertable, PartialEq, Debug, Getters, CopyGetters)]
-#[table_name = "global_data"]
+#[diesel(table_name = global_data)]
 /// A new global data database record.
 pub struct NewGlobalData {
     #[getset(get = "pub")]

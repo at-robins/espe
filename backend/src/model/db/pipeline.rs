@@ -4,7 +4,7 @@ use diesel::{Identifiable, Queryable};
 use getset::Getters;
 
 #[derive(Identifiable, Queryable, PartialEq, Debug)]
-#[table_name = "pipeline"]
+#[diesel(table_name = pipeline)]
 /// A pipeline database entry.
 pub struct Pipeline {
     pub id: i32,
@@ -14,7 +14,7 @@ pub struct Pipeline {
 }
 
 #[derive(Insertable, PartialEq, Debug, Getters)]
-#[table_name = "pipeline"]
+#[diesel(table_name = pipeline)]
 /// A new experiment database record.
 pub struct NewPipeline {
     #[getset(get = "pub")]

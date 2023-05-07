@@ -9,8 +9,8 @@ use getset::{CopyGetters, Getters};
 use super::pipeline::Pipeline;
 
 #[derive(Identifiable, Queryable, Associations, Insertable, PartialEq, Debug)]
-#[belongs_to(Pipeline)]
-#[table_name = "experiment"]
+#[diesel(belongs_to(Pipeline))]
+#[diesel(table_name = experiment)]
 /// A queryable experiment database entry.
 pub struct Experiment {
     pub id: i32,
@@ -22,7 +22,7 @@ pub struct Experiment {
 }
 
 #[derive(Insertable, PartialEq, Debug, Getters, CopyGetters)]
-#[table_name = "experiment"]
+#[diesel(table_name = experiment)]
 /// A new experiment database record.
 pub struct NewExperiment {
     #[getset(get = "pub")]
