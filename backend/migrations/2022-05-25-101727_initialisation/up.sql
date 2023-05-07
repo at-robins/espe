@@ -31,4 +31,10 @@ CREATE TABLE pipeline_step_instance (
     creation_time DATETIME NOT NULL,
         FOREIGN KEY (pipeline_step_id) REFERENCES pipeline_step (id) ON UPDATE CASCADE ON DELETE CASCADE,
         FOREIGN KEY (experiment_id) REFERENCES experiment (id) ON UPDATE CASCADE ON DELETE CASCADE
-)
+);
+CREATE TABLE global_data (
+    id INTEGER PRIMARY KEY NOT NULL,
+    global_data_name TEXT NOT NULL,
+    comment TEXT,
+    creation_time DATETIME NOT NULL
+);
