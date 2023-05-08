@@ -25,6 +25,13 @@ export type ExperimentUpload = {
   pipelineId: number;
 };
 
+export type GlobalDataDetails = {
+  id: number;
+  name: string;
+  comment: string | null | undefined;
+  creationTime: string;
+};
+
 export type ErrorResponse = {
   code: number;
   uuid: string;

@@ -1,6 +1,8 @@
 import PipelineDetailsView from "@/views/PipelineDetailsView.vue";
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "../views/HomeView.vue";
+import GlobalDataView from "@/views/GlobalDataView.vue";
+import GlobalDataDetailsView from "@/views/GlobalDataDetailsView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -13,6 +15,17 @@ const router = createRouter({
       path: "/ui/",
       name: "home",
       component: HomeView,
+    },
+    {
+      path: "/ui/globals",
+      name: "globals",
+      component: GlobalDataView,
+    },
+    {
+      path: "/ui/globals/:id",
+      name: "globals_detail",
+      component: GlobalDataDetailsView,
+      props: true,
     },
     {
       path: "/ui/pipeline/:id",

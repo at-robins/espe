@@ -63,9 +63,10 @@ import {
 import axios from "axios";
 import { ref, onMounted, type Ref } from "vue";
 import ErrorPopup from "./ErrorPopup.vue";
+import { useRouter } from "vue-router";
 
 // The intervall in which pipeline updates are requested from the server.
-const POLLING_INTERVALL_MILLISECONDS = 30000;
+const POLLING_INTERVALL_MILLISECONDS = 3000;
 
 const details: Ref<Array<PipelineStepDetail>> = ref([]);
 const isLoadingPipelineDetails = ref(false);
@@ -74,6 +75,8 @@ const isPollingPipelineDetails = ref(false);
 const pollingError: Ref<ErrorResponse | null> = ref(null);
 const selectedStep: Ref<PipelineStepDetail | null> = ref(null);
 const showPollingError = ref(false);
+const router = useRouter();
+const this_route = router.currentRoute.value.fullPath;
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -111,7 +114,9 @@ function pollDetailsChanges() {
   if (
     !isPollingPipelineDetails.value &&
     !loadingError.value &&
-    !pollingError.value
+    !pollingError.value &&
+    // Stop polling if the route changes.
+    router.currentRoute.value.fullPath === this_route
   ) {
     pollingError.value = null;
     axios
