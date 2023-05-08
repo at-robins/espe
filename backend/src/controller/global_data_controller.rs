@@ -23,6 +23,7 @@ pub async fn create_global_data(
         .app_data::<Arc<Configuration>>()
         .expect("The configuration must be accessible.");
     let mut connection = app_config.database_connection()?;
+    log::info!("Creating global data repository with name {}.", &name);
     let new_record = NewGlobalData::new(name, None);
     let inserted_id: i32 = diesel::insert_into(crate::schema::global_data::table)
         .values(&new_record)
@@ -47,6 +48,13 @@ pub async fn delete_global_data(
     ))
     .get_result(&mut connection)?;
     if exists {
+        log::info!("Deleting global data repository with ID {}.", id);
+        // Remove all files belonging to the global data repository.
+        let global_path = app_config.global_data_path(id.to_string());
+        if global_path.exists() {
+            std::fs::remove_dir_all(global_path)?;
+        }
+        // Delete the repository from the database.
         connection.immediate_transaction(|connection| {
             diesel::delete(crate::schema::global_data::table)
                 .filter(crate::schema::global_data::id.eq(id))

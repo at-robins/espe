@@ -293,14 +293,17 @@ mod tests {
         assert_eq!(step.variables()[0].name(), "Boolean");
         assert_eq!(step.variables()[0].description(), "A boolean checkbox.");
         assert_eq!(step.variables()[0].category(), &PipelineStepVariableCategory::Boolean);
+        assert_eq!(step.variables()[0].required(), &Some(true));
         assert_eq!(step.variables()[1].id(), "global");
         assert_eq!(step.variables()[1].name(), "Global");
         assert_eq!(step.variables()[1].description(), "A global data reference.");
         assert_eq!(step.variables()[1].category(), &PipelineStepVariableCategory::Global);
+        assert_eq!(step.variables()[1].required(), &Some(false));
         assert_eq!(step.variables()[2].id(), "number");
         assert_eq!(step.variables()[2].name(), "Number");
         assert_eq!(step.variables()[2].description(), "A number field.");
         assert_eq!(step.variables()[2].category(), &PipelineStepVariableCategory::Number);
+        assert_eq!(step.variables()[2].required(), &None);
         assert_eq!(step.variables()[3].id(), "option");
         assert_eq!(step.variables()[3].name(), "Option");
         assert_eq!(step.variables()[3].description(), "An option dropdown.");
@@ -313,9 +316,11 @@ mod tests {
         } else {
             panic!("Not an option variable!");
         }
+        assert_eq!(step.variables()[3].required(), &None);
         assert_eq!(step.variables()[4].id(), "string");
         assert_eq!(step.variables()[4].name(), "String");
         assert_eq!(step.variables()[4].description(), "A string text field.");
         assert_eq!(step.variables()[4].category(), &PipelineStepVariableCategory::String);
+        assert_eq!(step.variables()[4].required(), &None);
     }
 }

@@ -84,6 +84,9 @@ pub struct PipelineStepVariable {
     /// The type of variable.
     #[getset(get = "pub")]
     category: PipelineStepVariableCategory,
+    /// If the variable must be set by its instance.
+    #[getset(get = "pub")]
+    required: Option<bool>,
 }
 
 /// The definition of a pipeline step variable type.

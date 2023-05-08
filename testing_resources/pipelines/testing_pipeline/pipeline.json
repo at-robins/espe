@@ -16,7 +16,8 @@
                     "description": "A boolean checkbox.",
                     "category": {
                         "tag": "Boolean"
-                    }
+                    },
+                    "required": true
                 },
                 {
                     "id": "global",
@@ -24,7 +25,8 @@
                     "description": "A global data reference.",
                     "category": {
                         "tag": "Global"
-                    }
+                    },
+                    "required": false
                 },
                 {
                     "id": "number",
