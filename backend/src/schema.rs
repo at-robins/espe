@@ -19,6 +19,15 @@ table! {
 }
 
 table! {
+    global_data_file (id) {
+        id -> Integer,
+        global_data_id -> Integer,
+        file_path -> Text,
+        creation_time -> Timestamp,
+    }
+}
+
+table! {
     pipeline (id) {
         id -> Integer,
         pipeline_name -> Text,
@@ -49,6 +58,7 @@ table! {
 }
 
 joinable!(experiment -> pipeline (pipeline_id));
+joinable!(global_data_file -> global_data (global_data_id));
 joinable!(pipeline_step -> pipeline (pipeline_id));
 joinable!(pipeline_step_instance -> experiment (experiment_id));
 joinable!(pipeline_step_instance -> pipeline_step (pipeline_step_id));
@@ -56,6 +66,7 @@ joinable!(pipeline_step_instance -> pipeline_step (pipeline_step_id));
 allow_tables_to_appear_in_same_query!(
     experiment,
     global_data,
+    global_data_file,
     pipeline,
     pipeline_step,
     pipeline_step_instance,

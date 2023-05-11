@@ -1,0 +1,183 @@
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+
+use crate::service::multipart_service::UploadForm;
+
+const MAX_LENGTH_FILE_PATH: usize = 128;
+
+const ILLEGAL_COMPONENTS: [&str; 3] = [".", "..", "~"];
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalDataFileUpload {
+    pub file_path_components: Vec<String>,
+}
+
+impl GlobalDataFileUpload {
+    /// Returns the relative path to the file.
+    pub fn file_path(&self) -> PathBuf {
+        let mut path = PathBuf::new();
+        for path_component in &self.file_path_components {
+            path.push(path_component);
+        }
+        path
+    }
+
+    /// Returns the canonical relative path to the file as [`String`].
+    pub fn file_path_as_string(&self) -> String {
+        self.file_path()
+            .to_str()
+            .expect("The path is build from valid unicode components, so the conversion to a string must work.")
+            .into()
+    }
+
+    fn validate_file_path(&self) -> Result<(), String> {
+        let file_path = self.file_path().into_os_string();
+        if file_path.is_empty() {
+            Err("A file path must be set.".to_string())
+        } else if file_path.len() > MAX_LENGTH_FILE_PATH {
+            Err(format!("The file path may only contain {} letters.", MAX_LENGTH_FILE_PATH))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_file_path_component<T: AsRef<str>>(component: T) -> Result<(), String> {
+        let component: &str = component.as_ref();
+        if component.is_empty() {
+            Err("A file path component may not be empty.".to_string())
+        } else if component.len() > MAX_LENGTH_FILE_PATH {
+            Err(format!(
+                "The file path component may only contain {} letters.",
+                MAX_LENGTH_FILE_PATH
+            ))
+        } else if ILLEGAL_COMPONENTS.contains(&component) {
+            Err(format!("The file path component may not be \"{}\".", component))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_file_path_components(&self) -> Result<(), String> {
+        for component in &self.file_path_components {
+            let result = Self::validate_file_path_component(component);
+            if result.is_err() {
+                return result;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl UploadForm for GlobalDataFileUpload {
+    /**
+     * Checks if the recieved upload data is valid and returns a corresponding
+     * error message of not.
+     */
+    fn validate(&self) -> Result<(), String> {
+        self.validate_file_path()
+            .and(self.validate_file_path_components())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_file_path() {
+        let file_upload = GlobalDataFileUpload {
+            file_path_components: vec![
+                "a".to_string(),
+                "relative".to_string(),
+                "path.file".to_string(),
+            ],
+        };
+        let path = file_upload.file_path();
+        let expected_path: PathBuf = "a/relative/path.file".into();
+        assert_eq!(path, expected_path);
+        assert!(path.is_relative());
+    }
+
+    #[test]
+    fn test_file_path_as_string() {
+        let file_upload = GlobalDataFileUpload {
+            file_path_components: vec![
+                "a".to_string(),
+                "relative".to_string(),
+                "path.file".to_string(),
+            ],
+        };
+        let path = file_upload.file_path_as_string();
+        let expected_path: String = "a/relative/path.file".into();
+        assert_eq!(path, expected_path);
+    }
+
+    #[test]
+    fn test_validate_valid() {
+        let file_upload = GlobalDataFileUpload {
+            file_path_components: vec![
+                "a".to_string(),
+                "relative".to_string(),
+                "path.file".to_string(),
+            ],
+        };
+        assert!(file_upload.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_invaild_empty() {
+        let file_upload = GlobalDataFileUpload {
+            file_path_components: vec!["a".to_string(), "".to_string(), "path.file".to_string()],
+        };
+        assert!(file_upload.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_invaild_length() {
+        let file_upload = GlobalDataFileUpload {
+            file_path_components: vec![
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+                "0123456789".to_string(),
+            ],
+        };
+        assert!(file_upload.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_invaild_dot() {
+        let file_upload = GlobalDataFileUpload {
+            file_path_components: vec!["a".to_string(), ".".to_string(), "path.file".to_string()],
+        };
+        assert!(file_upload.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_invaild_dot_dot() {
+        let file_upload = GlobalDataFileUpload {
+            file_path_components: vec!["a".to_string(), "..".to_string(), "path.file".to_string()],
+        };
+        assert!(file_upload.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_invaild_tilde() {
+        let file_upload = GlobalDataFileUpload {
+            file_path_components: vec!["a".to_string(), "~".to_string(), "path.file".to_string()],
+        };
+        assert!(file_upload.validate().is_err());
+    }
+}

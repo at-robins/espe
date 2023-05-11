@@ -1,17 +1,28 @@
-use std::sync::Arc;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use crate::{
     application::{
         config::Configuration,
         error::{SeqError, SeqErrorType},
     },
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    diesel::{BelongingToDsl, ExpressionMethods, QueryDsl, RunQueryDsl},
     model::{
-        db::global_data::{GlobalData, NewGlobalData},
-        exchange::global_data_details::GlobalDataDetails,
+        db::global_data::{GlobalData, GlobalDataFile, NewGlobalData, NewGlobalDataFile},
+        exchange::{
+            global_data_details::{GlobalDataDetails, GlobalDataFileDetails},
+            global_data_file_upload::GlobalDataFileUpload,
+        },
+    },
+    service::multipart_service::{
+        create_temporary_file, delete_temporary_file, parse_multipart_file,
     },
 };
+use actix_multipart::Multipart;
 use actix_web::{web, HttpRequest, HttpResponse};
+use diesel::dsl::exists;
 
 pub async fn create_global_data(
     request: HttpRequest,
@@ -93,6 +104,44 @@ pub async fn get_global_data(
             .first::<GlobalData>(&mut connection)?
             .into();
         Ok(HttpResponse::Ok().json(global_repo_details))
+    } else {
+        Err(
+            SeqError::new(
+                "Invalid GET request",
+                SeqErrorType::NotFoundError,
+                format!("Global data with ID {} does not exist and can thereby not be fetched by request {:?}", id, request), 
+                "The entity does not exist."
+            )
+        )
+    }
+}
+
+pub async fn get_global_data_files(
+    request: HttpRequest,
+    id: web::Path<i32>,
+) -> Result<HttpResponse, SeqError> {
+    let id: i32 = id.into_inner();
+    // Retrieve the app config.
+    let app_config = request
+        .app_data::<Arc<Configuration>>()
+        .expect("The configuration must be accessible.");
+    let mut connection = app_config.database_connection()?;
+    let exists: bool = diesel::select(diesel::dsl::exists(
+        crate::schema::global_data::table.filter(crate::schema::global_data::id.eq(id)),
+    ))
+    .get_result(&mut connection)?;
+    if exists {
+        let global_repo_details: GlobalData = crate::schema::global_data::table
+            .find(id)
+            .first::<GlobalData>(&mut connection)?;
+
+        let global_repo_files: Vec<GlobalDataFileDetails> =
+            GlobalDataFile::belonging_to(&global_repo_details)
+                .load(&mut connection)?
+                .into_iter()
+                .map(|file: GlobalDataFile| file.into())
+                .collect();
+        Ok(HttpResponse::Ok().json(global_repo_files))
     } else {
         Err(
             SeqError::new(
@@ -189,4 +238,130 @@ pub async fn list_global_data(
         .map(|val| val.into())
         .collect();
     Ok(web::Json(global_repos))
+}
+
+pub async fn post_global_data_add_file(
+    request: HttpRequest,
+    id: web::Path<i32>,
+    payload: Multipart,
+) -> Result<HttpResponse, SeqError> {
+    let id: i32 = id.into_inner();
+    // Retrieve the app config.
+    let app_config = request
+        .app_data::<Arc<Configuration>>()
+        .expect("The configuration must be accessible.");
+
+    let (temporary_file_path, temporary_file_id) = create_temporary_file(Arc::clone(&app_config))?;
+
+    let inserted_id =
+        persist_multipart(payload, id, temporary_file_path.as_path(), Arc::clone(app_config))
+            .await
+            .map_err(|error| {
+                // Delete temporary file on error.
+                if delete_temporary_file(temporary_file_id, Arc::clone(app_config)).is_err() {
+                    log::error!(
+                        "Failed to delete temporary file {} upon error {}.",
+                        temporary_file_path.display(),
+                        error
+                    );
+                }
+                error
+            })?;
+
+    // Return the ID of the created attachment.
+    Ok(HttpResponse::Created().json(inserted_id))
+}
+
+async fn persist_multipart<P: AsRef<Path>>(
+    payload: Multipart,
+    global_data_id: i32,
+    temporary_file_path: P,
+    app_config: Arc<Configuration>,
+) -> Result<i32, SeqError> {
+    let mut connection = app_config.database_connection()?;
+
+    let (upload_info, temp_file_path) =
+        parse_multipart_file::<GlobalDataFileUpload, P>(payload, temporary_file_path).await?;
+
+    // Validate the existance of the global data repository.
+    let repo_exists: bool = diesel::select(exists(
+        crate::schema::global_data::dsl::global_data
+            .filter(crate::schema::global_data::id.eq(global_data_id)),
+    ))
+    .get_result(&mut connection)?;
+    if !repo_exists {
+        return Err(SeqError::new(
+                "Global data repository invalid",
+                SeqErrorType::NotFoundError,
+                format!(
+                    "Validation of global data repository {:?} failed with error: Global data repository with ID {} does not exist.",
+                    upload_info, global_data_id
+                ),
+                "The provided global data repository information is invalid.",
+            ));
+    }
+
+    // Write to database.
+    let new_global_data_file: NewGlobalDataFile =
+        NewGlobalDataFile::new(global_data_id, upload_info.file_path_as_string());
+    let inserted_id = diesel::insert_into(crate::schema::global_data_file::table)
+        .values(&new_global_data_file)
+        .returning(crate::schema::global_data_file::id)
+        .get_result(&mut connection)?;
+
+    // Create folder and copy file to destination.
+    temp_file_to_global_data(global_data_id, upload_info.file_path(), temp_file_path, app_config).map_err(|error| {
+        // Roll back database if there is an error while moving the temporary file.
+        if let Err(e) = diesel::delete(
+            crate::schema::global_data_file::dsl::global_data_file
+                .filter(crate::schema::global_data_file::id.eq(inserted_id)),
+        )
+        .execute(&mut connection)
+        {
+            log::error!(
+                "Roll back of database after insertion of global data file {} failed with error: {}.",
+                inserted_id,
+                e
+            );
+        }
+        error
+    })?;
+
+    // Return the ID of the created attachment.
+    Ok(inserted_id)
+}
+
+fn temp_file_to_global_data<P: AsRef<Path>, Q: AsRef<Path>>(
+    global_data_id: i32,
+    file_path: P,
+    temp_file_path: Q,
+    app_config: Arc<Configuration>,
+) -> Result<(), SeqError> {
+    let mut final_file_path: PathBuf = app_config.global_data_path(global_data_id.to_string());
+    // let sub_path: Path = file_path.as_ref();
+    if file_path.as_ref().is_relative() {
+        final_file_path.push(file_path);
+        log::info!(
+            "Saving temporary file {} to {}.",
+            temp_file_path.as_ref().display(),
+            final_file_path.display()
+        );
+        std::fs::create_dir_all(&final_file_path.parent().ok_or_else(|| {
+            SeqError::new(
+                "Invalid file path",
+                SeqErrorType::BadRequestError,
+                format!("The file path {} is not a valid path.", final_file_path.display()),
+                "The file path is invalid.",
+            )
+        })?)?;
+        std::fs::rename(temp_file_path, final_file_path)?;
+        Ok(())
+    } else {
+        Err(SeqError::new(
+            "Invalid file path",
+            SeqErrorType::BadRequestError,
+            format!("The file path {} is not a relative path.", file_path.as_ref().display()),
+            "The file path is invalid.",
+        ))
+    }
 }
