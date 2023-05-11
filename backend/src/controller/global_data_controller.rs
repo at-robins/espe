@@ -8,9 +8,9 @@ use crate::{
         config::Configuration,
         error::{SeqError, SeqErrorType},
     },
-    diesel::{BelongingToDsl, ExpressionMethods, QueryDsl, RunQueryDsl},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     model::{
-        db::global_data::{GlobalData, GlobalDataFile, NewGlobalData, NewGlobalDataFile},
+        db::global_data::{GlobalData, NewGlobalData, NewGlobalDataFile},
         exchange::{
             global_data_details::{GlobalDataDetails, GlobalDataFileDetails},
             global_data_file_upload::GlobalDataFileUpload,
@@ -54,34 +54,20 @@ pub async fn delete_global_data(
         .app_data::<Arc<Configuration>>()
         .expect("The configuration must be accessible.");
     let mut connection = app_config.database_connection()?;
-    let exists: bool = diesel::select(diesel::dsl::exists(
-        crate::schema::global_data::table.filter(crate::schema::global_data::id.eq(id)),
-    ))
-    .get_result(&mut connection)?;
-    if exists {
-        log::info!("Deleting global data repository with ID {}.", id);
-        // Remove all files belonging to the global data repository.
-        let global_path = app_config.global_data_path(id.to_string());
-        if global_path.exists() {
-            std::fs::remove_dir_all(global_path)?;
-        }
-        // Delete the repository from the database.
-        connection.immediate_transaction(|connection| {
-            diesel::delete(crate::schema::global_data::table)
-                .filter(crate::schema::global_data::id.eq(id))
-                .execute(connection)
-        })?;
-        Ok(HttpResponse::Ok().finish())
-    } else {
-        Err(
-            SeqError::new(
-                "Invalid DELETE request",
-                SeqErrorType::NotFoundError,
-                format!("Global data with ID {} does not exist and can thereby not be deleted by request {:?}", id, request), 
-                "The entity does not exist."
-            )
-        )
+    GlobalData::exists_err(id, &mut connection)?;
+    log::info!("Deleting global data repository with ID {}.", id);
+    // Remove all files belonging to the global data repository.
+    let global_path = app_config.global_data_path(id.to_string());
+    if global_path.exists() {
+        std::fs::remove_dir_all(global_path)?;
     }
+    // Delete the repository from the database.
+    connection.immediate_transaction(|connection| {
+        diesel::delete(crate::schema::global_data::table)
+            .filter(crate::schema::global_data::id.eq(id))
+            .execute(connection)
+    })?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 pub async fn get_global_data(
@@ -94,26 +80,12 @@ pub async fn get_global_data(
         .app_data::<Arc<Configuration>>()
         .expect("The configuration must be accessible.");
     let mut connection = app_config.database_connection()?;
-    let exists: bool = diesel::select(diesel::dsl::exists(
-        crate::schema::global_data::table.filter(crate::schema::global_data::id.eq(id)),
-    ))
-    .get_result(&mut connection)?;
-    if exists {
-        let global_repo_details: GlobalDataDetails = crate::schema::global_data::table
-            .find(id)
-            .first::<GlobalData>(&mut connection)?
-            .into();
-        Ok(HttpResponse::Ok().json(global_repo_details))
-    } else {
-        Err(
-            SeqError::new(
-                "Invalid GET request",
-                SeqErrorType::NotFoundError,
-                format!("Global data with ID {} does not exist and can thereby not be fetched by request {:?}", id, request), 
-                "The entity does not exist."
-            )
-        )
-    }
+    GlobalData::exists_err(id, &mut connection)?;
+    let global_repo_details: GlobalDataDetails = crate::schema::global_data::table
+        .find(id)
+        .first::<GlobalData>(&mut connection)?
+        .into();
+    Ok(HttpResponse::Ok().json(global_repo_details))
 }
 
 pub async fn get_global_data_files(
@@ -126,32 +98,12 @@ pub async fn get_global_data_files(
         .app_data::<Arc<Configuration>>()
         .expect("The configuration must be accessible.");
     let mut connection = app_config.database_connection()?;
-    let exists: bool = diesel::select(diesel::dsl::exists(
-        crate::schema::global_data::table.filter(crate::schema::global_data::id.eq(id)),
-    ))
-    .get_result(&mut connection)?;
-    if exists {
-        let global_repo_details: GlobalData = crate::schema::global_data::table
-            .find(id)
-            .first::<GlobalData>(&mut connection)?;
-
-        let global_repo_files: Vec<GlobalDataFileDetails> =
-            GlobalDataFile::belonging_to(&global_repo_details)
-                .load(&mut connection)?
-                .into_iter()
-                .map(|file: GlobalDataFile| file.into())
-                .collect();
-        Ok(HttpResponse::Ok().json(global_repo_files))
-    } else {
-        Err(
-            SeqError::new(
-                "Invalid GET request",
-                SeqErrorType::NotFoundError,
-                format!("Global data with ID {} does not exist and can thereby not be fetched by request {:?}", id, request), 
-                "The entity does not exist."
-            )
-        )
-    }
+    GlobalData::exists_err(id, &mut connection)?;
+    let global_repo_files: Vec<GlobalDataFileDetails> = GlobalData::files(id, &mut connection)?
+        .into_iter()
+        .map(|value| value.into())
+        .collect();
+    Ok(HttpResponse::Ok().json(global_repo_files))
 }
 
 pub async fn patch_global_data_name(
@@ -166,27 +118,13 @@ pub async fn patch_global_data_name(
         .app_data::<Arc<Configuration>>()
         .expect("The configuration must be accessible.");
     let mut connection = app_config.database_connection()?;
-    let exists: bool = diesel::select(diesel::dsl::exists(
-        crate::schema::global_data::table.filter(crate::schema::global_data::id.eq(id)),
-    ))
-    .get_result(&mut connection)?;
-    if exists {
-        connection.immediate_transaction(|connection| {
-            diesel::update(crate::schema::global_data::table.find(id))
-                .set(crate::schema::global_data::global_data_name.eq(new_name))
-                .execute(connection)
-        })?;
-        Ok(HttpResponse::Ok().finish())
-    } else {
-        Err(
-            SeqError::new(
-                "Invalid PATCH request",
-                SeqErrorType::NotFoundError,
-                format!("Global data with ID {} does not exist and can thereby not be patched (field: global_data_name) by request {:?}", id, request), 
-                "The entity does not exist."
-            )
-        )
-    }
+    GlobalData::exists_err(id, &mut connection)?;
+    connection.immediate_transaction(|connection| {
+        diesel::update(crate::schema::global_data::table.find(id))
+            .set(crate::schema::global_data::global_data_name.eq(new_name))
+            .execute(connection)
+    })?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 pub async fn patch_global_data_comment(
@@ -201,27 +139,13 @@ pub async fn patch_global_data_comment(
         .app_data::<Arc<Configuration>>()
         .expect("The configuration must be accessible.");
     let mut connection = app_config.database_connection()?;
-    let exists: bool = diesel::select(diesel::dsl::exists(
-        crate::schema::global_data::table.filter(crate::schema::global_data::id.eq(id)),
-    ))
-    .get_result(&mut connection)?;
-    if exists {
-        connection.immediate_transaction(|connection| {
-            diesel::update(crate::schema::global_data::table.find(id))
-                .set(crate::schema::global_data::comment.eq(new_comment))
-                .execute(connection)
-        })?;
-        Ok(HttpResponse::Ok().finish())
-    } else {
-        Err(
-            SeqError::new(
-                "Invalid PATCH request",
-                SeqErrorType::NotFoundError,
-                format!("Global data with ID {} does not exist and can thereby not be patched (field: comment) by request {:?}", id, request), 
-                "The entity does not exist."
-            )
-        )
-    }
+    GlobalData::exists_err(id, &mut connection)?;
+    connection.immediate_transaction(|connection| {
+        diesel::update(crate::schema::global_data::table.find(id))
+            .set(crate::schema::global_data::comment.eq(new_comment))
+            .execute(connection)
+    })?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 pub async fn list_global_data(
@@ -232,8 +156,7 @@ pub async fn list_global_data(
         .app_data::<Arc<Configuration>>()
         .expect("The configuration must be accessible.");
     let mut connection = app_config.database_connection()?;
-    let global_repos: Vec<GlobalDataDetails> = crate::schema::global_data::table
-        .load::<GlobalData>(&mut connection)?
+    let global_repos: Vec<GlobalDataDetails> = GlobalData::get_all(&mut connection)?
         .into_iter()
         .map(|val| val.into())
         .collect();
@@ -284,22 +207,7 @@ async fn persist_multipart<P: AsRef<Path>>(
         parse_multipart_file::<GlobalDataFileUpload, P>(payload, temporary_file_path).await?;
 
     // Validate the existance of the global data repository.
-    let repo_exists: bool = diesel::select(exists(
-        crate::schema::global_data::dsl::global_data
-            .filter(crate::schema::global_data::id.eq(global_data_id)),
-    ))
-    .get_result(&mut connection)?;
-    if !repo_exists {
-        return Err(SeqError::new(
-                "Global data repository invalid",
-                SeqErrorType::NotFoundError,
-                format!(
-                    "Validation of global data repository {:?} failed with error: Global data repository with ID {} does not exist.",
-                    upload_info, global_data_id
-                ),
-                "The provided global data repository information is invalid.",
-            ));
-    }
+    GlobalData::exists_err(global_data_id, &mut connection)?;
 
     // Write to database.
     let new_global_data_file: NewGlobalDataFile =
@@ -338,30 +246,20 @@ fn temp_file_to_global_data<P: AsRef<Path>, Q: AsRef<Path>>(
     app_config: Arc<Configuration>,
 ) -> Result<(), SeqError> {
     let mut final_file_path: PathBuf = app_config.global_data_path(global_data_id.to_string());
-    // let sub_path: Path = file_path.as_ref();
-    if file_path.as_ref().is_relative() {
-        final_file_path.push(file_path);
-        log::info!(
-            "Saving temporary file {} to {}.",
-            temp_file_path.as_ref().display(),
-            final_file_path.display()
-        );
-        std::fs::create_dir_all(&final_file_path.parent().ok_or_else(|| {
-            SeqError::new(
-                "Invalid file path",
-                SeqErrorType::BadRequestError,
-                format!("The file path {} is not a valid path.", final_file_path.display()),
-                "The file path is invalid.",
-            )
-        })?)?;
-        std::fs::rename(temp_file_path, final_file_path)?;
-        Ok(())
-    } else {
-        Err(SeqError::new(
+    final_file_path.push(file_path);
+    log::info!(
+        "Saving temporary file {} to {}.",
+        temp_file_path.as_ref().display(),
+        final_file_path.display()
+    );
+    std::fs::create_dir_all(&final_file_path.parent().ok_or_else(|| {
+        SeqError::new(
             "Invalid file path",
             SeqErrorType::BadRequestError,
-            format!("The file path {} is not a relative path.", file_path.as_ref().display()),
+            format!("The file path {} is not a valid path.", final_file_path.display()),
             "The file path is invalid.",
-        ))
-    }
+        )
+    })?)?;
+    std::fs::rename(temp_file_path, final_file_path)?;
+    Ok(())
 }
