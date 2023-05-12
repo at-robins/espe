@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import PipelineDetails from "../components/PipelineDetails.vue";
+import GlobalDataDetails from "../components/GlobalDataDetails.vue";
 defineProps({
   id: {
     type: String,
@@ -10,6 +10,6 @@ defineProps({
 
 <template>
   <main>
-    <pipeline-details :id="id" />
+    <global-data-details :id="id" />
   </main>
 </template>

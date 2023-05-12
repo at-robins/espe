@@ -32,6 +32,19 @@ export type GlobalDataDetails = {
   creationTime: string;
 };
 
+export type GlobalDataFileDetails = {
+  id: number;
+  pathComponents: string[];
+  creationTime: string;
+};
+
+export type FileTreeNode = {
+  id: string;
+  label: string;
+  children: FileTreeNode[];
+  parents: string[];
+};
+
 export type ErrorResponse = {
   code: number;
   uuid: string;
