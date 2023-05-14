@@ -43,6 +43,7 @@ export type FileTreeNode = {
   label: string;
   children: FileTreeNode[];
   parents: string[];
+  isFile: boolean;
 };
 
 export type ErrorResponse = {

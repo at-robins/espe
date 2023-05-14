@@ -67,6 +67,7 @@ function getFileTreeNodes(files: GlobalDataFileDetails[]): FileTreeNode[] {
           label: pathComponent,
           children: [],
           parents: parents,
+          isFile: i === globalDataFile.pathComponents.length - 1,
         };
         currentNodes.push(newNode);
         currentNodes = newNode.children;
