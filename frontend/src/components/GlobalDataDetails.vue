@@ -17,7 +17,9 @@
           <q-card-section>
             <file-tree
               v-model="fileNodes"
+              ref="treeReference"
               :base-directory-label="globalData ? globalData.name : 'Root'"
+              @added-file="uploadFile"
             />
           </q-card-section>
         </div>
@@ -35,6 +37,7 @@ import {
   type GlobalDataDetails,
   type GlobalDataFileDetails,
   type FileTreeNode,
+  type GlobalDataFileUpload,
 } from "@/scripts/types";
 import axios from "axios";
 import { ref, onMounted, type Ref } from "vue";
@@ -46,6 +49,7 @@ const globalData: Ref<GlobalDataDetails | null> = ref(null);
 const fileNodes: Ref<Array<FileTreeNode>> = ref([]);
 const isLoadingGlobalDataDetails = ref(false);
 const loadingError: Ref<ErrorResponse | null> = ref(null);
+const treeReference: Ref<typeof FileTree | null> = ref(null);
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -68,6 +72,7 @@ function getFileTreeNodes(files: GlobalDataFileDetails[]): FileTreeNode[] {
           children: [],
           parents: parents,
           isFile: i === globalDataFile.pathComponents.length - 1,
+          isUploaded: false,
         };
         currentNodes.push(newNode);
         currentNodes = newNode.children;
@@ -105,6 +110,43 @@ function loadGlobalDataDetails() {
     })
     .finally(() => {
       isLoadingGlobalDataDetails.value = false;
+    });
+}
+
+function uploadFile(file: File, node: FileTreeNode) {
+  let queryFileNodes: FileTreeNode[] | undefined = fileNodes.value;
+  for (const parentId of node.parents) {
+    queryFileNodes = queryFileNodes?.find(
+      (val) => val.id === parentId
+    )?.children;
+  }
+  const queryFileNode: FileTreeNode | undefined = queryFileNodes?.find(
+    (val) => val.id === node.id
+  );
+  if (queryFileNode) {
+    queryFileNode.isUploaded = true;
+  }
+  // isLoadingGlobalDataDetails.value = true;
+  // loadingError.value = null;
+  const formData = new FormData();
+  formData.append("file", file);
+  const uploadInfo: GlobalDataFileUpload = {
+    filePathComponents: node.parents,
+  };
+  uploadInfo.filePathComponents.push(file.name);
+  formData.append("form", JSON.stringify(uploadInfo));
+  const config = {
+    headers: {
+      "content-type": "multipart/form-data",
+    },
+  };
+  axios
+    .post("/api/globals/" + props.id + "/files", formData, config)
+    // .catch((error) => {})
+    .finally(() => {
+      if (queryFileNode) {
+        queryFileNode.isUploaded = false;
+      }
     });
 }
 </script>

@@ -38,12 +38,17 @@ export type GlobalDataFileDetails = {
   creationTime: string;
 };
 
+export type GlobalDataFileUpload = {
+  filePathComponents: string[];
+};
+
 export type FileTreeNode = {
   id: string;
   label: string;
   children: FileTreeNode[];
   parents: string[];
   isFile: boolean;
+  isUploaded: boolean;
 };
 
 export type ErrorResponse = {

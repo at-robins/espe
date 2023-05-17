@@ -3,8 +3,8 @@ use crate::schema::global_data::{self};
 use crate::schema::global_data_file::{self};
 use chrono::{NaiveDateTime, Utc};
 use diesel::{
-    BelongingToDsl, ExpressionMethods, Identifiable, Insertable, QueryDsl, Queryable, RunQueryDsl,
-    SqliteConnection,
+    BelongingToDsl, BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, QueryDsl,
+    Queryable, RunQueryDsl, SqliteConnection,
 };
 use getset::{CopyGetters, Getters};
 
@@ -53,6 +53,28 @@ impl GlobalData {
                 "The entity does not exist.",
             ))
         }
+    }
+
+    /// Returns `true` if the file path for the [`GlobalData`] with the specified ID exists and `false` otherwise.
+    ///
+    /// # Parameters
+    ///
+    /// * `global_data_id` - the entity ID
+    /// * `path` - the file path
+    /// * `connection` - the database connection
+    pub fn exists_path<P: AsRef<str>>(
+        global_data_id: i32,
+        path: P,
+        connection: &mut SqliteConnection,
+    ) -> Result<bool, diesel::result::Error> {
+        diesel::select(diesel::dsl::exists(
+            crate::schema::global_data_file::table.filter(
+                crate::schema::global_data_file::global_data_id
+                    .eq(global_data_id)
+                    .and(crate::schema::global_data_file::file_path.eq(path.as_ref())),
+            ),
+        ))
+        .get_result(connection)
     }
 
     /// Returns the entity with the specified ID.

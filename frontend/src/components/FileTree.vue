@@ -22,7 +22,11 @@
             @contextmenu="selectedNode = prop.node.id"
             class="col"
           >
-            <q-icon :name="prop.node.isFile ? matFilePresent : matFolder" />
+            <q-icon
+              v-if="!prop.node.isUploaded"
+              :name="prop.node.isFile ? matFilePresent : matFolder"
+            />
+            <q-spinner v-else />
             {{ prop.node.label }}
           </div>
           <q-menu
@@ -90,25 +94,26 @@
         <q-card-section>
           <div class="text-h6">Folder name</div>
         </q-card-section>
+        <q-form @submit="createNewFolder" :greedy="true">
+          <q-card-section class="q-pt-none">
+            <q-input
+              dense
+              v-model="folderName"
+              autofocus
+              :rules="componentValidationRules"
+            />
+          </q-card-section>
 
-        <q-card-section class="q-pt-none">
-          <q-input
-            dense
-            v-model="folderName"
-            autofocus
-            @keyup.enter="createNewFolder"
-          />
-        </q-card-section>
-
-        <q-card-actions align="right" class="text-primary">
-          <q-btn flat label="Cancel" v-close-popup />
-          <q-btn
-            flat
-            label="Add folder"
-            @click="createNewFolder"
-            v-close-popup
-          />
-        </q-card-actions>
+          <q-card-actions align="right" class="text-primary">
+            <q-btn
+              flat
+              label="Cancel"
+              @click="folderName = null"
+              v-close-popup
+            />
+            <q-btn flat label="Add folder" type="submit" />
+          </q-card-actions>
+        </q-form>
       </q-card>
     </q-dialog>
     <q-file
@@ -133,6 +138,51 @@ import {
 import type { QFile, QTree } from "quasar";
 
 const ROOT_ID = ".";
+const ILLEGAL_COMPONENTS = [".", "..", "~"];
+const ILLEGAL_COMPONENT_CHARACTERS = [
+  "/",
+  "\\",
+  "<",
+  ">",
+  ":",
+  "*",
+  "?",
+  "|",
+  '"',
+  "\x00",
+  "\x01",
+  "\x02",
+  "\x03",
+  "\x04",
+  "\x05",
+  "\x06",
+  "\x07",
+  "\x08",
+  "\x09",
+  "\x0A",
+  "\x0B",
+  "\x0C",
+  "\x0D",
+  "\x0E",
+  "\x0F",
+  "\x10",
+  "\x11",
+  "\x12",
+  "\x13",
+  "\x14",
+  "\x15",
+  "\x16",
+  "\x17",
+  "\x18",
+  "\x19",
+  "\x1A",
+  "\x1B",
+  "\x1C",
+  "\x1D",
+  "\x1E",
+  "\x1F",
+  "\x7F",
+];
 
 const props = defineProps({
   modelValue: { type: Object as PropType<FileTreeNode[]>, required: true },
@@ -147,8 +197,29 @@ const fileModel: Ref<File | null> = ref(null);
 const fileReference: Ref<QFile | null> = ref(null);
 const showContextMenu = ref(false);
 
+const componentValidationRules = [
+  (val: string) => !!val || "The name cannot be empty.",
+  (val: string) =>
+    !treeReference.value
+      ?.getNodeByKey(selectedNode.value)
+      .children.some((node: FileTreeNode) => node.label === val) ||
+    "The name already exists.",
+  (val: string) =>
+    !ILLEGAL_COMPONENTS.some((illegal_comp) => illegal_comp === val) ||
+    'The name cannot be any of the following ""' +
+      ILLEGAL_COMPONENTS.join(", ") +
+      '"".',
+  (val: string) =>
+    !ILLEGAL_COMPONENT_CHARACTERS.some((illegalChar) =>
+      val.includes(illegalChar)
+    ) ||
+    "The name contains one of the following illegal characters: " +
+      ILLEGAL_COMPONENT_CHARACTERS.join(", "),
+];
+
 const emit = defineEmits<{
   (event: "update:modelValue", nodes: FileTreeNode[]): void;
+  (event: "addedFile", file: File, node: FileTreeNode): void;
 }>();
 
 const fileTree = computed(() => {
@@ -159,6 +230,7 @@ const fileTree = computed(() => {
       children: [...props.modelValue],
       parents: [],
       isFile: false,
+      isUploaded: false,
     },
   ];
   return computedValue;
@@ -179,9 +251,9 @@ function createNewFolder() {
   );
   const label = folderName.value;
   if (parent && label) {
-    const createdId = createNewNode(label, parent, false);
+    const createdNode = createNewNode(label, parent, false);
     // Expands the parent folder.
-    if (createdId) {
+    if (createdNode) {
       nextTick(() => treeReference.value?.setExpanded(parent.id, true));
     }
   }
@@ -193,7 +265,11 @@ function createNewFile(value: File | null) {
     selectedNode.value
   );
   if (value && parent) {
-    createNewNode(value.name, parent, true);
+    const createdNode = createNewNode(value.name, parent, true);
+    if (createdNode) {
+      emit("addedFile", value, createdNode);
+      nextTick(() => treeReference.value?.setExpanded(parent.id, true));
+    }
   }
 }
 
@@ -201,7 +277,7 @@ function createNewNode(
   label: string,
   parent: FileTreeNode,
   isFile: boolean
-): string | null {
+): FileTreeNode | null {
   let parents: string[] = [];
   if (parent.id !== ROOT_ID) {
     parents = [...parent.parents];
@@ -215,9 +291,7 @@ function createNewNode(
       currentNodes = found;
     }
   }
-  if (parent.children.some((node) => node.label === label)) {
-    // TODO: show error
-  } else {
+  if (!parent.children.some((node) => node.label === label)) {
     const id = parents.join("") + label;
     const newNode: FileTreeNode = {
       id: id,
@@ -225,10 +299,11 @@ function createNewNode(
       children: [],
       parents: parents,
       isFile: isFile,
+      isUploaded: false,
     };
     currentNodes.push(newNode);
     emit("update:modelValue", newValue);
-    return id;
+    return newNode;
   }
   return null;
 }

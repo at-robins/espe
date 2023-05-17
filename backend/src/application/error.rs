@@ -40,6 +40,8 @@ pub enum SeqErrorType {
     NotFoundError,
     /// A error representing an erroneous request.
     BadRequestError,
+    /// A error representing a request conflicting with internal server state.
+    Conflict,
 }
 
 impl SeqError {
@@ -67,6 +69,7 @@ impl SeqError {
             SeqErrorType::InternalServerError => error!("{}", self),
             SeqErrorType::NotFoundError => warn!("{}", self),
             SeqErrorType::BadRequestError => error!("{}", self),
+            SeqErrorType::Conflict => error!("{}", self),
         }
     }
 
@@ -130,6 +133,7 @@ impl ResponseError for SeqError {
             SeqErrorType::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
             SeqErrorType::NotFoundError => StatusCode::NOT_FOUND,
             SeqErrorType::BadRequestError => StatusCode::BAD_REQUEST,
+            SeqErrorType::Conflict => StatusCode::CONFLICT,
         }
     }
 }

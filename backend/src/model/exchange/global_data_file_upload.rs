@@ -7,6 +7,12 @@ use crate::service::multipart_service::UploadForm;
 const MAX_LENGTH_FILE_PATH: usize = 128;
 
 const ILLEGAL_COMPONENTS: [&str; 3] = [".", "..", "~"];
+const ILLEGAL_COMPONENT_CHARACTERS: [&str; 42] = [
+    "/", "\\", "<", ">", ":", "*", "?", "|", "\"", "\x00", "\x01", "\x02", "\x03", "\x04", "\x05",
+    "\x06", "\x07", "\x08", "\x09", "\x0A", "\x0B", "\x0C", "\x0D", "\x0E", "\x0F", "\x10", "\x11",
+    "\x12", "\x13", "\x14", "\x15", "\x16", "\x17", "\x18", "\x19", "\x1A", "\x1B", "\x1C", "\x1D",
+    "\x1E", "\x1F", "\x7F",
+];
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,7 +30,7 @@ impl GlobalDataFileUpload {
         path
     }
 
-    /// Returns the canonical relative path to the file as [`String`].
+    /// Returns the relative path to the file as [`String`].
     pub fn file_path_as_string(&self) -> String {
         self.file_path()
             .to_str()
@@ -54,9 +60,21 @@ impl GlobalDataFileUpload {
             ))
         } else if ILLEGAL_COMPONENTS.contains(&component) {
             Err(format!("The file path component may not be \"{}\".", component))
+        } else if Self::component_contains_illegal_characters(component) {
+            Err(format!(
+                "The file path component may not contain any of the characters \"{}\".",
+                ILLEGAL_COMPONENT_CHARACTERS.join(", ")
+            ))
         } else {
             Ok(())
         }
+    }
+
+    /// Returns `true` if the path component contains illegal characters.
+    fn component_contains_illegal_characters<T: AsRef<str>>(component: T) -> bool {
+        ILLEGAL_COMPONENT_CHARACTERS
+            .into_iter()
+            .any(|illegal_character| component.as_ref().contains(illegal_character))
     }
 
     fn validate_file_path_components(&self) -> Result<(), String> {

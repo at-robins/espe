@@ -209,6 +209,17 @@ async fn persist_multipart<P: AsRef<Path>>(
     // Validate the existance of the global data repository.
     GlobalData::exists_err(global_data_id, &mut connection)?;
 
+    // Validate that the file path is not already existant.
+    if GlobalData::exists_path(global_data_id, upload_info.file_path_as_string(), &mut connection)?
+    {
+        return Err(SeqError::new(
+            "Conflicting request",
+            SeqErrorType::Conflict,
+            format!("Global data file at path {} does already exist.", upload_info.file_path_as_string()),
+            "The entity does already exist.",
+        ));
+    }
+
     // Write to database.
     let new_global_data_file: NewGlobalDataFile =
         NewGlobalDataFile::new(global_data_id, upload_info.file_path_as_string());
