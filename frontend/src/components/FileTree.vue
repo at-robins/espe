@@ -71,7 +71,12 @@
                   </div></q-item-section
                 >
               </q-item>
-              <q-item v-if="prop.node.id !== ROOT_ID" clickable v-close-popup>
+              <q-item
+                v-if="prop.node.id !== ROOT_ID"
+                clickable
+                v-close-popup
+                @click="deleteNode(prop.node)"
+              >
                 <q-item-section>
                   <div class="row flex-center no-wrap">
                     <q-icon
@@ -220,6 +225,7 @@ const componentValidationRules = [
 const emit = defineEmits<{
   (event: "update:modelValue", nodes: FileTreeNode[]): void;
   (event: "addedFile", file: File, node: FileTreeNode): void;
+  (event: "deletedPath", pathComponents: string[]): void;
 }>();
 
 const fileTree = computed(() => {
@@ -306,5 +312,41 @@ function createNewNode(
     return newNode;
   }
   return null;
+}
+
+function deleteNode(node: FileTreeNode) {
+  const newValue = [...props.modelValue];
+  if (node.parents.length > 0) {
+    const parent = getNodeByPathComponents(newValue, node.parents);
+    if (parent) {
+      parent.children = parent.children.filter((val) => val.id !== node.id);
+      emit("update:modelValue", newValue);
+    }
+  } else {
+    emit(
+      "update:modelValue",
+      newValue.filter((val) => val.id !== node.id)
+    );
+  }
+  const fullPath = node.parents;
+  fullPath.push(node.label);
+  emit("deletedPath", fullPath);
+}
+
+function getNodeByPathComponents(
+  tree: FileTreeNode[],
+  pathComponents: string[]
+): FileTreeNode | null {
+  let currentNodes = tree;
+  let node = null;
+  for (const parent of pathComponents) {
+    node = currentNodes.find((node) => node.id === parent);
+    if (node) {
+      currentNodes = node.children;
+    } else {
+      return null;
+    }
+  }
+  return node;
 }
 </script>

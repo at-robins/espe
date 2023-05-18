@@ -20,6 +20,7 @@
               ref="treeReference"
               :base-directory-label="globalData ? globalData.name : 'Root'"
               @added-file="uploadFile"
+              @deleted-path="deletePath"
             />
           </q-card-section>
         </div>
@@ -148,5 +149,19 @@ function uploadFile(file: File, node: FileTreeNode) {
         queryFileNode.isUploaded = false;
       }
     });
+}
+
+function deletePath(pathComponents: string[]) {
+  const pathUpload: GlobalDataFileUpload = {
+    filePathComponents: pathComponents,
+  };
+  axios.delete("/api/globals/" + props.id + "/files", {
+    headers: {
+      "content-type": "application/json",
+    },
+    data: JSON.stringify(pathUpload),
+  });
+  // .catch((error) => {})
+  // .finally(() => {})
 }
 </script>

@@ -1,10 +1,11 @@
 use crate::application::error::{SeqError, SeqErrorType};
+use crate::model::exchange::global_data_file_upload::DATABASE_PATH_COMPONENT_SEPARATOR;
 use crate::schema::global_data::{self};
 use crate::schema::global_data_file::{self};
 use chrono::{NaiveDateTime, Utc};
 use diesel::{
     BelongingToDsl, BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, QueryDsl,
-    Queryable, RunQueryDsl, SqliteConnection,
+    Queryable, RunQueryDsl, SqliteConnection, TextExpressionMethods,
 };
 use getset::{CopyGetters, Getters};
 
@@ -75,6 +76,34 @@ impl GlobalData {
             ),
         ))
         .get_result(connection)
+    }
+
+    /// Deletes all files of the [`GlobalData`] with the specifed ID
+    /// that start with the specified path prefix.
+    ///
+    /// # Parameters
+    ///
+    /// * `global_data_id` - the entity ID
+    /// * `path_prefix` - the file path prefix
+    /// * `connection` - the database connection
+    pub fn delete_files_by_path_prefix<P: AsRef<str>>(
+        global_data_id: i32,
+        path_prefix: P,
+        connection: &mut SqliteConnection,
+    ) -> Result<usize, diesel::result::Error> {
+        diesel::delete(
+            crate::schema::global_data_file::table.filter(
+                crate::schema::global_data_file::global_data_id
+                    .eq(global_data_id)
+                    .and(
+                        crate::schema::global_data_file::file_path
+                            .like(format!("{}{}%", path_prefix.as_ref(), DATABASE_PATH_COMPONENT_SEPARATOR))
+                            .or(crate::schema::global_data_file::file_path
+                                .eq(path_prefix.as_ref())),
+                    ),
+            ),
+        )
+        .execute(connection)
     }
 
     /// Returns the entity with the specified ID.

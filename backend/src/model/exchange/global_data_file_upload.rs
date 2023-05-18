@@ -6,6 +6,9 @@ use crate::service::multipart_service::UploadForm;
 
 const MAX_LENGTH_FILE_PATH: usize = 128;
 
+/// The path separator for path components inside the database.
+pub const DATABASE_PATH_COMPONENT_SEPARATOR: &str = ILLEGAL_COMPONENT_CHARACTERS[0];
+
 const ILLEGAL_COMPONENTS: [&str; 3] = [".", "..", "~"];
 const ILLEGAL_COMPONENT_CHARACTERS: [&str; 42] = [
     "/", "\\", "<", ">", ":", "*", "?", "|", "\"", "\x00", "\x01", "\x02", "\x03", "\x04", "\x05",
@@ -31,11 +34,8 @@ impl GlobalDataFileUpload {
     }
 
     /// Returns the relative path to the file as [`String`].
-    pub fn file_path_as_string(&self) -> String {
-        self.file_path()
-            .to_str()
-            .expect("The path is build from valid unicode components, so the conversion to a string must work.")
-            .into()
+    pub fn file_path_database(&self) -> String {
+        self.file_path_components.join(DATABASE_PATH_COMPONENT_SEPARATOR)
     }
 
     fn validate_file_path(&self) -> Result<(), String> {
@@ -120,7 +120,7 @@ mod tests {
     }
 
     #[test]
-    fn test_file_path_as_string() {
+    fn test_file_path_database() {
         let file_upload = GlobalDataFileUpload {
             file_path_components: vec![
                 "a".to_string(),
@@ -128,7 +128,7 @@ mod tests {
                 "path.file".to_string(),
             ],
         };
-        let path = file_upload.file_path_as_string();
+        let path = file_upload.file_path_database();
         let expected_path: String = "a/relative/path.file".into();
         assert_eq!(path, expected_path);
     }
