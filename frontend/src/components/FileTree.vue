@@ -10,7 +10,7 @@
       v-model:selected="selectedNode"
     >
       <template v-slot:default-header="prop">
-        <div class="col items-center">
+        <div class="col items-center tree-node">
           <div
             @click="
               treeReference?.setExpanded(
@@ -23,7 +23,13 @@
           >
             <q-icon
               v-if="!prop.node.isUploaded"
-              :name="prop.node.isFile ? matFilePresent : matFolder"
+              :name="
+                prop.node.isFile
+                  ? symOutlinedFilePresent
+                  : treeReference?.isExpanded(prop.node.id)
+                  ? symOutlinedFolderOpen
+                  : symOutlinedFolder
+              "
             />
             <q-spinner v-else />
             {{ prop.node.label }}
@@ -104,6 +110,11 @@
               dense
               v-model="folderName"
               autofocus
+              counter
+              :maxlength="
+                MAX_PATH_LENGTH -
+                treeReference?.getNodeByKey(selectedNode).id.length
+              "
               :rules="componentValidationRules"
             />
           </q-card-section>
@@ -135,10 +146,13 @@ import { computed, ref, type PropType, type Ref, nextTick } from "vue";
 import {
   matDelete,
   matCreateNewFolder,
-  matFolder,
-  matFilePresent,
   matUploadFile,
 } from "@quasar/extras/material-icons";
+import {
+  symOutlinedFilePresent,
+  symOutlinedFolder,
+  symOutlinedFolderOpen,
+} from "@quasar/extras/material-symbols-outlined";
 import type { QFile, QTree } from "quasar";
 
 const ROOT_ID = ".";
@@ -187,6 +201,7 @@ const ILLEGAL_COMPONENT_CHARACTERS = [
   "\x1F",
   "\x7F",
 ];
+const MAX_PATH_LENGTH = 128;
 
 const props = defineProps({
   modelValue: { type: Object as PropType<FileTreeNode[]>, required: true },
@@ -349,3 +364,12 @@ function getNodeByPathComponents(
   return node;
 }
 </script>
+
+<style lang="scss">
+.q-tree__node-header {
+  padding: 0 !important;
+}
+.tree-node {
+  padding: 4px;
+}
+</style>

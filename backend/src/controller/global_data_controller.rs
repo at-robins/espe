@@ -11,7 +11,9 @@ use crate::{
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     model::{
         db::global_data::{GlobalData, NewGlobalData},
-        exchange::global_data_details::{GlobalDataDetails, GlobalDataFileDetails},
+        exchange::global_data_details::{
+            GlobalDataDetails, GlobalDataFileDetails, GlobalDataFilePath,
+        },
     },
     service::multipart_service::{
         create_temporary_file, delete_temporary_file, parse_multipart_file,
@@ -126,6 +128,7 @@ pub async fn get_global_data_files(
 
         global_repo_files.push(GlobalDataFileDetails {
             path_components: components,
+            is_file: entry.path().is_file(),
         });
     }
     Ok(HttpResponse::Ok().json(global_repo_files))
@@ -191,7 +194,7 @@ pub async fn list_global_data(
 pub async fn delete_global_data_files_by_path(
     request: HttpRequest,
     id: web::Path<i32>,
-    path: web::Json<GlobalDataFileDetails>,
+    path: web::Json<GlobalDataFilePath>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     let delete_info = path.into_inner();
@@ -233,23 +236,21 @@ pub async fn post_global_data_add_file(
 
     let (temporary_file_path, temporary_file_id) = create_temporary_file(Arc::clone(&app_config))?;
 
-    let inserted_id =
-        persist_multipart(payload, id, temporary_file_path.as_path(), Arc::clone(app_config))
-            .await
-            .map_err(|error| {
-                // Delete temporary file on error.
-                if delete_temporary_file(temporary_file_id, Arc::clone(app_config)).is_err() {
-                    log::error!(
-                        "Failed to delete temporary file {} upon error {}.",
-                        temporary_file_path.display(),
-                        error
-                    );
-                }
-                error
-            })?;
+    persist_multipart(payload, id, temporary_file_path.as_path(), Arc::clone(app_config))
+        .await
+        .map_err(|error| {
+            // Delete temporary file on error.
+            if delete_temporary_file(temporary_file_id, Arc::clone(app_config)).is_err() {
+                log::error!(
+                    "Failed to delete temporary file {} upon error {}.",
+                    temporary_file_path.display(),
+                    error
+                );
+            }
+            error
+        })?;
 
-    // Return the ID of the created attachment.
-    Ok(HttpResponse::Created().json(inserted_id))
+    Ok(HttpResponse::Created().finish())
 }
 
 async fn persist_multipart<P: AsRef<Path>>(
@@ -261,7 +262,7 @@ async fn persist_multipart<P: AsRef<Path>>(
     let mut connection = app_config.database_connection()?;
 
     let (upload_info, temp_file_path) =
-        parse_multipart_file::<GlobalDataFileDetails, P>(payload, temporary_file_path).await?;
+        parse_multipart_file::<GlobalDataFilePath, P>(payload, temporary_file_path).await?;
 
     // Validate the existance of the global data repository.
     GlobalData::exists_err(global_data_id, &mut connection)?;

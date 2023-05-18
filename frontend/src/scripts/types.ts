@@ -34,6 +34,11 @@ export type GlobalDataDetails = {
 
 export type GlobalDataFileDetails = {
   pathComponents: string[];
+  isFile: boolean;
+};
+
+export type GlobalDataFilePath = {
+  pathComponents: string[];
 };
 
 export type FileTreeNode = {

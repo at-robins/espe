@@ -44,9 +44,17 @@ impl From<GlobalData> for GlobalDataDetails {
 pub struct GlobalDataFileDetails {
     /// The path components.
     pub path_components: Vec<String>,
+    pub is_file: bool,
 }
 
-impl GlobalDataFileDetails {
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalDataFilePath {
+    /// The path components.
+    pub path_components: Vec<String>,
+}
+
+impl GlobalDataFilePath {
     /// Returns the relative path to the file.
     pub fn file_path(&self) -> PathBuf {
         let mut path = PathBuf::new();
@@ -106,7 +114,7 @@ impl GlobalDataFileDetails {
     }
 }
 
-impl UploadForm for GlobalDataFileDetails {
+impl UploadForm for GlobalDataFilePath {
     /**
      * Checks if the recieved upload data is valid and returns a corresponding
      * error message of not.
@@ -124,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_file_path() {
-        let file_upload = GlobalDataFileDetails {
+        let file_upload = GlobalDataFilePath {
             path_components: vec![
                 "a".to_string(),
                 "relative".to_string(),
@@ -139,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_validate_valid() {
-        let file_upload = GlobalDataFileDetails {
+        let file_upload = GlobalDataFilePath {
             path_components: vec![
                 "a".to_string(),
                 "relative".to_string(),
@@ -151,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_validate_invaild_empty() {
-        let file_upload = GlobalDataFileDetails {
+        let file_upload = GlobalDataFilePath {
             path_components: vec!["a".to_string(), "".to_string(), "path.file".to_string()],
         };
         assert!(file_upload.validate().is_err());
@@ -159,7 +167,7 @@ mod tests {
 
     #[test]
     fn test_validate_invaild_length() {
-        let file_upload = GlobalDataFileDetails {
+        let file_upload = GlobalDataFilePath {
             path_components: vec![
                 "0123456789".to_string(),
                 "0123456789".to_string(),
@@ -181,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_validate_invaild_dot() {
-        let file_upload = GlobalDataFileDetails {
+        let file_upload = GlobalDataFilePath {
             path_components: vec!["a".to_string(), ".".to_string(), "path.file".to_string()],
         };
         assert!(file_upload.validate().is_err());
@@ -189,7 +197,7 @@ mod tests {
 
     #[test]
     fn test_validate_invaild_dot_dot() {
-        let file_upload = GlobalDataFileDetails {
+        let file_upload = GlobalDataFilePath {
             path_components: vec!["a".to_string(), "..".to_string(), "path.file".to_string()],
         };
         assert!(file_upload.validate().is_err());
@@ -197,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_validate_invaild_tilde() {
-        let file_upload = GlobalDataFileDetails {
+        let file_upload = GlobalDataFilePath {
             path_components: vec!["a".to_string(), "~".to_string(), "path.file".to_string()],
         };
         assert!(file_upload.validate().is_err());

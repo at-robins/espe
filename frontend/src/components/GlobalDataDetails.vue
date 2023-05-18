@@ -38,6 +38,7 @@ import {
   type GlobalDataDetails,
   type GlobalDataFileDetails,
   type FileTreeNode,
+  type GlobalDataFilePath,
 } from "@/scripts/types";
 import axios from "axios";
 import { ref, onMounted, type Ref } from "vue";
@@ -71,7 +72,9 @@ function getFileTreeNodes(files: GlobalDataFileDetails[]): FileTreeNode[] {
           label: pathComponent,
           children: [],
           parents: parents,
-          isFile: i === globalDataFile.pathComponents.length - 1,
+          isFile:
+            i === globalDataFile.pathComponents.length - 1 &&
+            globalDataFile.isFile,
           isUploaded: false,
         };
         currentNodes.push(newNode);
@@ -130,7 +133,7 @@ function uploadFile(file: File, node: FileTreeNode) {
   // loadingError.value = null;
   const formData = new FormData();
   formData.append("file", file);
-  const uploadInfo: GlobalDataFileDetails = {
+  const uploadInfo: GlobalDataFilePath = {
     pathComponents: node.parents,
   };
   uploadInfo.pathComponents.push(file.name);
@@ -151,7 +154,7 @@ function uploadFile(file: File, node: FileTreeNode) {
 }
 
 function deletePath(pathComponents: string[]) {
-  const pathUpload: GlobalDataFileDetails = {
+  const pathUpload: GlobalDataFilePath = {
     pathComponents: pathComponents,
   };
   axios.delete("/api/globals/" + props.id + "/files", {
