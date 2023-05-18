@@ -182,6 +182,17 @@ impl From<std::io::Error> for SeqError {
     }
 }
 
+impl From<walkdir::Error> for SeqError {
+    fn from(error: walkdir::Error) -> Self {
+        Self::new(
+            "walkdir::Error",
+            SeqErrorType::InternalServerError,
+            error,
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        )
+    }
+}
+
 impl From<diesel::ConnectionError> for SeqError {
     fn from(error: diesel::ConnectionError) -> Self {
         Self::new(

@@ -8,7 +8,6 @@
       text-color="primary"
       :selected-color="showContextMenu ? 'accent' : 'primary'"
       v-model:selected="selectedNode"
-      default-expand-all
     >
       <template v-slot:default-header="prop">
         <div class="col items-center">
@@ -287,12 +286,12 @@ function createNewNode(
   let parents: string[] = [];
   if (parent.id !== ROOT_ID) {
     parents = [...parent.parents];
-    parents.push(parent.id);
+    parents.push(parent.label);
   }
   const newValue = [...props.modelValue];
   let currentNodes = newValue;
   for (const parent of parents) {
-    const found = currentNodes.find((node) => node.id === parent)?.children;
+    const found = currentNodes.find((node) => node.label === parent)?.children;
     if (found) {
       currentNodes = found;
     }
@@ -340,7 +339,7 @@ function getNodeByPathComponents(
   let currentNodes = tree;
   let node = null;
   for (const parent of pathComponents) {
-    node = currentNodes.find((node) => node.id === parent);
+    node = currentNodes.find((node) => node.label === parent);
     if (node) {
       currentNodes = node.children;
     } else {

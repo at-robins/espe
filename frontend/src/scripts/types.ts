@@ -33,13 +33,7 @@ export type GlobalDataDetails = {
 };
 
 export type GlobalDataFileDetails = {
-  id: number;
   pathComponents: string[];
-  creationTime: string;
-};
-
-export type GlobalDataFileUpload = {
-  filePathComponents: string[];
 };
 
 export type FileTreeNode = {

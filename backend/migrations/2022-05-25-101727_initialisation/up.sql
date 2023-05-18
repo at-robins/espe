@@ -38,10 +38,3 @@ CREATE TABLE global_data (
     comment TEXT,
     creation_time DATETIME NOT NULL
 );
-CREATE TABLE global_data_file (
-    id INTEGER PRIMARY KEY NOT NULL,
-    global_data_id INTEGER NOT NULL,
-    file_path TEXT NOT NULL,
-    creation_time DATETIME NOT NULL,
-        FOREIGN KEY (global_data_id) REFERENCES global_data (id) ON UPDATE CASCADE ON DELETE CASCADE
-);
