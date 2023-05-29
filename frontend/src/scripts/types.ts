@@ -48,6 +48,7 @@ export type FileTreeNode = {
   parents: string[];
   isFile: boolean;
   isUploaded: boolean;
+  error: string | null;
 };
 
 export type ErrorResponse = {

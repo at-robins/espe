@@ -10,30 +10,53 @@
       v-model:selected="selectedNode"
     >
       <template v-slot:default-header="prop">
-        <div class="col items-center tree-node">
+        <div
+          class="col items-center tree-node"
+          @click="
+            treeReference?.setExpanded(
+              prop.node.id,
+              !treeReference?.isExpanded(prop.node.id)
+            )
+          "
+          @contextmenu="selectedNode = prop.node.id"
+        >
           <div
-            @click="
-              treeReference?.setExpanded(
-                prop.node.id,
-                !treeReference?.isExpanded(prop.node.id)
-              )
-            "
-            @contextmenu="selectedNode = prop.node.id"
-            class="col"
+            :class="[
+              prop.node.error ? 'text-negative' : '',
+              'row',
+              'items-center',
+            ]"
           >
-            <q-icon
-              v-if="!prop.node.isUploaded"
-              :name="
-                prop.node.isFile
-                  ? symOutlinedFilePresent
-                  : treeReference?.isExpanded(prop.node.id)
-                  ? symOutlinedFolderOpen
-                  : symOutlinedFolder
-              "
-            />
-            <q-spinner v-else />
-            {{ prop.node.label }}
+            <div class="q-pr-xs">
+              <q-spinner v-if="prop.node.isUploaded" />
+              <q-icon
+                v-else-if="prop.node.error"
+                :name="symOutlinedError"
+                color="negative"
+              />
+              <q-icon
+                v-else
+                :name="
+                  prop.node.isFile
+                    ? symOutlinedFilePresent
+                    : treeReference?.isExpanded(prop.node.id)
+                    ? symOutlinedFolderOpen
+                    : symOutlinedFolder
+                "
+              />
+            </div>
+            <div>
+              {{ prop.node.label }}
+            </div>
           </div>
+          <q-tooltip
+            v-if="prop.node.error"
+            class="bg-red"
+            anchor="bottom start"
+            self="top start"
+          >
+            {{ prop.node.error }}
+          </q-tooltip>
           <q-menu
             @update:model-value="(value) => (showContextMenu = value)"
             touch-position
@@ -149,6 +172,7 @@ import {
   matUploadFile,
 } from "@quasar/extras/material-icons";
 import {
+  symOutlinedError,
   symOutlinedFilePresent,
   symOutlinedFolder,
   symOutlinedFolderOpen,
@@ -224,6 +248,11 @@ const componentValidationRules = [
       .children.some((node: FileTreeNode) => node.label === val) ||
     "The name already exists.",
   (val: string) =>
+    treeReference.value?.getNodeByKey(selectedNode.value).id.length +
+      val.length <=
+      MAX_PATH_LENGTH ||
+    "The path exceeds the maximum of " + MAX_PATH_LENGTH + " characters.",
+  (val: string) =>
     !ILLEGAL_COMPONENTS.some((illegal_comp) => illegal_comp === val) ||
     'The name cannot be any of the following ""' +
       ILLEGAL_COMPONENTS.join(", ") +
@@ -239,7 +268,8 @@ const componentValidationRules = [
 const emit = defineEmits<{
   (event: "update:modelValue", nodes: FileTreeNode[]): void;
   (event: "addedFile", file: File, node: FileTreeNode): void;
-  (event: "deletedPath", pathComponents: string[]): void;
+  (event: "addedFolder", node: FileTreeNode): void;
+  (event: "deletedPath", node: FileTreeNode): void;
 }>();
 
 const fileTree = computed(() => {
@@ -251,6 +281,7 @@ const fileTree = computed(() => {
       parents: [],
       isFile: false,
       isUploaded: false,
+      error: null,
     },
   ];
   return computedValue;
@@ -274,7 +305,12 @@ function createNewFolder() {
     const createdNode = createNewNode(label, parent, false);
     // Expands the parent folder.
     if (createdNode) {
-      nextTick(() => treeReference.value?.setExpanded(parent.id, true));
+      if (createdNode) {
+        nextTick(() => {
+          emit("addedFolder", createdNode);
+          treeReference.value?.setExpanded(parent.id, true);
+        });
+      }
     }
   }
   folderName.value = null;
@@ -287,8 +323,10 @@ function createNewFile(value: File | null) {
   if (value && parent) {
     const createdNode = createNewNode(value.name, parent, true);
     if (createdNode) {
-      emit("addedFile", value, createdNode);
-      nextTick(() => treeReference.value?.setExpanded(parent.id, true));
+      nextTick(() => {
+        emit("addedFile", value, createdNode);
+        treeReference.value?.setExpanded(parent.id, true);
+      });
     }
   }
 }
@@ -313,6 +351,14 @@ function createNewNode(
   }
   if (!parent.children.some((node) => node.label === label)) {
     const id = parents.join("") + label;
+    let error = null;
+    // Validate files here as there is no separated naming step to validate before emitting.
+    if (isFile) {
+      const validation: string | undefined = componentValidationRules
+        .map((validation_function) => validation_function(label))
+        .find((value) => typeof value === "string") as string | undefined;
+      error = validation ? validation : null;
+    }
     const newNode: FileTreeNode = {
       id: id,
       label: label,
@@ -320,6 +366,7 @@ function createNewNode(
       parents: parents,
       isFile: isFile,
       isUploaded: false,
+      error: error,
     };
     currentNodes.push(newNode);
     emit("update:modelValue", newValue);
@@ -342,9 +389,7 @@ function deleteNode(node: FileTreeNode) {
       newValue.filter((val) => val.id !== node.id)
     );
   }
-  const fullPath = node.parents;
-  fullPath.push(node.label);
-  emit("deletedPath", fullPath);
+  emit("deletedPath", node);
 }
 
 function getNodeByPathComponents(

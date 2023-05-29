@@ -6,7 +6,7 @@ import GlobalDataList from "@/components/GlobalDataList.vue";
 <template>
   <main>
     <div class="q-ma-md">
-      <q-card flat bordered class="my-card">
+      <q-card>
         <q-card-section>
           <div class="text-h6">Globla data repositories</div>
         </q-card-section>
@@ -15,9 +15,13 @@ import GlobalDataList from "@/components/GlobalDataList.vue";
           multiple pipeline instances such as genomes that are used for read
           alignment.
         </q-card-section>
+        <q-card-section>
+          <global-data-creation class="q-ma-md" />
+        </q-card-section>
+        <q-card-section>
+          <global-data-list />
+        </q-card-section>
       </q-card>
     </div>
-    <global-data-creation class="q-ma-md" />
-    <global-data-list />
   </main>
 </template>

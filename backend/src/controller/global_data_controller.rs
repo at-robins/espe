@@ -100,36 +100,39 @@ pub async fn get_global_data_files(
 
     let mut global_repo_files: Vec<GlobalDataFileDetails> = Vec::new();
     let global_data_path = app_config.global_data_path(id.to_string());
-    for entry in walkdir::WalkDir::new(&global_data_path) {
-        let entry = entry?;
-        let relative_path = entry
-            .path()
-            .strip_prefix(&global_data_path)
-            .expect("The global data directory must be a parent of the contained components.");
-        let (components, invalid_path) =
-            relative_path
-                .components()
-                .fold((Vec::new(), false), |mut acc, comp| {
-                    if let Some(valid_component) = comp.as_os_str().to_str() {
-                        acc.0.push(valid_component.to_string());
-                        acc
-                    } else {
-                        (acc.0, true)
-                    }
-                });
-        if invalid_path {
-            return Err(SeqError::new(
-                "Invalid path",
-                SeqErrorType::InternalServerError,
-                format!("The path {} contains invalid characters.", entry.path().display()),
-                "A path is invalid.",
-            ));
-        }
+    if global_data_path.exists() {
+        for entry in walkdir::WalkDir::new(&global_data_path) {
+            let entry = entry?;
+            let relative_path = entry
+                .path()
+                .strip_prefix(&global_data_path)
+                .expect("The global data directory must be a parent of the contained components.");
+            let (components, invalid_path) =
+                relative_path
+                    .components()
+                    .fold((Vec::new(), false), |mut acc, comp| {
+                        if let Some(valid_component) = comp.as_os_str().to_str() {
+                            acc.0.push(valid_component.to_string());
+                            acc
+                        } else {
+                            (acc.0, true)
+                        }
+                    });
+            if invalid_path {
+                return Err(SeqError::new(
+                    "Invalid path",
+                    SeqErrorType::InternalServerError,
+                    format!("The path {} contains invalid characters.", entry.path().display()),
+                    "A path is invalid.",
+                ));
+            }
 
-        global_repo_files.push(GlobalDataFileDetails {
-            path_components: components,
-            is_file: entry.path().is_file(),
-        });
+            global_repo_files.push(GlobalDataFileDetails {
+                path_components: components,
+                is_file: entry.path().is_file(),
+            });
+        }
+        global_repo_files.sort();
     }
     Ok(HttpResponse::Ok().json(global_repo_files))
 }
@@ -253,6 +256,43 @@ pub async fn post_global_data_add_file(
     Ok(HttpResponse::Created().finish())
 }
 
+pub async fn post_global_data_add_folder(
+    request: HttpRequest,
+    id: web::Path<i32>,
+    upload_info: web::Json<GlobalDataFilePath>,
+) -> Result<HttpResponse, SeqError> {
+    let id: i32 = id.into_inner();
+    let upload_info = upload_info.into_inner();
+    // Retrieve the app config.
+    let app_config = request
+        .app_data::<Arc<Configuration>>()
+        .expect("The configuration must be accessible.");
+    let mut connection = app_config.database_connection()?;
+
+    // Validate the existance of the global data repository.
+    GlobalData::exists_err(id, &mut connection)?;
+
+    // Validate that the file path is not already existant.
+    let full_path = app_config
+        .global_data_path(id.to_string())
+        .join(upload_info.file_path());
+    if full_path.exists() {
+        return Err(SeqError::new(
+            "Conflicting request",
+            SeqErrorType::Conflict,
+            format!(
+                "Global data file at path {} does already exist.",
+                upload_info.file_path().display()
+            ),
+            "The resource does already exist.",
+        ));
+    } else {
+        std::fs::create_dir_all(full_path)?;
+    }
+
+    Ok(HttpResponse::Created().finish())
+}
+
 async fn persist_multipart<P: AsRef<Path>>(
     payload: Multipart,
     global_data_id: i32,
@@ -279,7 +319,7 @@ async fn persist_multipart<P: AsRef<Path>>(
                 "Global data file at path {} does already exist.",
                 upload_info.file_path().display()
             ),
-            "The entity does already exist.",
+            "The resource does already exist.",
         ));
     }
 

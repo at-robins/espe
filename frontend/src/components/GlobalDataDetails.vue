@@ -2,24 +2,27 @@
   <div class="q-pa-md">
     <q-card>
       <div v-if="!loadingError">
-        <div v-if="isLoadingGlobalDataDetails">
+        <div v-if="isLoadingGlobalDataDetails || !globalData">
           <q-card-section class="flex-center row">
             <q-spinner color="primary" size="xl" />
           </q-card-section>
         </div>
         <div v-else>
           <q-card-section>
-            <div class="text-h6">{{ globalData?.name }}</div>
+            <global-data-title
+              :title="globalData.name"
+              :global-data-id="globalData.id"
+            />
           </q-card-section>
-          <q-card-section>
+          <q-card-section v-if="globalData?.comment">
             <div>{{ globalData?.comment }}</div>
           </q-card-section>
           <q-card-section>
             <file-tree
               v-model="fileNodes"
-              ref="treeReference"
               :base-directory-label="globalData ? globalData.name : 'Root'"
               @added-file="uploadFile"
+              @added-folder="uploadFolder"
               @deleted-path="deletePath"
             />
           </q-card-section>
@@ -29,6 +32,9 @@
         <error-popup :error-response="loadingError" />
       </div>
     </q-card>
+    <q-dialog v-model="showDeletionError" v-if="deletionError">
+      <error-popup :error-response="deletionError" />
+    </q-dialog>
   </div>
 </template>
 
@@ -44,13 +50,15 @@ import axios from "axios";
 import { ref, onMounted, type Ref } from "vue";
 import ErrorPopup from "./ErrorPopup.vue";
 import FileTree from "./FileTree.vue";
+import GlobalDataTitle from "./GlobalDataTitle.vue";
 
 const files: Ref<Array<GlobalDataFileDetails>> = ref([]);
 const globalData: Ref<GlobalDataDetails | null> = ref(null);
 const fileNodes: Ref<Array<FileTreeNode>> = ref([]);
 const isLoadingGlobalDataDetails = ref(false);
 const loadingError: Ref<ErrorResponse | null> = ref(null);
-const treeReference: Ref<typeof FileTree | null> = ref(null);
+const deletionError: Ref<ErrorResponse | null> = ref(null);
+const showDeletionError = ref(false);
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -76,6 +84,7 @@ function getFileTreeNodes(files: GlobalDataFileDetails[]): FileTreeNode[] {
             i === globalDataFile.pathComponents.length - 1 &&
             globalDataFile.isFile,
           isUploaded: false,
+          error: null,
         };
         currentNodes.push(newNode);
         currentNodes = newNode.children;
@@ -116,54 +125,100 @@ function loadGlobalDataDetails() {
     });
 }
 
-function uploadFile(file: File, node: FileTreeNode) {
-  let queryFileNodes: FileTreeNode[] | undefined = fileNodes.value;
-  for (const parentId of node.parents) {
-    queryFileNodes = queryFileNodes?.find(
-      (val) => val.id === parentId
+function getFileNodeByNode(query: FileTreeNode): FileTreeNode | undefined {
+  let foundFileNodes: FileTreeNode[] | undefined = fileNodes.value;
+  for (const parentLabel of query.parents) {
+    foundFileNodes = foundFileNodes?.find(
+      (val) => val.label === parentLabel
     )?.children;
   }
-  const queryFileNode: FileTreeNode | undefined = queryFileNodes?.find(
-    (val) => val.id === node.id
+  const foundFileNode: FileTreeNode | undefined = foundFileNodes?.find(
+    (val) => val.id === query.id
   );
-  if (queryFileNode) {
-    queryFileNode.isUploaded = true;
-  }
-  // isLoadingGlobalDataDetails.value = true;
-  // loadingError.value = null;
-  const formData = new FormData();
-  formData.append("file", file);
-  const uploadInfo: GlobalDataFilePath = {
-    pathComponents: node.parents,
-  };
-  uploadInfo.pathComponents.push(file.name);
-  formData.append("form", JSON.stringify(uploadInfo));
-  const config = {
-    headers: {
-      "content-type": "multipart/form-data",
-    },
-  };
-  axios
-    .post("/api/globals/" + props.id + "/files", formData, config)
-    // .catch((error) => {})
-    .finally(() => {
-      if (queryFileNode) {
-        queryFileNode.isUploaded = false;
-      }
-    });
+  return foundFileNode;
 }
 
-function deletePath(pathComponents: string[]) {
-  const pathUpload: GlobalDataFilePath = {
-    pathComponents: pathComponents,
-  };
-  axios.delete("/api/globals/" + props.id + "/files", {
-    headers: {
-      "content-type": "application/json",
-    },
-    data: JSON.stringify(pathUpload),
-  });
-  // .catch((error) => {})
-  // .finally(() => {})
+function uploadFolder(node: FileTreeNode) {
+  if (!node.error) {
+    const queryFolderNode = getFileNodeByNode(node);
+    if (queryFolderNode) {
+      queryFolderNode.isUploaded = true;
+      const uploadInfo: GlobalDataFilePath = {
+        pathComponents: node.parents,
+      };
+      uploadInfo.pathComponents.push(node.label);
+      const config = {
+        headers: {
+          "content-type": "application/json",
+        },
+      };
+      axios
+        .post(
+          "/api/globals/" + props.id + "/folders",
+          JSON.stringify(uploadInfo),
+          config
+        )
+        .catch((error) => {
+          queryFolderNode.error = error;
+        })
+        .finally(() => {
+          if (queryFolderNode) {
+            queryFolderNode.isUploaded = false;
+          }
+        });
+    }
+  }
+}
+
+function uploadFile(file: File, node: FileTreeNode) {
+  if (!node.error) {
+    const queryFileNode = getFileNodeByNode(node);
+    if (queryFileNode) {
+      queryFileNode.isUploaded = true;
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadInfo: GlobalDataFilePath = {
+        pathComponents: node.parents,
+      };
+      uploadInfo.pathComponents.push(file.name);
+      formData.append("form", JSON.stringify(uploadInfo));
+      const config = {
+        headers: {
+          "content-type": "multipart/form-data",
+        },
+      };
+      axios
+        .post("/api/globals/" + props.id + "/files", formData, config)
+        .catch((error) => {
+          queryFileNode.error = error;
+        })
+        .finally(() => {
+          if (queryFileNode) {
+            queryFileNode.isUploaded = false;
+          }
+        });
+    }
+  }
+}
+
+function deletePath(node: FileTreeNode) {
+  if (!node.error) {
+    const pathComponents = node.parents;
+    pathComponents.push(node.label);
+    const pathUpload: GlobalDataFilePath = {
+      pathComponents: pathComponents,
+    };
+    axios
+      .delete("/api/globals/" + props.id + "/files", {
+        headers: {
+          "content-type": "application/json",
+        },
+        data: JSON.stringify(pathUpload),
+      })
+      .catch((error) => {
+        deletionError.value = error;
+        showDeletionError.value = true;
+      });
+  }
 }
 </script>

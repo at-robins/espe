@@ -39,7 +39,7 @@ impl From<GlobalData> for GlobalDataDetails {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalDataFileDetails {
     /// The path components.

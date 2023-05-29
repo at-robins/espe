@@ -1,16 +1,21 @@
 <template>
   <div class="q-pa-md q-gutter-md">
     <q-table
-      title="Global data repositories"
+      title="Existing repositories"
       :rows="loadedGlobalRepos"
       :columns="columns"
       row-key="id"
       :loading="isLoadingGlobals"
       no-data-label="No repositories have been declared yet."
       :rows-per-page-options="[10, 15, 20, 25, 50, 0]"
+      flat
     >
       <template v-slot:body-cell="props">
-        <q-td :props="props" @click="navigateToRepository(props.row.id)">
+        <q-td
+          :props="props"
+          @click="navigateToRepository(props.row.id)"
+          class="cursor-pointer"
+        >
           {{ props.value }}
         </q-td>
         <q-menu touch-position context-menu>
