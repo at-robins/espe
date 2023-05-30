@@ -164,7 +164,8 @@ pub async fn patch_global_data_comment(
     new_comment: web::Json<Option<String>>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
-    let new_comment = new_comment.into_inner();
+    // Sanitise the HTML.
+    let new_comment = new_comment.into_inner().map(|inner| ammonia::clean(&inner));
     // Retrieve the app config.
     let app_config = request
         .app_data::<Arc<Configuration>>()
