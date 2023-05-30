@@ -51,6 +51,10 @@ const props = defineProps({
   globalDataId: { type: Number, required: true },
 });
 
+const emit = defineEmits<{
+  (event: "update:title", title: string): void;
+}>();
+
 const isUpdatingTitle = ref(false);
 const updateTitleErrorMessage = ref("");
 const editTitleMode = ref(false);
@@ -68,6 +72,9 @@ function updateTitle() {
   };
   axios
     .patch("/api/globals/" + props.globalDataId + "/name", formData, config)
+    .then(() => {
+      emit("update:title", titleModel.value);
+    })
     .catch((error) => {
       updateTitleErrorMessage.value = error;
     })

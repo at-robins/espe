@@ -12,6 +12,7 @@
             <global-data-title
               :title="globalData.name"
               :global-data-id="globalData.id"
+              @update:title="updateTitle"
             />
           </q-card-section>
           <q-card-section v-if="globalData?.comment">
@@ -63,6 +64,12 @@ const showDeletionError = ref(false);
 const props = defineProps({
   id: { type: String, required: true },
 });
+
+function updateTitle(title: string) {
+  if (globalData.value) {
+    globalData.value.name = title;
+  }
+}
 
 function getFileTreeNodes(files: GlobalDataFileDetails[]): FileTreeNode[] {
   const tree: FileTreeNode[] = [];
