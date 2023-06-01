@@ -305,12 +305,10 @@ function createNewFolder() {
     const createdNode = createNewNode(label, parent, false);
     // Expands the parent folder.
     if (createdNode) {
-      if (createdNode) {
-        nextTick(() => {
-          emit("addedFolder", createdNode);
-          treeReference.value?.setExpanded(parent.id, true);
-        });
-      }
+      nextTick(() => {
+        emit("addedFolder", createdNode);
+        treeReference.value?.setExpanded(parent.id, true);
+      });
     }
   }
   folderName.value = null;
