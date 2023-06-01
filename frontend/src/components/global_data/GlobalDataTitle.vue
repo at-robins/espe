@@ -1,7 +1,7 @@
 <template>
   <div class="row no-wrap">
-    <q-item-label v-if="!editTitleMode" class="text-h6 shrink q-ma-sm"
-      >{{ titleModel }}
+    <div v-if="!editTitleMode" class="text-h6 shrink q-ma-sm">
+      {{ titleModel }}
       <q-menu touch-position context-menu>
         <q-list dense>
           <q-item clickable v-close-popup @click="editTitleField">
@@ -19,7 +19,7 @@
           </q-item>
         </q-list>
       </q-menu>
-    </q-item-label>
+    </div>
     <q-input
       v-else
       ref="titleInputRef"

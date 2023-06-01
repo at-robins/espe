@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import GlobalDataCreation from "@/components/GlobalDataCreation.vue";
-import GlobalDataList from "@/components/GlobalDataList.vue";
+import GlobalDataCreation from "@/components/global_data/GlobalDataCreation.vue";
+import GlobalDataList from "@/components/global_data/GlobalDataList.vue";
 </script>
 
 <template>

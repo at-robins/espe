@@ -68,7 +68,7 @@
 import { type ErrorResponse, type GlobalDataDetails } from "@/scripts/types";
 import axios from "axios";
 import { ref, onMounted, type Ref } from "vue";
-import ErrorPopup from "./ErrorPopup.vue";
+import ErrorPopup from "../ErrorPopup.vue";
 import { DateTime } from "luxon";
 import { type QTableProps } from "quasar";
 import { matDelete, matFileOpen } from "@quasar/extras/material-icons";

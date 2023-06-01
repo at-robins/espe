@@ -15,17 +15,29 @@
               @update:title="updateTitle"
             />
           </q-card-section>
-          <q-card-section v-if="globalData?.comment">
-            <div>{{ globalData?.comment }}</div>
+          <q-card-section>
+            <global-data-comment
+              :comment="globalData.comment"
+              :global-data-id="globalData.id"
+            />
           </q-card-section>
           <q-card-section>
-            <file-tree
-              v-model="fileNodes"
-              :base-directory-label="globalData ? globalData.name : 'Root'"
-              @added-file="uploadFile"
-              @added-folder="uploadFolder"
-              @deleted-path="deletePath"
-            />
+            <div class="row">
+              <div class="q-ma-md">
+                <q-btn :icon="symOutlinedAccountTree" round>
+                  <q-tooltip>Upload files to the global repository.</q-tooltip>
+                </q-btn>
+              </div>
+              <q-separator vertical class="q-ml-md q-mr-md" />
+              <file-tree
+                v-model="fileNodes"
+                :base-directory-label="globalData ? globalData.name : 'Root'"
+                @added-file="uploadFile"
+                @added-folder="uploadFolder"
+                @deleted-path="deletePath"
+                class="col"
+              />
+            </div>
           </q-card-section>
         </div>
       </div>
@@ -49,9 +61,11 @@ import {
 } from "@/scripts/types";
 import axios from "axios";
 import { ref, onMounted, type Ref } from "vue";
-import ErrorPopup from "./ErrorPopup.vue";
-import FileTree from "./FileTree.vue";
+import ErrorPopup from "../ErrorPopup.vue";
+import FileTree from "../FileTree.vue";
 import GlobalDataTitle from "./GlobalDataTitle.vue";
+import GlobalDataComment from "./GlobalDataComment.vue";
+import { symOutlinedAccountTree } from "@quasar/extras/material-symbols-outlined";
 
 const files: Ref<Array<GlobalDataFileDetails>> = ref([]);
 const globalData: Ref<GlobalDataDetails | null> = ref(null);
@@ -151,7 +165,7 @@ function uploadFolder(node: FileTreeNode) {
     if (queryFolderNode) {
       queryFolderNode.isUploaded = true;
       const uploadInfo: GlobalDataFilePath = {
-        pathComponents: node.parents,
+        pathComponents: [...node.parents],
       };
       uploadInfo.pathComponents.push(node.label);
       const config = {
@@ -166,7 +180,7 @@ function uploadFolder(node: FileTreeNode) {
           config
         )
         .catch((error) => {
-          queryFolderNode.error = error;
+          queryFolderNode.error = error.response.data;
         })
         .finally(() => {
           if (queryFolderNode) {
@@ -197,7 +211,7 @@ function uploadFile(file: File, node: FileTreeNode) {
       axios
         .post("/api/globals/" + props.id + "/files", formData, config)
         .catch((error) => {
-          queryFileNode.error = error;
+          queryFileNode.error = error.response.data;
         })
         .finally(() => {
           if (queryFileNode) {
@@ -223,7 +237,7 @@ function deletePath(node: FileTreeNode) {
         data: JSON.stringify(pathUpload),
       })
       .catch((error) => {
-        deletionError.value = error;
+        deletionError.value = error.response.data;
         showDeletionError.value = true;
       });
   }

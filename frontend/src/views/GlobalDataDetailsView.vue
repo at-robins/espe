@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import GlobalDataDetails from "../components/GlobalDataDetails.vue";
+import GlobalDataDetails from "../components/global_data/GlobalDataDetails.vue";
 defineProps({
   id: {
     type: String,
