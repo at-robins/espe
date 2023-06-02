@@ -2,8 +2,9 @@
   <div class="row no-wrap">
     <div class="q-ma-md">
       <q-btn
-        @click="editCommentMode = true"
+        @click="saveOrChangeToEditMode"
         :icon="symOutlinedDescription"
+        :loading="isUpdatingComment"
         round
       >
         <q-tooltip>Specify a description.</q-tooltip>
@@ -42,7 +43,7 @@
               tip: 'Save changes',
               icon: 'save',
               label: 'Save',
-              handler: manualSave,
+              handler: saveOrChangeToEditMode,
             },
           }"
           :toolbar="[
@@ -166,14 +167,18 @@ function onEditorUpdate() {
   updateTimer.value = setTimeout(clearTimerAndUpdateInstructions, UPDATE_DELAY);
 }
 
-function manualSave() {
-  editCommentMode.value = false;
-  clearTimerAndUpdateInstructions();
-}
-
 function clearTimerAndUpdateInstructions() {
   updateTimer.value = null;
   updateComment();
+}
+
+function saveOrChangeToEditMode() {
+  if (editCommentMode.value) {
+    editCommentMode.value = false;
+    clearTimerAndUpdateInstructions();
+  } else {
+    editCommentMode.value = true;
+  }
 }
 
 function updateComment() {
