@@ -76,7 +76,7 @@ async fn expect_dummy_request_response(file: &str, expected_code: StatusCode) {
         .execute(&mut connection)
         .unwrap();
     let app = test::init_service(create_test_app(&db_context)).await;
-    let payload_file = format!("../testing_resources/requests/{}", file);
+    let payload_file = format!("../testing_resources/requests/sample_submission/{}", file);
     let payload = std::fs::read(payload_file).unwrap();
     let content_type: mime::Mime =
         "multipart/form-data; boundary=---------------------------5851692324164894962235391524"
