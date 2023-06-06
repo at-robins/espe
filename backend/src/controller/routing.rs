@@ -6,9 +6,12 @@ use crate::application::error::SeqError;
 
 use super::{
     global_data_controller::{
-        create_global_data, delete_global_data, get_global_data, get_global_data_files,
-        list_global_data, patch_global_data_comment, patch_global_data_name,
-        post_global_data_add_file, delete_global_data_files_by_path, post_global_data_add_folder,
+        create_global_data, delete_global_data, get_global_data, list_global_data,
+        patch_global_data_comment, patch_global_data_name,
+    },
+    global_data_file_controller::{
+        delete_global_data_files_by_path, get_global_data_files, post_global_data_add_file,
+        post_global_data_add_folder,
     },
     pipeline_controller::{get_pipeline_blueprints, get_pipeline_instance},
     sample_controller::upload_sample,
