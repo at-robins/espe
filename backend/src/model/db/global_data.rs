@@ -2,8 +2,7 @@ use crate::application::error::{SeqError, SeqErrorType};
 use crate::schema::global_data::{self};
 use chrono::{NaiveDateTime, Utc};
 use diesel::{
-    ExpressionMethods, Identifiable, Insertable, QueryDsl, Queryable,
-    RunQueryDsl, SqliteConnection,
+    ExpressionMethods, Identifiable, Insertable, QueryDsl, Queryable, RunQueryDsl, SqliteConnection,
 };
 use getset::{CopyGetters, Getters};
 
@@ -106,5 +105,105 @@ impl NewGlobalData {
             comment: comment.into(),
             creation_time: Utc::now().naive_utc(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::test_utility::TestContext;
+
+    use super::*;
+
+    #[test]
+    fn test_global_data_exists() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let mut connection = context.get_connection();
+        let id = 42;
+        assert!(!GlobalData::exists(id, &mut connection).unwrap());
+        assert!(!GlobalData::exists(id + 1, &mut connection).unwrap());
+        let new_record = GlobalData {
+            id,
+            global_data_name: "Dummy record".to_string(),
+            comment: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        };
+        diesel::insert_into(crate::schema::global_data::table)
+            .values(&new_record)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(GlobalData::exists(id, &mut connection).unwrap());
+        assert!(!GlobalData::exists(id + 1, &mut connection).unwrap());
+    }
+
+    #[test]
+    fn test_global_data_exists_err() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let mut connection = context.get_connection();
+        let id = 42;
+        assert!(GlobalData::exists_err(id, &mut connection).is_err());
+        assert!(GlobalData::exists_err(id + 1, &mut connection).is_err());
+        let new_record = GlobalData {
+            id,
+            global_data_name: "Dummy record".to_string(),
+            comment: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        };
+        diesel::insert_into(crate::schema::global_data::table)
+            .values(&new_record)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(GlobalData::exists_err(id, &mut connection).is_ok());
+        assert!(GlobalData::exists_err(id + 1, &mut connection).is_err());
+    }
+
+    #[test]
+    fn test_global_get() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let mut connection = context.get_connection();
+        let id = 42;
+        assert!(GlobalData::get(id, &mut connection).is_err());
+        assert!(GlobalData::get(id + 1, &mut connection).is_err());
+        let new_record = GlobalData {
+            id,
+            global_data_name: "Dummy record".to_string(),
+            comment: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        };
+        diesel::insert_into(crate::schema::global_data::table)
+            .values(&new_record)
+            .execute(&mut connection)
+            .unwrap();
+        assert_eq!(new_record, GlobalData::get(id, &mut connection).unwrap());
+        assert!(GlobalData::get(id + 1, &mut connection).is_err());
+    }
+
+    #[test]
+    fn test_global_get_all() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let mut connection = context.get_connection();
+        assert!(GlobalData::get_all(&mut connection).unwrap().is_empty());
+        let number_of_records = 42;
+        let new_records: Vec<GlobalData> = (0..number_of_records)
+            .map(|id| GlobalData {
+                id,
+                global_data_name: id.to_string(),
+                comment: None,
+                creation_time: chrono::Utc::now().naive_local(),
+            })
+            .collect();
+        diesel::insert_into(crate::schema::global_data::table)
+            .values(&new_records)
+            .execute(&mut connection)
+            .unwrap();
+        assert_eq!(new_records, GlobalData::get_all(&mut connection).unwrap());
     }
 }

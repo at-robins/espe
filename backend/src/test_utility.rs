@@ -47,7 +47,7 @@ pub struct TestContext {
 impl TestContext {
     /// Creates a new `TestContext`.
     pub fn new() -> TestContext {
-        let id = Configuration::generate_uuid();
+        let id = Uuid::new_v4();
         let context = TestContext { id };
         std::fs::create_dir_all(context.context_folder()).unwrap();
         let con = &mut context.get_connection();

@@ -22,11 +22,15 @@ use crate::{
 use actix_multipart::Multipart;
 use actix_web::{web, HttpRequest, HttpResponse};
 
+/// The maximum length a global data title is allowed to have.
+const MAXIMUM_TITLE_LENGTH: usize = 512;
+
 pub async fn create_global_data(
     request: HttpRequest,
     name: actix_web::web::Json<String>,
 ) -> Result<HttpResponse, SeqError> {
     let name: String = name.into_inner();
+    validate_global_data_name(&name)?;
     // Retrieve the app config.
     let app_config = request
         .app_data::<Arc<Configuration>>()
@@ -126,11 +130,13 @@ pub async fn get_global_data_files(
                     "A path is invalid.",
                 ));
             }
-
-            global_repo_files.push(GlobalDataFileDetails {
-                path_components: components,
-                is_file: entry.path().is_file(),
-            });
+            // Excludes the root folder, which has an empty component vector.
+            if !components.is_empty() {
+                global_repo_files.push(GlobalDataFileDetails {
+                    path_components: components,
+                    is_file: entry.path().is_file(),
+                });
+            }
         }
         global_repo_files.sort();
     }
@@ -144,6 +150,7 @@ pub async fn patch_global_data_name(
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     let new_name = new_name.into_inner();
+    validate_global_data_name(&new_name)?;
     // Retrieve the app config.
     let app_config = request
         .app_data::<Arc<Configuration>>()
@@ -354,3 +361,27 @@ fn temp_file_to_global_data<P: AsRef<Path>, Q: AsRef<Path>>(
     std::fs::rename(temp_file_path, final_file_path)?;
     Ok(())
 }
+
+fn validate_global_data_name<T: AsRef<str>>(name: T) -> Result<(), SeqError> {
+    let name: &str = name.as_ref();
+    if name.is_empty() {
+        return Err(SeqError::new(
+            "Invalid request",
+            SeqErrorType::BadRequestError,
+            "The title may not be empty.",
+            "The title is invalid.",
+        ));
+    }
+    if name.len() > MAXIMUM_TITLE_LENGTH {
+        return Err(SeqError::new(
+            "Invalid request",
+            SeqErrorType::BadRequestError,
+            format!("The title {} exceeds the limit of {} characters.", name, MAXIMUM_TITLE_LENGTH),
+            "The title is invalid.",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;

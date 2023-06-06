@@ -210,4 +210,14 @@ mod tests {
         };
         assert!(file_upload.validate().is_err());
     }
+
+    #[test]
+    fn test_validate_invaild_character() {
+        for invalid_character in ILLEGAL_COMPONENT_CHARACTERS {
+            let file_upload = GlobalDataFilePath {
+                path_components: vec!["a".to_string(), "b".to_string() + invalid_character + "c", "path.file".to_string()],
+            };
+            assert!(file_upload.validate().is_err());
+        }
+    }
 }
