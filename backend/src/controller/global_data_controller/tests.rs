@@ -56,16 +56,26 @@ async fn test_create_global_data_title_empty() {
 
 #[actix_web::test]
 async fn test_delete_global_data() {
-    let db_context = TestContext::new();
-    let mut connection = db_context.get_connection();
-    let app = test::init_service(create_test_app(&db_context)).await;
-    let create_req = test::TestRequest::post()
-        .uri("/api/globals")
-        .set_json("Dummy repo")
-        .to_request();
-    let create_resp = test::call_service(&app, create_req).await;
-    assert_eq!(create_resp.status(), StatusCode::CREATED);
-    let id: i32 = test::read_body_json(create_resp).await;
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let id = 42;
+    let new_record = GlobalData {
+        id,
+        global_data_name: "Dummy record".to_string(),
+        comment: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::global_data::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let global_data_path = app_config.global_data_path(id.to_string());
+    let file_path = global_data_path.join("test_file.txt");
+    std::fs::create_dir_all(&global_data_path).unwrap();
+    std::fs::write(&file_path, "test content").unwrap();
+    assert!(file_path.exists());
     assert!(!GlobalData::get_all(&mut connection).unwrap().is_empty());
     let delete_req = test::TestRequest::delete()
         .uri(&format!("/api/globals/{}", id))
@@ -73,10 +83,11 @@ async fn test_delete_global_data() {
     let delete_resp = test::call_service(&app, delete_req).await;
     assert_eq!(delete_resp.status(), StatusCode::OK);
     assert!(GlobalData::get_all(&mut connection).unwrap().is_empty());
+    assert!(!global_data_path.exists());
 }
 
 #[actix_web::test]
-async fn test_delete_global_data_non_existant() {
+async fn test_delete_global_data_non_existent() {
     let db_context = TestContext::new();
     let mut connection = db_context.get_connection();
     let app = test::init_service(create_test_app(&db_context)).await;
@@ -118,7 +129,7 @@ async fn test_get_global_data() {
 }
 
 #[actix_web::test]
-async fn test_get_global_data_not_existant() {
+async fn test_get_global_data_non_existent() {
     let db_context = TestContext::new();
     let app = test::init_service(create_test_app(&db_context)).await;
     let req = test::TestRequest::get().uri("/api/globals/42").to_request();
@@ -196,6 +207,19 @@ async fn test_patch_global_data_comment() {
 }
 
 #[actix_web::test]
+async fn test_patch_global_comment_non_existent() {
+    let db_context = TestContext::new();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let new_name = "A completely new name".to_string();
+    let req = test::TestRequest::patch()
+        .uri("/api/globals/42/comment")
+        .set_json(&new_name)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
 async fn test_patch_global_data_name() {
     let db_context = TestContext::new();
     let mut connection = db_context.get_connection();
@@ -224,6 +248,19 @@ async fn test_patch_global_data_name() {
             .unwrap()
             .global_data_name
     );
+}
+
+#[actix_web::test]
+async fn test_patch_global_name_non_existent() {
+    let db_context = TestContext::new();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let new_name = "A completely new name".to_string();
+    let req = test::TestRequest::patch()
+        .uri("/api/globals/42/name")
+        .set_json(&new_name)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
 #[actix_web::test]
