@@ -1,0 +1,10 @@
+-----------------------------5851692324164894962235391524
+Content-Disposition: form-data; name="file"; filename="original_name_of_the_test_file_that_should_be_ignored.txt"
+Content-Type: text/plain
+
+test content
+-----------------------------5851692324164894962235391524
+Content-Disposition: form-data; name="form"
+
+{"pathComponents":[]}
+-----------------------------5851692324164894962235391524--

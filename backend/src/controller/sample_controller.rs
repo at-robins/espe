@@ -9,10 +9,7 @@ use crate::{
         error::SeqErrorType,
     },
     diesel::{ExpressionMethods, RunQueryDsl},
-    model::{
-        db::experiment::Experiment, db::experiment::NewExperiment,
-        exchange::experiment_upload::ExperimentUpload,
-    },
+    model::{db::experiment::NewExperiment, exchange::experiment_upload::ExperimentUpload},
     service::multipart_service::{
         create_temporary_file, delete_temporary_file, parse_multipart_file,
     },
@@ -56,7 +53,7 @@ async fn persist_multipart<P: AsRef<Path>>(
     temporary_file_path: P,
     app_config: Arc<Configuration>,
 ) -> Result<i32, SeqError> {
-    let connection = app_config.database_connection()?;
+    let mut connection = app_config.database_connection()?;
 
     let (upload_info, temp_file_path) =
         parse_multipart_file::<ExperimentUpload, P>(payload, temporary_file_path).await?;
@@ -66,7 +63,7 @@ async fn persist_multipart<P: AsRef<Path>>(
         crate::schema::pipeline::dsl::pipeline
             .filter(crate::schema::pipeline::id.eq(upload_info.pipeline_id)),
     ))
-    .get_result(&connection)?;
+    .get_result(&mut connection)?;
     if !pipeline_exists {
         return Err(SeqError::new(
                 "Pipeline invalid",
@@ -81,18 +78,10 @@ async fn persist_multipart<P: AsRef<Path>>(
 
     // Write experiment to database.
     let new_experiment: NewExperiment = upload_info.into();
-    diesel::insert_into(crate::schema::experiment::table)
+    let inserted_id = diesel::insert_into(crate::schema::experiment::table)
         .values(&new_experiment)
-        .execute(&connection)?;
-
-    // Get ID of the inserted record.
-    // The corner case of multiple identical samples being inserted at the same time using the same pipeline is not covered.
-    let inserted = crate::schema::experiment::table
-        .filter(crate::schema::experiment::experiment_name.eq(new_experiment.experiment_name()))
-        .filter(crate::schema::experiment::creation_time.eq(new_experiment.creation_time()))
-        .filter(crate::schema::experiment::pipeline_id.eq(new_experiment.pipeline_id()))
-        .first::<Experiment>(&connection)?;
-    let inserted_id = inserted.id;
+        .returning(crate::schema::experiment::id)
+        .get_result(&mut connection)?;
 
     // Create experiment folder and copy file to destination.
     temp_file_to_experiment(inserted_id, temp_file_path, app_config).map_err(|error| {
@@ -101,7 +90,7 @@ async fn persist_multipart<P: AsRef<Path>>(
             crate::schema::experiment::dsl::experiment
                 .filter(crate::schema::experiment::id.eq(inserted_id)),
         )
-        .execute(&connection)
+        .execute(&mut connection)
         {
             log::error!(
                 "Roll back of database after insertion of experiment {} failed with error: {}.",

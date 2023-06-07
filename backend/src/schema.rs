@@ -10,6 +10,15 @@ table! {
 }
 
 table! {
+    global_data (id) {
+        id -> Integer,
+        global_data_name -> Text,
+        comment -> Nullable<Text>,
+        creation_time -> Timestamp,
+    }
+}
+
+table! {
     pipeline (id) {
         id -> Integer,
         pipeline_name -> Text,
@@ -46,6 +55,7 @@ joinable!(pipeline_step_instance -> pipeline_step (pipeline_step_id));
 
 allow_tables_to_appear_in_same_query!(
     experiment,
+    global_data,
     pipeline,
     pipeline_step,
     pipeline_step_instance,

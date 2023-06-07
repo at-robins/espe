@@ -5,8 +5,8 @@ import { RouterView, useRouter } from "vue-router";
 const leftMenuOpen = ref(false);
 const router = useRouter();
 
-function navigateToAtac() {
-  router.push({ name: "atac" });
+function navigateToGlobals() {
+  router.push({ name: "globals" });
 }
 </script>
 
@@ -26,7 +26,7 @@ function navigateToAtac() {
           <q-avatar>
             <img src="/icon_main.svg" />
           </q-avatar>
-          MRI Sequencing Pipeline
+          Wiedemann Sequencing Pipeline
         </q-toolbar-title>
       </q-toolbar>
     </q-header>
@@ -39,8 +39,8 @@ function navigateToAtac() {
       @mouseleave="leftMenuOpen = false"
     >
       <q-list separator>
-        <q-item clickable v-ripple @click="navigateToAtac">
-          <q-item-section>ATACseq</q-item-section>
+        <q-item clickable v-ripple @click="navigateToGlobals">
+          <q-item-section>Global data repositories</q-item-section>
         </q-item>
       </q-list>
     </q-drawer>

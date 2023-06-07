@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build --emptyOutDir",
-    "build:dev": "vue-tsc --noEmit && vite build -m development --emptyOutDir --watch ",
+    "build:dev": "vue-tsc --noEmit && vite build -m development --emptyOutDir --watch",
     "preview": "vite preview --port 5050",
     "test:unit": "vitest --environment jsdom",
     "typecheck": "vue-tsc --noEmit",

@@ -14,11 +14,7 @@ use serial_test::serial;
 #[actix_web::test]
 #[serial]
 async fn test_upload_sample_post() {
-    expect_dummy_request_response(
-        "sample_submission_multipart",
-        StatusCode::CREATED,
-    )
-    .await;
+    expect_dummy_request_response("sample_submission_multipart", StatusCode::CREATED).await;
 }
 
 #[actix_web::test]
@@ -73,14 +69,14 @@ async fn test_upload_sample_post_no_comment_and_mail() {
 
 async fn expect_dummy_request_response(file: &str, expected_code: StatusCode) {
     let db_context = TestContext::new();
-    let connection = db_context.get_connection();
+    let mut connection = db_context.get_connection();
     let dummy_pipeline = NewPipeline::new("test pipeline", "test comment");
     diesel::insert_into(crate::schema::pipeline::table)
         .values(dummy_pipeline)
-        .execute(&connection)
+        .execute(&mut connection)
         .unwrap();
     let app = test::init_service(create_test_app(&db_context)).await;
-    let payload_file = format!("../testing_resources/requests/{}", file);
+    let payload_file = format!("../testing_resources/requests/sample_submission/{}", file);
     let payload = std::fs::read(payload_file).unwrap();
     let content_type: mime::Mime =
         "multipart/form-data; boundary=---------------------------5851692324164894962235391524"

@@ -56,9 +56,9 @@ pub struct ContextualisedPipelineBlueprint {
 
 impl ContextualisedPipelineBlueprint {
     /// Creates a new `ContextualisedPipelineBlueprint`
-    /// 
+    ///
     /// # Parameters
-    /// 
+    ///
     /// * `pipeline` - the underlying [`PipelineBlueprint`] definition
     /// * `context` - the directory in which the pipeline definition resides
     pub fn new<P: Into<PathBuf>>(pipeline: PipelineBlueprint, context: P) -> Self {
@@ -84,6 +84,9 @@ pub struct PipelineStepVariable {
     /// The type of variable.
     #[getset(get = "pub")]
     category: PipelineStepVariableCategory,
+    /// If the variable must be set by its instance.
+    #[getset(get = "pub")]
+    required: Option<bool>,
 }
 
 /// The definition of a pipeline step variable type.

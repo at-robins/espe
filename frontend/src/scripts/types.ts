@@ -25,6 +25,32 @@ export type ExperimentUpload = {
   pipelineId: number;
 };
 
+export type GlobalDataDetails = {
+  id: number;
+  name: string;
+  comment: string | null | undefined;
+  creationTime: string;
+};
+
+export type GlobalDataFileDetails = {
+  pathComponents: string[];
+  isFile: boolean;
+};
+
+export type GlobalDataFilePath = {
+  pathComponents: string[];
+};
+
+export type FileTreeNode = {
+  id: string;
+  label: string;
+  children: FileTreeNode[];
+  parents: string[];
+  isFile: boolean;
+  isUploaded: boolean;
+  error: string | null;
+};
+
 export type ErrorResponse = {
   code: number;
   uuid: string;

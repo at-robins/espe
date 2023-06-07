@@ -149,7 +149,7 @@ pub fn run_pipeline_step<P: AsRef<str>>(
     // Set global mounts.
     variables
         .iter()
-        .filter(|var_instance| var_instance.isGlobalDateReference())
+        .filter(|var_instance| var_instance.is_global_data_reference())
         .for_each(|global_var| {
             arguments.push(pipeline_step_mount(
                 app_config.global_data_path(&global_var.value),
@@ -161,7 +161,7 @@ pub fn run_pipeline_step<P: AsRef<str>>(
     // Set other variables.
     variables
         .iter()
-        .filter(|var_instance| !var_instance.isGlobalDateReference())
+        .filter(|var_instance| !var_instance.is_global_data_reference())
         .for_each(|other_var| {
             arguments.push(format!("--env {}='{}'", other_var.id, other_var.value).into());
         });
@@ -293,14 +293,17 @@ mod tests {
         assert_eq!(step.variables()[0].name(), "Boolean");
         assert_eq!(step.variables()[0].description(), "A boolean checkbox.");
         assert_eq!(step.variables()[0].category(), &PipelineStepVariableCategory::Boolean);
+        assert_eq!(step.variables()[0].required(), &Some(true));
         assert_eq!(step.variables()[1].id(), "global");
         assert_eq!(step.variables()[1].name(), "Global");
         assert_eq!(step.variables()[1].description(), "A global data reference.");
         assert_eq!(step.variables()[1].category(), &PipelineStepVariableCategory::Global);
+        assert_eq!(step.variables()[1].required(), &Some(false));
         assert_eq!(step.variables()[2].id(), "number");
         assert_eq!(step.variables()[2].name(), "Number");
         assert_eq!(step.variables()[2].description(), "A number field.");
         assert_eq!(step.variables()[2].category(), &PipelineStepVariableCategory::Number);
+        assert_eq!(step.variables()[2].required(), &None);
         assert_eq!(step.variables()[3].id(), "option");
         assert_eq!(step.variables()[3].name(), "Option");
         assert_eq!(step.variables()[3].description(), "An option dropdown.");
@@ -313,9 +316,11 @@ mod tests {
         } else {
             panic!("Not an option variable!");
         }
+        assert_eq!(step.variables()[3].required(), &None);
         assert_eq!(step.variables()[4].id(), "string");
         assert_eq!(step.variables()[4].name(), "String");
         assert_eq!(step.variables()[4].description(), "A string text field.");
         assert_eq!(step.variables()[4].category(), &PipelineStepVariableCategory::String);
+        assert_eq!(step.variables()[4].required(), &None);
     }
 }

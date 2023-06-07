@@ -74,6 +74,7 @@ npm run build
 Prerequisites:
 ```bash
 # Install SQLite and the Diesel dependency.
+# The version requirement for SQLite is >= 3.35.
 sudo apt install sqlite3 libsqlite3-dev
 # Install Diesel.
 cargo install diesel_cli --no-default-features --features sqlite

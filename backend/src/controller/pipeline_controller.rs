@@ -116,8 +116,8 @@ pub async fn get_pipeline_blueprints(request: HttpRequest) -> Result<impl Respon
             "Missing configuration.",
         )
     })?;
-    let connection = app_config.database_connection()?;
-    let pipelines = crate::schema::pipeline::table.load::<Pipeline>(&connection)?;
+    let mut connection = app_config.database_connection()?;
+    let pipelines = crate::schema::pipeline::table.load::<Pipeline>(&mut connection)?;
     Ok(web::Json(
         pipelines
             .iter()

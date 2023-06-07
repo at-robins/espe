@@ -4,13 +4,13 @@ use crate::{
 };
 use chrono::{NaiveDateTime, Utc};
 use diesel::{Identifiable, Insertable, Queryable};
-use getset::{Getters, CopyGetters};
+use getset::{CopyGetters, Getters};
 
 use super::pipeline::Pipeline;
 
 #[derive(Identifiable, Queryable, Associations, Insertable, PartialEq, Debug)]
-#[belongs_to(Pipeline)]
-#[table_name = "experiment"]
+#[diesel(belongs_to(Pipeline))]
+#[diesel(table_name = experiment)]
 /// A queryable experiment database entry.
 pub struct Experiment {
     pub id: i32,
@@ -22,7 +22,7 @@ pub struct Experiment {
 }
 
 #[derive(Insertable, PartialEq, Debug, Getters, CopyGetters)]
-#[table_name = "experiment"]
+#[diesel(table_name = experiment)]
 /// A new experiment database record.
 pub struct NewExperiment {
     #[getset(get = "pub")]
@@ -46,7 +46,12 @@ impl NewExperiment {
     /// * `mail` - the optional E-mail address to notifiy on pipeline updates
     /// * `pipeline_id` - the referenced pipeline
     /// * `comment` - the optional comment describing the experiment
-    pub fn new(name: String, mail: Option<String>, pipeline_id: i32, comment: Option<String>) -> Self {
+    pub fn new(
+        name: String,
+        mail: Option<String>,
+        pipeline_id: i32,
+        comment: Option<String>,
+    ) -> Self {
         Self {
             experiment_name: name,
             mail,
