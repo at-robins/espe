@@ -141,6 +141,15 @@ pub async fn post_global_data_add_folder(
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     let upload_info = upload_info.into_inner();
+    // Error if no path was specified.
+    if upload_info.path_components.is_empty() {
+        return Err(SeqError::new(
+            "Invalid request",
+            SeqErrorType::BadRequestError,
+            "The specified path is empty.",
+            "The specified path is invalid.",
+        ));
+    }
     // Retrieve the app config.
     let app_config = request
         .app_data::<Arc<Configuration>>()
@@ -181,6 +190,16 @@ async fn persist_multipart<P: AsRef<Path>>(
 
     let (upload_info, temp_file_path) =
         parse_multipart_file::<GlobalDataFilePath, P>(payload, temporary_file_path).await?;
+
+    // Error if no path was specified.
+    if upload_info.path_components.is_empty() {
+        return Err(SeqError::new(
+            "Invalid request",
+            SeqErrorType::BadRequestError,
+            "The specified path is empty.",
+            "The specified path is invalid.",
+        ));
+    }
 
     // Validate the existance of the global data repository.
     GlobalData::exists_err(global_data_id, &mut connection)?;
