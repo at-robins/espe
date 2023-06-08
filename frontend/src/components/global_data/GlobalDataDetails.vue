@@ -35,6 +35,7 @@
                 @added-file="uploadFile"
                 @added-folder="uploadFolder"
                 @deleted-path="deletePath"
+                @deleted-all="deleteAll"
                 class="col"
               />
             </div>
@@ -199,7 +200,7 @@ function uploadFile(file: File, node: FileTreeNode) {
       const formData = new FormData();
       formData.append("file", file);
       const uploadInfo: GlobalDataFilePath = {
-        pathComponents: node.parents,
+        pathComponents: [...node.parents],
       };
       uploadInfo.pathComponents.push(file.name);
       formData.append("form", JSON.stringify(uploadInfo));
@@ -224,7 +225,7 @@ function uploadFile(file: File, node: FileTreeNode) {
 
 function deletePath(node: FileTreeNode) {
   if (!node.error) {
-    const pathComponents = node.parents;
+    const pathComponents = [...node.parents];
     pathComponents.push(node.label);
     const pathUpload: GlobalDataFilePath = {
       pathComponents: pathComponents,
@@ -241,5 +242,22 @@ function deletePath(node: FileTreeNode) {
         showDeletionError.value = true;
       });
   }
+}
+
+function deleteAll() {
+  const pathUpload: GlobalDataFilePath = {
+    pathComponents: [],
+  };
+  axios
+    .delete("/api/globals/" + props.id + "/files", {
+      headers: {
+        "content-type": "application/json",
+      },
+      data: JSON.stringify(pathUpload),
+    })
+    .catch((error) => {
+      deletionError.value = error.response.data;
+      showDeletionError.value = true;
+    });
 }
 </script>
