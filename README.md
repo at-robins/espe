@@ -1,49 +1,60 @@
-# MriSequencingPipeline
+<p align="center">
+  <img src="frontend/public/icon_main.svg" />
+</p>
+ <p"><h1 style="text-align: center;"><b>E</b>ncapsulated <b>S</b>equencing <b>P</b>ipeline <b>E</b>ngine</h1></p>
 
 ## Design philosophy
 
-This sequencing pipeline is intended as a simple, streamlined, well documented and tested solution for common sequencing approaches.
+This encapsulated sequencing pipeline engine (ESPE) is intended as a simple, streamlined, well documented and tested solution for common sequencing data analysis setups.
 Since transformation and analysis of sequencing data is typically a time and resource consuming task,
 the main focus is not placed on scalability of a centralised processing pipeline for e.g. a core facility.
-Rather a Docker image is provided to allow easy setup of the pipeline within a specific workgroup.
-Each image is thereby self-contained, so all processed data and associated information (database etc.) is 
-stored within the respective container. While this severely limits the scalability it allows for an easy setup, documentation 
-and improves general usability.
-For the same reasons execution of pipelines themselves is not paralellised. Instead each pipeline step uses paralellisation whenever possible.
+Rather an engine is provided to allow easy setup of the pipelines of choice within a specific workgroup.
+The software itself is self-contained, so all processed data and associated information (database etc.) is stored locally with the software.
+While this severely limits the scalability it allows for an easy setup, documentation and improves general usability.
+For the same reasons execution of pipelines themselves is not paralellised.
+Instead each pipeline step uses paralellisation whenever possible.
+Additonally, each pipeline step can be configured as desired by the user and runs inside a container to prevent data and package conflicts, allow for running arbitrary pipeline steps without the need to install additional software and mitigate difficulties during setup. 
 
 ## Architecture
 
 ### Frontend
+
 Vue.js with the Quasar framework is used for easy implementation of the frontend.
 
 ### Backend
-An actix-Rust-backend is used as a statically typed, fast and reliable backend. 
+
+An actix-Rust-backend is used as a statically typed, fast and reliable backend.
 
 ### Database
+
 SQLite is used as it provides a simple, self-contained and fast database.
 Diesel is used for automated database migration.
 
 ### Containerisation
-Docker was selected as tool for running and managing containers due to 
-its ease of use and widespread adoption.
+
+Docker was selected as tool for running and managing containers due to its ease of use and widespread adoption.
 
 ## Usage
-TODO: Insert once the Docker image is created.
+
+TODO: Create and add link to full user guide.
 
 ## Enviroment variables
-Also see ```backend/.env```.
 
-| Variable | Description |
-| --- | --- |
-| CONTEXT_FOLDER | the context folder of the application where all relevant data is stored |
-| DATABASE_URL | the database location |
-| LOG_LEVEL | the minimum log level of the application (```debug```, ```info```, ```warn```, ```error```) |
-| PIPELINE_FOLDER | the folder storing pipeline definitions |
-| SERVER_ADDRESS | the address of the server |
-| SERVER_PORT | the port of the server |
+Also see `backend/.env`.
+
+| Variable        | Description                                                                 |
+| --------------- | --------------------------------------------------------------------------- |
+| CONTEXT_FOLDER  | the context folder of the application where all relevant data is stored     |
+| DATABASE_URL    | the database location                                                       |
+| LOG_LEVEL       | the minimum log level of the application (`debug`, `info`, `warn`, `error`) |
+| PIPELINE_FOLDER | the folder storing pipeline definitions                                     |
+| SERVER_ADDRESS  | the address of the server                                                   |
+| SERVER_PORT     | the port of the server                                                      |
 
 ## Build (for developers)
+
 Prerequisites:
+
 ```bash
 # Install Rust.
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -56,12 +67,14 @@ sudo apt install libssl-dev
 ```
 
 Conventional release build:
+
 ```bash
 cd backend
 cargo build --release
 ```
 
 Building for development:
+
 ```bash
 cd backend
 cargo build
@@ -71,7 +84,9 @@ npm run build
 ```
 
 ## Run (for developers)
+
 Prerequisites:
+
 ```bash
 # Install SQLite and the Diesel dependency.
 # The version requirement for SQLite is >= 3.35.
@@ -87,12 +102,14 @@ sudo apt install docker.io
 ```
 
 Running a release build:
+
 ```bash
 cd backend
 cargo run --release
 ```
 
 Running for development:
+
 ```bash
 cd backend
 cargo run
@@ -101,14 +118,16 @@ npm run build:dev
 ```
 
 ## Testing
+
 Backend testing:
+
 ```bash
 cd backend
 cargo test
 ```
 
-
 Frontend testing:
+
 ```bash
 cd frontend
 npm run test:unit
