@@ -14,7 +14,7 @@ use super::{
         post_global_data_add_folder,
     },
     pipeline_controller::{get_pipeline_blueprints, get_pipeline_instance},
-    sample_controller::upload_sample,
+    experiment_controller::upload_sample,
 };
 
 /// Serve the entry point to the single page web app.

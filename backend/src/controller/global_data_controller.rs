@@ -13,8 +13,8 @@ use crate::{
 };
 use actix_web::{web, HttpRequest, HttpResponse};
 
-/// The maximum length a global data title is allowed to have.
-const MAXIMUM_TITLE_LENGTH: usize = 512;
+/// The maximum length a global data name is allowed to have.
+const MAXIMUM_NAME_LENGTH: usize = 512;
 
 pub async fn create_global_data(
     request: HttpRequest,
@@ -146,16 +146,16 @@ fn validate_global_data_name<T: AsRef<str>>(name: T) -> Result<(), SeqError> {
         return Err(SeqError::new(
             "Invalid request",
             SeqErrorType::BadRequestError,
-            "The title may not be empty.",
-            "The title is invalid.",
+            "The name may not be empty.",
+            "The name is invalid.",
         ));
     }
-    if name.len() > MAXIMUM_TITLE_LENGTH {
+    if name.len() > MAXIMUM_NAME_LENGTH {
         return Err(SeqError::new(
             "Invalid request",
             SeqErrorType::BadRequestError,
-            format!("The title {} exceeds the limit of {} characters.", name, MAXIMUM_TITLE_LENGTH),
-            "The title is invalid.",
+            format!("The name {} exceeds the limit of {} characters.", name, MAXIMUM_NAME_LENGTH),
+            "The name is invalid.",
         ));
     }
     Ok(())
