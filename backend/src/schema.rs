@@ -3,7 +3,7 @@ table! {
         id -> Integer,
         experiment_name -> Text,
         mail -> Nullable<Text>,
-        pipeline_id -> Integer,
+        pipeline_id -> Nullable<Text>,
         comment -> Nullable<Text>,
         creation_time -> Timestamp,
     }
@@ -48,7 +48,6 @@ table! {
     }
 }
 
-joinable!(experiment -> pipeline (pipeline_id));
 joinable!(pipeline_step -> pipeline (pipeline_id));
 joinable!(pipeline_step_instance -> experiment (experiment_id));
 joinable!(pipeline_step_instance -> pipeline_step (pipeline_step_id));

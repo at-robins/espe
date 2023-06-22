@@ -10,7 +10,7 @@ use crate::{
     },
     model::{
         db::global_data::GlobalData,
-        exchange::global_data_details::{GlobalDataFileDetails, GlobalDataFilePath},
+        exchange::{global_data_details::{GlobalDataFileDetails}, file_path::FilePath},
     },
     service::multipart_service::{
         create_temporary_file, delete_temporary_file, parse_multipart_file,
@@ -75,7 +75,7 @@ pub async fn get_global_data_files(
 pub async fn delete_global_data_files_by_path(
     request: HttpRequest,
     id: web::Path<i32>,
-    path: web::Json<GlobalDataFilePath>,
+    path: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     let delete_info = path.into_inner();
@@ -137,7 +137,7 @@ pub async fn post_global_data_add_file(
 pub async fn post_global_data_add_folder(
     request: HttpRequest,
     id: web::Path<i32>,
-    upload_info: web::Json<GlobalDataFilePath>,
+    upload_info: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     let upload_info = upload_info.into_inner();
@@ -189,7 +189,7 @@ async fn persist_multipart<P: AsRef<Path>>(
     let mut connection = app_config.database_connection()?;
 
     let (upload_info, temp_file_path) =
-        parse_multipart_file::<GlobalDataFilePath, P>(payload, temporary_file_path).await?;
+        parse_multipart_file::<FilePath, P>(payload, temporary_file_path).await?;
 
     // Error if no path was specified.
     if upload_info.path_components.is_empty() {

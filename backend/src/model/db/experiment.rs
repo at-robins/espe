@@ -1,27 +1,85 @@
-use crate::{
-    model::exchange::experiment_upload::ExperimentUpload,
-    schema::experiment::{self},
-};
+use crate::{schema::experiment::{self}, application::error::{SeqError, SeqErrorType}};
 use chrono::{NaiveDateTime, Utc};
-use diesel::{Identifiable, Insertable, Queryable};
-use getset::{CopyGetters, Getters};
+use diesel::{Identifiable, Insertable, Queryable, SqliteConnection, QueryDsl, ExpressionMethods, RunQueryDsl};
+use getset::Getters;
 
-use super::pipeline::Pipeline;
-
-#[derive(Identifiable, Queryable, Associations, Insertable, PartialEq, Debug)]
-#[diesel(belongs_to(Pipeline))]
+#[derive(Identifiable, Queryable, Insertable, PartialEq, Debug)]
 #[diesel(table_name = experiment)]
 /// A queryable experiment database entry.
 pub struct Experiment {
     pub id: i32,
     pub experiment_name: String,
     pub mail: Option<String>,
-    pub pipeline_id: i32,
+    pub pipeline_id: Option<String>,
     pub comment: Option<String>,
     pub creation_time: NaiveDateTime,
 }
 
-#[derive(Insertable, PartialEq, Debug, Getters, CopyGetters)]
+impl Experiment {
+    /// Returns `true` if the entity with the specified ID exists and `false` otherwise.
+    ///
+    /// # Parameters
+    ///
+    /// * `id` - the entity ID
+    /// * `connection` - the database connection
+    pub fn exists(
+        id: i32,
+        connection: &mut SqliteConnection,
+    ) -> Result<bool, diesel::result::Error> {
+        diesel::select(diesel::dsl::exists(
+            crate::schema::experiment::table.filter(crate::schema::experiment::id.eq(id)),
+        ))
+        .get_result(connection)
+    }
+
+    /// Returns [`Ok`] if the entity with the specified ID exists
+    /// and a `NotFound` [`Err`] if not present.
+    ///
+    /// # Parameters
+    ///
+    /// * `id` - the entity ID
+    /// * `connection` - the database connection
+    pub fn exists_err(id: i32, connection: &mut SqliteConnection) -> Result<(), SeqError> {
+        if Self::exists(id, connection)? {
+            Ok(())
+        } else {
+            Err(SeqError::new(
+                "Invalid request",
+                SeqErrorType::NotFoundError,
+                format!("Experiment with ID {} does not exist.", id),
+                "The entity does not exist.",
+            ))
+        }
+    }
+
+    /// Returns the entity with the specified ID.
+    ///
+    /// # Parameters
+    ///
+    /// * `id` - the entity ID
+    /// * `connection` - the database connection
+    pub fn get(
+        id: i32,
+        connection: &mut SqliteConnection,
+    ) -> Result<Experiment, diesel::result::Error> {
+        crate::schema::experiment::table
+            .find(id)
+            .first::<Experiment>(connection)
+    }
+
+    /// Returns all entities.
+    ///
+    /// # Parameters
+    ///
+    /// * `connection` - the database connection
+    pub fn get_all(
+        connection: &mut SqliteConnection,
+    ) -> Result<Vec<Experiment>, diesel::result::Error> {
+        crate::schema::experiment::table.load::<Experiment>(connection)
+    }
+}
+
+#[derive(Insertable, PartialEq, Debug, Getters)]
 #[diesel(table_name = experiment)]
 /// A new experiment database record.
 pub struct NewExperiment {
@@ -29,8 +87,8 @@ pub struct NewExperiment {
     experiment_name: String,
     #[getset(get = "pub")]
     mail: Option<String>,
-    #[getset(get_copy = "pub")]
-    pipeline_id: i32,
+    #[getset(get = "pub")]
+    pipeline_id: Option<String>,
     #[getset(get = "pub")]
     comment: Option<String>,
     #[getset(get = "pub")]
@@ -43,32 +101,13 @@ impl NewExperiment {
     /// # Parameters
     ///
     /// * `name` - the experiment's name
-    /// * `mail` - the optional E-mail address to notifiy on pipeline updates
-    /// * `pipeline_id` - the referenced pipeline
-    /// * `comment` - the optional comment describing the experiment
-    pub fn new(
-        name: String,
-        mail: Option<String>,
-        pipeline_id: i32,
-        comment: Option<String>,
-    ) -> Self {
+    pub fn new(name: String) -> Self {
         Self {
             experiment_name: name,
-            mail,
-            pipeline_id,
-            comment,
+            mail: None,
+            pipeline_id: None,
+            comment: None,
             creation_time: Utc::now().naive_utc(),
         }
-    }
-}
-
-impl From<ExperimentUpload> for NewExperiment {
-    fn from(experiment_upload: ExperimentUpload) -> Self {
-        NewExperiment::new(
-            experiment_upload.name,
-            experiment_upload.mail,
-            experiment_upload.pipeline_id,
-            experiment_upload.comment,
-        )
     }
 }

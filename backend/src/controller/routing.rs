@@ -5,6 +5,7 @@ use log::error;
 use crate::application::error::SeqError;
 
 use super::{
+    experiment_controller::create_experiment,
     global_data_controller::{
         create_global_data, delete_global_data, get_global_data, list_global_data,
         patch_global_data_comment, patch_global_data_name,
@@ -14,7 +15,6 @@ use super::{
         post_global_data_add_folder,
     },
     pipeline_controller::{get_pipeline_blueprints, get_pipeline_instance},
-    experiment_controller::upload_sample,
 };
 
 /// Serve the entry point to the single page web app.
@@ -34,10 +34,12 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/", web::get().to(index))
     .route("/ui", web::get().to(index))
     .route("/ui/{rest:.*}", web::get().to(index))
-
+    // Pipelines
     .route("/api/pipeline/instance/{id}", web::get().to(get_pipeline_instance))
     .route("/api/pipeline/blueprint", web::get().to(get_pipeline_blueprints))
-    .route("/api/experiment", web::post().to(upload_sample))
+    // Experiments
+    .route("/api/experiments", web::post().to(create_experiment))
+    // Global data repositories
     .route("/api/globals", web::get().to(list_global_data))
     .route("/api/globals", web::post().to(create_global_data))
     .route("/api/globals/{id}", web::get().to(get_global_data))
@@ -48,7 +50,6 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/globals/{id}/files", web::post().to(post_global_data_add_file))
     .route("/api/globals/{id}/files", web::delete().to(delete_global_data_files_by_path))
     .route("/api/globals/{id}/folders", web::post().to(post_global_data_add_folder))
-
     // Registers static frontend resources. Needs to be last to not overwrite other routes.
     .service(Files::new("/", "./static_dist").show_files_listing());
 }

@@ -8,8 +8,6 @@ const UUID_NODE_ID: &[u8; 6] = &[12, 221, 33, 14, 35, 16];
 const PATH_FILES_TEMPORARY: &str = "tmp/files";
 /// The context path where data related to specific experiments or samples is stored.
 const PATH_FILES_EXPERIMENTS: &str = "experiments";
-/// The file name of the initially submitted sample before processing.
-pub const PATH_FILES_EXPERIMENT_INITIAL_FASTQ: &str = "00_initial.fastq.gz";
 /// The file inside each pipeline folder defining the pipeline.
 pub const PIPELINE_DEFINITION_FILE: &str = "pipeline.json";
 /// The sub-folder where pipeline step output is stored.
