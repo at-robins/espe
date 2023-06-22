@@ -148,7 +148,7 @@ async fn test_delete_global_data_files_by_path() {
     assert!(global_data_path.join("3").exists());
     assert!(global_data_path.join("3/test_file_2.txt").exists());
     // Delete a folder without content.
-    let terminal_folder_path = GlobalDataFilePath {
+    let terminal_folder_path = FilePath {
         path_components: vec!["2".to_string(), "21".to_string()],
     };
     let req = test::TestRequest::delete()
@@ -166,7 +166,7 @@ async fn test_delete_global_data_files_by_path() {
     assert!(global_data_path.join("3").exists());
     assert!(global_data_path.join("3/test_file_2.txt").exists());
     // Delete a single file.
-    let terminal_file_path = GlobalDataFilePath {
+    let terminal_file_path = FilePath {
         path_components: vec!["3".to_string(), "test_file_2.txt".to_string()],
     };
     let req = test::TestRequest::delete()
@@ -184,7 +184,7 @@ async fn test_delete_global_data_files_by_path() {
     assert!(global_data_path.join("3").exists());
     assert!(!global_data_path.join("3/test_file_2.txt").exists());
     // Delete a folder containing other files and folders.
-    let super_folder_path = GlobalDataFilePath {
+    let super_folder_path = FilePath {
         path_components: vec!["1".to_string()],
     };
     let req = test::TestRequest::delete()
@@ -245,7 +245,7 @@ async fn test_delete_global_data_files_by_path_all() {
     assert!(global_data_path.join("2/22").exists());
     assert!(global_data_path.join("3").exists());
     assert!(global_data_path.join("3/test_file_2.txt").exists());
-    let root_path = GlobalDataFilePath {
+    let root_path = FilePath {
         path_components: vec![],
     };
     let req = test::TestRequest::delete()
@@ -261,7 +261,7 @@ async fn test_delete_global_data_files_by_path_all() {
 async fn test_delete_global_data_files_non_existent() {
     let context = TestContext::new();
     let app = test::init_service(create_test_app(&context)).await;
-    let file_path = GlobalDataFilePath {
+    let file_path = FilePath {
         path_components: vec!["1".to_string(), "test_file.txt".to_string()],
     };
     let req = test::TestRequest::delete()
@@ -470,7 +470,7 @@ async fn test_post_global_data_add_folder_sub_folder() {
         .execute(&mut connection)
         .unwrap();
     let global_data_path = app_config.global_data_path(id.to_string());
-    let folder_path = GlobalDataFilePath {
+    let folder_path = FilePath {
         path_components: vec!["1".to_string(), "2".to_string(), "3".to_string()],
     };
     assert!(!global_data_path.join("1").exists());
@@ -504,7 +504,7 @@ async fn test_post_global_data_add_folder_root() {
         .execute(&mut connection)
         .unwrap();
     let global_data_path = app_config.global_data_path(id.to_string());
-    let folder_path = GlobalDataFilePath {
+    let folder_path = FilePath {
         path_components: vec!["1".to_string()],
     };
     assert!(!global_data_path.join("1").exists());
@@ -525,7 +525,7 @@ async fn test_post_global_data_add_folder_non_existent() {
     let app_config: Configuration = (&context).into();
     let id = 42;
     let global_data_path = app_config.global_data_path(id.to_string());
-    let folder_path = GlobalDataFilePath {
+    let folder_path = FilePath {
         path_components: vec!["1".to_string()],
     };
     assert!(!global_data_path.join("1").exists());
@@ -557,7 +557,7 @@ async fn test_post_global_data_add_folder_already_existent() {
         .unwrap();
     let global_data_path = app_config.global_data_path(id.to_string());
     let folder_path = global_data_path.join("1");
-    let folder_path_data = GlobalDataFilePath {
+    let folder_path_data = FilePath {
         path_components: vec!["1".to_string()],
     };
     std::fs::create_dir_all(&folder_path).unwrap();
@@ -589,7 +589,7 @@ async fn test_post_global_data_add_folder_empty_path() {
         .values(&new_record)
         .execute(&mut connection)
         .unwrap();
-    let folder_path = GlobalDataFilePath {
+    let folder_path = FilePath {
         path_components: vec![],
     };
     let req = test::TestRequest::post()

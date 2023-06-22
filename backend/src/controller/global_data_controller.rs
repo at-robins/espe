@@ -28,7 +28,7 @@ pub async fn create_global_data(
         .expect("The configuration must be accessible.");
     let mut connection = app_config.database_connection()?;
     log::info!("Creating global data repository with name {}.", &name);
-    let new_record = NewGlobalData::new(name, None);
+    let new_record = NewGlobalData::new(name);
     let inserted_id: i32 = diesel::insert_into(crate::schema::global_data::table)
         .values(&new_record)
         .returning(crate::schema::global_data::id)
