@@ -272,7 +272,7 @@ async fn test_patch_global_data_name_empty() {
     let old_name = "Dummy record".to_string();
     let new_record = GlobalData {
         id,
-        global_data_name: "Dummy record".to_string(),
+        global_data_name: old_name.clone(),
         comment: None,
         creation_time: chrono::Utc::now().naive_local(),
     };
