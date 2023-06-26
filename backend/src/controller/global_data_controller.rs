@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     application::{config::Configuration, error::SeqError},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
@@ -18,9 +16,7 @@ pub async fn create_global_data(
     let name: String = name.into_inner();
     validate_entity_name(&name)?;
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     log::info!("Creating global data repository with name {}.", &name);
     let new_record = NewGlobalData::new(name);
@@ -38,9 +34,7 @@ pub async fn delete_global_data(
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     GlobalData::exists_err(id, &mut connection)?;
     log::info!("Deleting global data repository with ID {}.", id);
@@ -64,9 +58,7 @@ pub async fn get_global_data(
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     GlobalData::exists_err(id, &mut connection)?;
     let global_repo_details: GlobalDataDetails = crate::schema::global_data::table
@@ -85,9 +77,7 @@ pub async fn patch_global_data_name(
     let new_name = new_name.into_inner();
     validate_entity_name(&new_name)?;
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     GlobalData::exists_err(id, &mut connection)?;
     connection.immediate_transaction(|connection| {
@@ -110,9 +100,7 @@ pub async fn patch_global_data_comment(
         validate_comment(inner)?;
     }
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     GlobalData::exists_err(id, &mut connection)?;
     connection.immediate_transaction(|connection| {
@@ -127,9 +115,7 @@ pub async fn list_global_data(
     request: HttpRequest,
 ) -> Result<web::Json<Vec<GlobalDataDetails>>, SeqError> {
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     let global_repos: Vec<GlobalDataDetails> = GlobalData::get_all(&mut connection)?
         .into_iter()

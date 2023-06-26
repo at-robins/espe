@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     application::{config::Configuration, error::SeqError},
     diesel::RunQueryDsl,
@@ -19,9 +17,7 @@ pub async fn create_experiment(
     let name: String = name.into_inner();
     validate_entity_name(&name)?;
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     log::info!("Creating experiment with name {}.", &name);
     let new_record = NewExperiment::new(name);
@@ -39,9 +35,7 @@ pub async fn delete_experiment(
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     Experiment::exists_err(id, &mut connection)?;
     log::info!("Deleting experiment with ID {}.", id);
@@ -65,9 +59,7 @@ pub async fn get_experiment(
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     Experiment::exists_err(id, &mut connection)?;
     let experiment_details: ExperimentDetails = crate::schema::experiment::table
@@ -86,9 +78,7 @@ pub async fn patch_experiment_name(
     let new_name = new_name.into_inner();
     validate_entity_name(&new_name)?;
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     Experiment::exists_err(id, &mut connection)?;
     connection.immediate_transaction(|connection| {
@@ -111,9 +101,7 @@ pub async fn patch_experiment_comment(
         validate_comment(inner)?;
     }
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     Experiment::exists_err(id, &mut connection)?;
     connection.immediate_transaction(|connection| {
@@ -128,9 +116,7 @@ pub async fn list_experiment(
     request: HttpRequest,
 ) -> Result<web::Json<Vec<ExperimentDetails>>, SeqError> {
     // Retrieve the app config.
-    let app_config = request
-        .app_data::<Arc<Configuration>>()
-        .expect("The configuration must be accessible.");
+    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     let experiments: Vec<ExperimentDetails> = Experiment::get_all(&mut connection)?
         .into_iter()
