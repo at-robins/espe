@@ -1,27 +1,22 @@
 use std::sync::Arc;
 
 use crate::{
-    application::{
-        config::Configuration,
-        error::{SeqError, SeqErrorType},
-    },
+    application::{config::Configuration, error::SeqError},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     model::{
         db::global_data::{GlobalData, NewGlobalData},
         exchange::global_data_details::GlobalDataDetails,
     },
+    service::validation_service::{validate_comment, validate_entity_name},
 };
 use actix_web::{web, HttpRequest, HttpResponse};
-
-/// The maximum length a global data name is allowed to have.
-const MAXIMUM_NAME_LENGTH: usize = 512;
 
 pub async fn create_global_data(
     request: HttpRequest,
     name: actix_web::web::Json<String>,
 ) -> Result<HttpResponse, SeqError> {
     let name: String = name.into_inner();
-    validate_global_data_name(&name)?;
+    validate_entity_name(&name)?;
     // Retrieve the app config.
     let app_config = request
         .app_data::<Arc<Configuration>>()
@@ -88,7 +83,7 @@ pub async fn patch_global_data_name(
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     let new_name = new_name.into_inner();
-    validate_global_data_name(&new_name)?;
+    validate_entity_name(&new_name)?;
     // Retrieve the app config.
     let app_config = request
         .app_data::<Arc<Configuration>>()
@@ -109,8 +104,11 @@ pub async fn patch_global_data_comment(
     new_comment: web::Json<Option<String>>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
-    // Sanitise the HTML.
+    // Sanitise the HTML and validate.
     let new_comment = new_comment.into_inner().map(|inner| ammonia::clean(&inner));
+    if let Some(inner) = &new_comment {
+        validate_comment(inner)?;
+    }
     // Retrieve the app config.
     let app_config = request
         .app_data::<Arc<Configuration>>()
@@ -138,27 +136,6 @@ pub async fn list_global_data(
         .map(|val| val.into())
         .collect();
     Ok(web::Json(global_repos))
-}
-
-fn validate_global_data_name<T: AsRef<str>>(name: T) -> Result<(), SeqError> {
-    let name: &str = name.as_ref();
-    if name.is_empty() {
-        return Err(SeqError::new(
-            "Invalid request",
-            SeqErrorType::BadRequestError,
-            "The name may not be empty.",
-            "The name is invalid.",
-        ));
-    }
-    if name.len() > MAXIMUM_NAME_LENGTH {
-        return Err(SeqError::new(
-            "Invalid request",
-            SeqErrorType::BadRequestError,
-            format!("The name {} exceeds the limit of {} characters.", name, MAXIMUM_NAME_LENGTH),
-            "The name is invalid.",
-        ));
-    }
-    Ok(())
 }
 
 #[cfg(test)]
