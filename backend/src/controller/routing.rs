@@ -5,7 +5,7 @@ use log::error;
 use crate::application::error::SeqError;
 
 use super::{
-    experiment_controller::{create_experiment, delete_experiment, get_experiment, list_experiment, patch_experiment_name, patch_experiment_comment},
+    experiment_controller::{create_experiment, delete_experiment, get_experiment, list_experiment, patch_experiment_name, patch_experiment_comment, patch_experiment_mail},
     global_data_controller::{
         create_global_data, delete_global_data, get_global_data, list_global_data,
         patch_global_data_comment, patch_global_data_name,
@@ -43,6 +43,7 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/experiments/{id}", web::delete().to(delete_experiment))
     .route("/api/experiments/{id}", web::get().to(get_experiment))
     .route("/api/experiments/{id}/comment", web::patch().to(patch_experiment_comment))
+    .route("/api/experiments/{id}/mail", web::patch().to(patch_experiment_mail))
     .route("/api/experiments/{id}/name", web::patch().to(patch_experiment_name))
     
     // Global data repositories

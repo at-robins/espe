@@ -5,7 +5,7 @@ use crate::{
         db::experiment::{Experiment, NewExperiment},
         exchange::experiment_details::ExperimentDetails,
     },
-    service::validation_service::{validate_comment, validate_entity_name},
+    service::validation_service::{validate_comment, validate_entity_name, validate_mail},
 };
 use actix_web::{web, HttpRequest, HttpResponse};
 use diesel::{ExpressionMethods, QueryDsl};
@@ -84,6 +84,26 @@ pub async fn patch_experiment_name(
     connection.immediate_transaction(|connection| {
         diesel::update(crate::schema::experiment::table.find(id))
             .set(crate::schema::experiment::experiment_name.eq(new_name))
+            .execute(connection)
+    })?;
+    Ok(HttpResponse::Ok().finish())
+}
+
+pub async fn patch_experiment_mail(
+    request: HttpRequest,
+    id: web::Path<i32>,
+    new_name: web::Json<String>,
+) -> Result<HttpResponse, SeqError> {
+    let id: i32 = id.into_inner();
+    let new_mail = new_name.into_inner();
+    validate_mail(&new_mail)?;
+    // Retrieve the app config.
+    let app_config = Configuration::from_request(request);
+    let mut connection = app_config.database_connection()?;
+    Experiment::exists_err(id, &mut connection)?;
+    connection.immediate_transaction(|connection| {
+        diesel::update(crate::schema::experiment::table.find(id))
+            .set(crate::schema::experiment::mail.eq(new_mail))
             .execute(connection)
     })?;
     Ok(HttpResponse::Ok().finish())

@@ -275,7 +275,7 @@ async fn test_patch_experiment_name() {
 }
 
 #[actix_web::test]
-async fn test_patch_global_name_non_existent() {
+async fn test_patch_experiment_name_non_existent() {
     let db_context = TestContext::new();
     let app = test::init_service(create_test_app(&db_context)).await;
     let new_name = "A completely new name".to_string();
@@ -355,4 +355,134 @@ async fn test_patch_experiment_name_too_long() {
             .unwrap()
             .experiment_name
     );
+}
+
+#[actix_web::test]
+async fn test_patch_experiment_mail() {
+    let db_context = TestContext::new();
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let id = 42;
+    let new_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: None,
+        mail: None,
+        pipeline_id: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let new_mail = "A.completely@new.mail".to_string();
+    let req = test::TestRequest::patch()
+        .uri(&format!("/api/experiments/{}/mail", id))
+        .set_json(&new_mail)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(new_mail, Experiment::get(id, &mut connection).unwrap().mail.unwrap());
+}
+
+#[actix_web::test]
+async fn test_patch_experiment_mail_non_existent() {
+    let db_context = TestContext::new();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let new_mail = "a.completely@new.mail".to_string();
+    let req = test::TestRequest::patch()
+        .uri("/api/experiments/42/mail")
+        .set_json(&new_mail)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_patch_experiment_mail_empty() {
+    let db_context = TestContext::new();
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let id = 42;
+    let old_mail = "an@old.mail".to_string();
+    let new_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: None,
+        mail: Some(old_mail.clone()),
+        pipeline_id: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::patch()
+        .uri(&format!("/api/experiments/{}/mail", id))
+        .set_json("")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(old_mail, Experiment::get(id, &mut connection).unwrap().mail.unwrap());
+}
+
+#[actix_web::test]
+async fn test_patch_experiment_mail_too_long() {
+    let db_context = TestContext::new();
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let id = 42;
+    let old_mail = "an@old.mail".to_string();
+    let new_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: None,
+        mail: Some(old_mail.clone()),
+        pipeline_id: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let new_mail_component: String = (0..=254).fold(String::new(), |mut acc, _| {
+        acc.push('a');
+        acc
+    });
+    let new_mail = format!("{}@{}.com", new_mail_component, new_mail_component);
+    let req = test::TestRequest::patch()
+        .uri(&format!("/api/experiments/{}/mail", id))
+        .set_json(&new_mail)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(old_mail, Experiment::get(id, &mut connection).unwrap().mail.unwrap());
+}
+
+#[actix_web::test]
+async fn test_patch_experiment_mail_invalid() {
+    let db_context = TestContext::new();
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let id = 42;
+    let old_mail = "an@old.mail".to_string();
+    let new_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: None,
+        mail: Some(old_mail.clone()),
+        pipeline_id: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::patch()
+        .uri(&format!("/api/experiments/{}/mail", id))
+        .set_json("a@b@c.de".to_string())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(old_mail, Experiment::get(id, &mut connection).unwrap().mail.unwrap());
 }
