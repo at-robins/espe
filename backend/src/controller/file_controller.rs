@@ -292,4 +292,7 @@ fn temp_file_to_data_file<P: AsRef<Path>, Q: AsRef<Path>>(
 }
 
 #[cfg(test)]
-mod tests;
+mod global_data_tests;
+
+#[cfg(test)]
+mod experiment_tests;
