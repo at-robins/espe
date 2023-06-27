@@ -32,7 +32,7 @@ pub enum FileRequestCategory {
 }
 
 impl FileRequestCategory {
-    /// Returns the base path depending on the request category.
+    /// Returns the base file path depending on the request category.
     ///
     /// # Parameters
     /// * `app_config` - the application's [`Configuration`]
@@ -40,7 +40,7 @@ impl FileRequestCategory {
     pub fn base_path(&self, app_config: Arc<Configuration>, id: i32) -> PathBuf {
         match self {
             FileRequestCategory::Globals => app_config.global_data_path(id.to_string()),
-            FileRequestCategory::Experiments => app_config.experiment_path(id.to_string()),
+            FileRequestCategory::Experiments => app_config.experiment_input_path(id.to_string()),
         }
     }
 

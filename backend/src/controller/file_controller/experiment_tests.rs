@@ -27,7 +27,7 @@ async fn test_get_experiment_files() {
         .values(&new_record)
         .execute(&mut connection)
         .unwrap();
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_input_path(id.to_string());
     let folders = vec![
         experiment_path.join("1/11/111"),
         experiment_path.join("1/11/112"),
@@ -128,7 +128,7 @@ async fn test_delete_experiment_files_by_path() {
         .values(&new_record)
         .execute(&mut connection)
         .unwrap();
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_input_path(id.to_string());
     let folders = vec![
         experiment_path.join("1/11/111"),
         experiment_path.join("1/11/112"),
@@ -228,7 +228,7 @@ async fn test_delete_experiment_files_by_path_all() {
         .values(&new_record)
         .execute(&mut connection)
         .unwrap();
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_input_path(id.to_string());
     let folders = vec![
         experiment_path.join("1/11/111"),
         experiment_path.join("1/11/112"),
@@ -297,7 +297,7 @@ async fn test_post_experiment_add_file_sub_folder() {
         .values(&new_record)
         .execute(&mut connection)
         .unwrap();
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_input_path(id.to_string());
     let payload_file = "../testing_resources/requests/file_upload/multipart_file_subfolders";
     let payload = std::fs::read(payload_file).unwrap();
     let content_type: mime::Mime =
@@ -340,7 +340,7 @@ async fn test_post_experiment_add_file_root_folder() {
         .values(&new_record)
         .execute(&mut connection)
         .unwrap();
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_input_path(id.to_string());
     let payload_file = "../testing_resources/requests/file_upload/multipart_file_root";
     let payload = std::fs::read(payload_file).unwrap();
     let content_type: mime::Mime =
@@ -369,7 +369,7 @@ async fn test_post_experiment_add_file_non_existent() {
     let app = test::init_service(create_test_app(&context)).await;
     let app_config: Configuration = (&context).into();
     let id = 42;
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_input_path(id.to_string());
     let payload_file = "../testing_resources/requests/file_upload/multipart_file_root";
     let payload = std::fs::read(payload_file).unwrap();
     let content_type: mime::Mime =
@@ -406,7 +406,7 @@ async fn test_post_experiment_add_file_already_existent() {
         .values(&new_record)
         .execute(&mut connection)
         .unwrap();
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_input_path(id.to_string());
     let file_path = experiment_path.join("test_file.txt");
     let payload_file = "../testing_resources/requests/file_upload/multipart_file_root";
     let payload = std::fs::read(payload_file).unwrap();
@@ -483,7 +483,7 @@ async fn test_post_experiment_add_folder_sub_folder() {
         .values(&new_record)
         .execute(&mut connection)
         .unwrap();
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_input_path(id.to_string());
     let folder_path = FilePath {
         path_components: vec!["1".to_string(), "2".to_string(), "3".to_string()],
     };
@@ -519,7 +519,7 @@ async fn test_post_experiment_add_folder_root() {
         .values(&new_record)
         .execute(&mut connection)
         .unwrap();
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_input_path(id.to_string());
     let folder_path = FilePath {
         path_components: vec!["1".to_string()],
     };
@@ -540,7 +540,7 @@ async fn test_post_experiment_add_folder_non_existent() {
     let app = test::init_service(create_test_app(&context)).await;
     let app_config: Configuration = (&context).into();
     let id = 42;
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_input_path(id.to_string());
     let folder_path = FilePath {
         path_components: vec!["1".to_string()],
     };
@@ -573,7 +573,7 @@ async fn test_post_experiment_add_folder_already_existent() {
         .values(&new_record)
         .execute(&mut connection)
         .unwrap();
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_input_path(id.to_string());
     let folder_path = experiment_path.join("1");
     let folder_path_data = FilePath {
         path_components: vec!["1".to_string()],

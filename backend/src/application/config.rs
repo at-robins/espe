@@ -10,14 +10,16 @@ const PATH_FILES_TEMPORARY: &str = "tmp/files";
 const PATH_FILES_EXPERIMENTS: &str = "experiments";
 /// The file inside each pipeline folder defining the pipeline.
 pub const PIPELINE_DEFINITION_FILE: &str = "pipeline.json";
-/// The sub-folder where pipeline step output is stored.
+/// The sub-folder where pipeline step output of an experiment is stored.
 pub const PATH_FILES_EXPERIMENTS_STEPS: &str = "steps";
+/// The sub-folder where experiment input is stored.
+pub const PATH_FILES_EXPERIMENTS_INPUT: &str = "input";
 /// The sub-folder where initial pipeline input samples are stored.
 pub const PATH_FILES_EXPERIMENTS_SAMPLES: &str = "samples";
 /// The folder where global data is stored.
 pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
 
-use std::{path::PathBuf, sync::Arc, time::SystemTime, borrow::Borrow};
+use std::{borrow::Borrow, path::PathBuf, sync::Arc, time::SystemTime};
 
 use actix_web::HttpRequest;
 use diesel::{connection::SimpleConnection, Connection, SqliteConnection};
@@ -182,6 +184,18 @@ impl Configuration {
     pub fn experiment_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
         let mut path: PathBuf = self.experiments_path();
         path.push(experiment_id.as_ref());
+        path
+    }
+
+    /// The context path where data related to the pipeline input
+    /// of the specified experiment is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    pub fn experiment_input_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
+        let mut path: PathBuf = self.experiment_path(experiment_id);
+        path.push(PATH_FILES_EXPERIMENTS_INPUT);
         path
     }
 
