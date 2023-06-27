@@ -10,7 +10,7 @@ use super::{
         create_global_data, delete_global_data, get_global_data, list_global_data,
         patch_global_data_comment, patch_global_data_name,
     },
-    global_data_file_controller::{
+    file_controller::{
         delete_files_by_path, get_files, post_add_file,
         post_add_folder,
     },
