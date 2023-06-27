@@ -5,7 +5,7 @@
     v-model="name"
     label="Global data repository name"
     counter
-    maxlength="1000"
+    maxlength="512"
     :readonly="isUploadingGlobalData"
     :error="!!uploadErrorMessage"
     :error-message="uploadErrorMessage"

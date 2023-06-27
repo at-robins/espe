@@ -130,7 +130,7 @@ function loadGlobalDataDetails() {
     .get("/api/globals/" + props.id)
     .then((response) => {
       globalData.value = response.data;
-      return axios.get("/api/globals/" + props.id + "/files");
+      return axios.get("/api/files/globals/" + props.id);
     })
     .then((response) => {
       files.value = response.data;
@@ -176,7 +176,7 @@ function uploadFolder(node: FileTreeNode) {
       };
       axios
         .post(
-          "/api/globals/" + props.id + "/folders",
+          "/api/folders/globals/" + props.id,
           JSON.stringify(uploadInfo),
           config
         )
@@ -210,7 +210,7 @@ function uploadFile(file: File, node: FileTreeNode) {
         },
       };
       axios
-        .post("/api/globals/" + props.id + "/files", formData, config)
+        .post("/api/files/globals/" + props.id, formData, config)
         .catch((error) => {
           queryFileNode.error = error.response.data;
         })
@@ -231,7 +231,7 @@ function deletePath(node: FileTreeNode) {
       pathComponents: pathComponents,
     };
     axios
-      .delete("/api/globals/" + props.id + "/files", {
+      .delete("/api/files/globals/" + props.id, {
         headers: {
           "content-type": "application/json",
         },
@@ -249,7 +249,7 @@ function deleteAll() {
     pathComponents: [],
   };
   axios
-    .delete("/api/globals/" + props.id + "/files", {
+    .delete("/api/files/globals/" + props.id, {
       headers: {
         "content-type": "application/json",
       },
