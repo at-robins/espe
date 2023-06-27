@@ -91,6 +91,14 @@ impl UploadForm for FilePath {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDetails {
+    /// The path components.
+    pub path_components: Vec<String>,
+    pub is_file: bool,
+}
+
 #[cfg(test)]
 mod tests {
 

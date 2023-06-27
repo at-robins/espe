@@ -41,29 +41,29 @@ async fn test_get_global_data_files() {
     std::fs::write(test_file_path, "test_content").unwrap();
 
     let req = test::TestRequest::get()
-        .uri(&format!("/api/globals/{}/files", id))
+        .uri(&format!("/api/files/globals/{}", id))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let fetched_data: Vec<GlobalDataFileDetails> = test::read_body_json(resp).await;
-    let expected_data: Vec<GlobalDataFileDetails> = vec![
-        GlobalDataFileDetails {
+    let fetched_data: Vec<FileDetails> = test::read_body_json(resp).await;
+    let expected_data: Vec<FileDetails> = vec![
+        FileDetails {
             path_components: vec!["1".to_string()],
             is_file: false,
         },
-        GlobalDataFileDetails {
+        FileDetails {
             path_components: vec!["1".to_string(), "11".to_string()],
             is_file: false,
         },
-        GlobalDataFileDetails {
+        FileDetails {
             path_components: vec!["1".to_string(), "11".to_string(), "111".to_string()],
             is_file: false,
         },
-        GlobalDataFileDetails {
+        FileDetails {
             path_components: vec!["1".to_string(), "11".to_string(), "112".to_string()],
             is_file: false,
         },
-        GlobalDataFileDetails {
+        FileDetails {
             path_components: vec![
                 "1".to_string(),
                 "11".to_string(),
@@ -72,23 +72,23 @@ async fn test_get_global_data_files() {
             ],
             is_file: true,
         },
-        GlobalDataFileDetails {
+        FileDetails {
             path_components: vec!["1".to_string(), "11".to_string(), "113".to_string()],
             is_file: false,
         },
-        GlobalDataFileDetails {
+        FileDetails {
             path_components: vec!["2".to_string()],
             is_file: false,
         },
-        GlobalDataFileDetails {
+        FileDetails {
             path_components: vec!["2".to_string(), "21".to_string()],
             is_file: false,
         },
-        GlobalDataFileDetails {
+        FileDetails {
             path_components: vec!["2".to_string(), "22".to_string()],
             is_file: false,
         },
-        GlobalDataFileDetails {
+        FileDetails {
             path_components: vec!["3".to_string()],
             is_file: false,
         },
@@ -101,7 +101,7 @@ async fn test_get_global_data_files_non_existent() {
     let context = TestContext::new();
     let app = test::init_service(create_test_app(&context)).await;
     let req = test::TestRequest::get()
-        .uri("/api/globals/42/files")
+        .uri("/api/files/globals/42")
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
@@ -152,7 +152,7 @@ async fn test_delete_global_data_files_by_path() {
         path_components: vec!["2".to_string(), "21".to_string()],
     };
     let req = test::TestRequest::delete()
-        .uri(&format!("/api/globals/{}/files", id))
+        .uri(&format!("/api/files/globals/{}", id))
         .set_json(terminal_folder_path)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -170,7 +170,7 @@ async fn test_delete_global_data_files_by_path() {
         path_components: vec!["3".to_string(), "test_file_2.txt".to_string()],
     };
     let req = test::TestRequest::delete()
-        .uri(&format!("/api/globals/{}/files", id))
+        .uri(&format!("/api/files/globals/{}", id))
         .set_json(terminal_file_path)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -188,7 +188,7 @@ async fn test_delete_global_data_files_by_path() {
         path_components: vec!["1".to_string()],
     };
     let req = test::TestRequest::delete()
-        .uri(&format!("/api/globals/{}/files", id))
+        .uri(&format!("/api/files/globals/{}", id))
         .set_json(super_folder_path)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -249,7 +249,7 @@ async fn test_delete_global_data_files_by_path_all() {
         path_components: vec![],
     };
     let req = test::TestRequest::delete()
-        .uri(&format!("/api/globals/{}/files", id))
+        .uri(&format!("/api/files/globals/{}", id))
         .set_json(root_path)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -265,7 +265,7 @@ async fn test_delete_global_data_files_non_existent() {
         path_components: vec!["1".to_string(), "test_file.txt".to_string()],
     };
     let req = test::TestRequest::delete()
-        .uri("/api/globals/42/files")
+        .uri("/api/files/globals/42")
         .set_json(file_path)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -300,7 +300,7 @@ async fn test_post_global_data_add_file_sub_folder() {
     assert!(!global_data_path.join("1").exists());
     assert!(!global_data_path.join("1/2/test_file.txt").exists());
     let req = test::TestRequest::post()
-        .uri(&format!("/api/globals/{}/files", id))
+        .uri(&format!("/api/files/globals/{}", id))
         .insert_header(ContentType(content_type))
         .set_payload(payload)
         .to_request();
@@ -340,7 +340,7 @@ async fn test_post_global_data_add_file_root_folder() {
             .unwrap();
     assert!(!global_data_path.join("test_file.txt").exists());
     let req = test::TestRequest::post()
-        .uri(&format!("/api/globals/{}/files", id))
+        .uri(&format!("/api/files/globals/{}", id))
         .insert_header(ContentType(content_type))
         .set_payload(payload)
         .to_request();
@@ -369,7 +369,7 @@ async fn test_post_global_data_add_file_non_existent() {
             .unwrap();
     assert!(!global_data_path.join("test_file.txt").exists());
     let req = test::TestRequest::post()
-        .uri(&format!("/api/globals/{}/files", id))
+        .uri(&format!("/api/files/globals/{}", id))
         .insert_header(ContentType(content_type))
         .set_payload(payload)
         .to_request();
@@ -409,7 +409,7 @@ async fn test_post_global_data_add_file_already_existent() {
     assert!(file_path.exists());
     assert!(file_path.is_file());
     let req = test::TestRequest::post()
-        .uri(&format!("/api/globals/{}/files", id))
+        .uri(&format!("/api/files/globals/{}", id))
         .insert_header(ContentType(content_type))
         .set_payload(payload)
         .to_request();
@@ -444,7 +444,7 @@ async fn test_post_global_data_add_file_empty_path() {
             .parse()
             .unwrap();
     let req = test::TestRequest::post()
-        .uri(&format!("/api/globals/{}/files", id))
+        .uri(&format!("/api/files/globals/{}", id))
         .insert_header(ContentType(content_type))
         .set_payload(payload)
         .to_request();
@@ -477,7 +477,7 @@ async fn test_post_global_data_add_folder_sub_folder() {
     assert!(!global_data_path.join("1/2").exists());
     assert!(!global_data_path.join("1/2/3").exists());
     let req = test::TestRequest::post()
-        .uri(&format!("/api/globals/{}/folders", id))
+        .uri(&format!("/api/folders/globals/{}", id))
         .set_json(folder_path)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -509,7 +509,7 @@ async fn test_post_global_data_add_folder_root() {
     };
     assert!(!global_data_path.join("1").exists());
     let req = test::TestRequest::post()
-        .uri(&format!("/api/globals/{}/folders", id))
+        .uri(&format!("/api/folders/globals/{}", id))
         .set_json(folder_path)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -530,7 +530,7 @@ async fn test_post_global_data_add_folder_non_existent() {
     };
     assert!(!global_data_path.join("1").exists());
     let req = test::TestRequest::post()
-        .uri(&format!("/api/globals/{}/folders", id))
+        .uri(&format!("/api/folders/globals/{}", id))
         .set_json(folder_path)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -564,7 +564,7 @@ async fn test_post_global_data_add_folder_already_existent() {
     assert!(folder_path.exists());
     assert!(folder_path.is_dir());
     let req = test::TestRequest::post()
-        .uri(&format!("/api/globals/{}/folders", id))
+        .uri(&format!("/api/folders/globals/{}", id))
         .set_json(folder_path_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -593,7 +593,7 @@ async fn test_post_global_data_add_folder_empty_path() {
         path_components: vec![],
     };
     let req = test::TestRequest::post()
-        .uri(&format!("/api/globals/{}/folders", id))
+        .uri(&format!("/api/folders/globals/{}", id))
         .set_json(folder_path)
         .to_request();
     let resp = test::call_service(&app, req).await;

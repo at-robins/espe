@@ -26,11 +26,3 @@ impl From<GlobalData> for GlobalDataDetails {
         }
     }
 }
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GlobalDataFileDetails {
-    /// The path components.
-    pub path_components: Vec<String>,
-    pub is_file: bool,
-}

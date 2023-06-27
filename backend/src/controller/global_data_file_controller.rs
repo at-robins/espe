@@ -9,8 +9,8 @@ use crate::{
         error::{SeqError, SeqErrorType},
     },
     model::{
-        db::global_data::GlobalData,
-        exchange::{global_data_details::{GlobalDataFileDetails}, file_path::FilePath},
+        db::{experiment::Experiment, global_data::GlobalData},
+        exchange::file_path::{FileDetails, FilePath},
     },
     service::multipart_service::{
         create_temporary_file, delete_temporary_file, parse_multipart_file,
@@ -18,26 +18,68 @@ use crate::{
 };
 use actix_multipart::Multipart;
 use actix_web::{web, HttpRequest, HttpResponse};
+use diesel::SqliteConnection;
+use serde::{Deserialize, Serialize};
 
-pub async fn get_global_data_files(
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+/// The category or type of a file system related request.
+pub enum FileRequestCategory {
+    /// A request related to global data repositories.
+    Globals,
+    /// A request related to experiments.
+    Experiments,
+}
+
+impl FileRequestCategory {
+    /// Returns the base path depending on the request category.
+    ///
+    /// # Parameters
+    /// * `app_config` - the application's [`Configuration`]
+    /// * `id` - the ID corresponding to the request category entity
+    pub fn base_path(&self, app_config: Arc<Configuration>, id: i32) -> PathBuf {
+        match self {
+            FileRequestCategory::Globals => app_config.global_data_path(id.to_string()),
+            FileRequestCategory::Experiments => app_config.experiment_path(id.to_string()),
+        }
+    }
+
+    /// Returns if an entity of the request category exists or an error otherwise.
+    ///
+    /// # Parameters
+    /// * `id` - the ID corresponding to the request category entity
+    /// * `connection` - a databse connection
+    pub fn entity_exists(
+        &self,
+        id: i32,
+        connection: &mut SqliteConnection,
+    ) -> Result<(), SeqError> {
+        match self {
+            FileRequestCategory::Globals => GlobalData::exists_err(id, connection),
+            FileRequestCategory::Experiments => Experiment::exists_err(id, connection),
+        }
+    }
+}
+
+pub async fn get_files(
     request: HttpRequest,
-    id: web::Path<i32>,
+    params: web::Path<(FileRequestCategory, i32)>,
 ) -> Result<HttpResponse, SeqError> {
-    let id: i32 = id.into_inner();
+    let (category, id) = params.into_inner();
     // Retrieve the app config.
     let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
-    GlobalData::exists_err(id, &mut connection)?;
+    category.entity_exists(id, &mut connection)?;
 
-    let mut global_repo_files: Vec<GlobalDataFileDetails> = Vec::new();
-    let global_data_path = app_config.global_data_path(id.to_string());
-    if global_data_path.exists() {
-        for entry in walkdir::WalkDir::new(&global_data_path) {
+    let mut all_files: Vec<FileDetails> = Vec::new();
+    let data_path = category.base_path(app_config, id);
+    if data_path.exists() {
+        for entry in walkdir::WalkDir::new(&data_path) {
             let entry = entry?;
             let relative_path = entry
                 .path()
-                .strip_prefix(&global_data_path)
-                .expect("The global data directory must be a parent of the contained components.");
+                .strip_prefix(&data_path)
+                .expect("The base directory must be a parent of the contained components.");
             let (components, invalid_path) =
                 relative_path
                     .components()
@@ -59,32 +101,32 @@ pub async fn get_global_data_files(
             }
             // Excludes the root folder, which has an empty component vector.
             if !components.is_empty() {
-                global_repo_files.push(GlobalDataFileDetails {
+                all_files.push(FileDetails {
                     path_components: components,
                     is_file: entry.path().is_file(),
                 });
             }
         }
-        global_repo_files.sort();
+        all_files.sort();
     }
-    Ok(HttpResponse::Ok().json(global_repo_files))
+    Ok(HttpResponse::Ok().json(all_files))
 }
 
-pub async fn delete_global_data_files_by_path(
+pub async fn delete_files_by_path(
     request: HttpRequest,
-    id: web::Path<i32>,
+    params: web::Path<(FileRequestCategory, i32)>,
     path: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
-    let id: i32 = id.into_inner();
+    let (category, id) = params.into_inner();
     let delete_info = path.into_inner();
     let delete_path = delete_info.file_path();
     // Retrieve the app config.
     let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
-    GlobalData::exists_err(id, &mut connection)?;
+    category.entity_exists(id, &mut connection)?;
 
-    let global_data_path: PathBuf = app_config.global_data_path(id.to_string());
-    let full_path: PathBuf = global_data_path.join(&delete_path);
+    let data_path = category.base_path(app_config, id);
+    let full_path: PathBuf = data_path.join(&delete_path);
     if !full_path.exists() {
         return Err(SeqError::new(
             "Invalid request",
@@ -100,40 +142,46 @@ pub async fn delete_global_data_files_by_path(
     Ok(HttpResponse::Ok().finish())
 }
 
-pub async fn post_global_data_add_file(
+pub async fn post_add_file(
     request: HttpRequest,
-    id: web::Path<i32>,
+    params: web::Path<(FileRequestCategory, i32)>,
     payload: Multipart,
 ) -> Result<HttpResponse, SeqError> {
-    let id: i32 = id.into_inner();
+    let (category, id) = params.into_inner();
     // Retrieve the app config.
     let app_config = Configuration::from_request(request);
 
     let (temporary_file_path, temporary_file_id) = create_temporary_file(Arc::clone(&app_config))?;
 
-    persist_multipart(payload, id, temporary_file_path.as_path(), Arc::clone(&app_config))
-        .await
-        .map_err(|error| {
-            // Delete temporary file on error.
-            if delete_temporary_file(temporary_file_id, Arc::clone(&app_config)).is_err() {
-                log::error!(
-                    "Failed to delete temporary file {} upon error {}.",
-                    temporary_file_path.display(),
-                    error
-                );
-            }
-            error
-        })?;
+    persist_multipart(
+        payload,
+        id,
+        category,
+        temporary_file_path.as_path(),
+        Arc::clone(&app_config),
+    )
+    .await
+    .map_err(|error| {
+        // Delete temporary file on error.
+        if delete_temporary_file(temporary_file_id, Arc::clone(&app_config)).is_err() {
+            log::error!(
+                "Failed to delete temporary file {} upon error {}.",
+                temporary_file_path.display(),
+                error
+            );
+        }
+        error
+    })?;
 
     Ok(HttpResponse::Created().finish())
 }
 
-pub async fn post_global_data_add_folder(
+pub async fn post_add_folder(
     request: HttpRequest,
-    id: web::Path<i32>,
+    params: web::Path<(FileRequestCategory, i32)>,
     upload_info: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
-    let id: i32 = id.into_inner();
+    let (category, id) = params.into_inner();
     let upload_info = upload_info.into_inner();
     // Error if no path was specified.
     if upload_info.path_components.is_empty() {
@@ -148,20 +196,21 @@ pub async fn post_global_data_add_folder(
     let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
 
-    // Validate the existance of the global data repository.
-    GlobalData::exists_err(id, &mut connection)?;
+    // Validate the existance of the entity.
+    category.entity_exists(id, &mut connection)?;
 
     // Validate that the file path is not already existant.
-    let full_path = app_config
-        .global_data_path(id.to_string())
+    let full_path = category
+        .base_path(app_config, id)
         .join(upload_info.file_path());
     if full_path.exists() {
         return Err(SeqError::new(
             "Conflicting request",
             SeqErrorType::Conflict,
             format!(
-                "Global data file at path {} does already exist.",
-                upload_info.file_path().display()
+                "File at path {} in category {:?} does already exist.",
+                upload_info.file_path().display(),
+                category
             ),
             "The resource does already exist.",
         ));
@@ -174,7 +223,8 @@ pub async fn post_global_data_add_folder(
 
 async fn persist_multipart<P: AsRef<Path>>(
     payload: Multipart,
-    global_data_id: i32,
+    id: i32,
+    category: FileRequestCategory,
     temporary_file_path: P,
     app_config: Arc<Configuration>,
 ) -> Result<(), SeqError> {
@@ -193,53 +243,51 @@ async fn persist_multipart<P: AsRef<Path>>(
         ));
     }
 
-    // Validate the existance of the global data repository.
-    GlobalData::exists_err(global_data_id, &mut connection)?;
+    // Validate the existance of the entity.
+    category.entity_exists(id, &mut connection)?;
 
-    // Validate that the file path is not already existant.
-    let full_path = app_config
-        .global_data_path(global_data_id.to_string())
+    // Validate that the file path is not already existent.
+    let full_path = category
+        .base_path(Arc::clone(&app_config), id)
         .join(upload_info.file_path());
     if full_path.exists() {
         return Err(SeqError::new(
             "Conflicting request",
             SeqErrorType::Conflict,
             format!(
-                "Global data file at path {} does already exist.",
-                upload_info.file_path().display()
+                "File at path {} in category {:?} does already exist.",
+                upload_info.file_path().display(),
+                category
             ),
             "The resource does already exist.",
         ));
     }
 
     // Create folder and copy file to destination.
-    temp_file_to_global_data(global_data_id, upload_info.file_path(), temp_file_path, app_config)?;
+    temp_file_to_data_file(full_path, temp_file_path)?;
 
     Ok(())
 }
 
-fn temp_file_to_global_data<P: AsRef<Path>, Q: AsRef<Path>>(
-    global_data_id: i32,
+fn temp_file_to_data_file<P: AsRef<Path>, Q: AsRef<Path>>(
     file_path: P,
     temp_file_path: Q,
-    app_config: Arc<Configuration>,
 ) -> Result<(), SeqError> {
-    let mut final_file_path: PathBuf = app_config.global_data_path(global_data_id.to_string());
-    final_file_path.push(file_path);
+    let file_path = file_path.as_ref();
     log::info!(
         "Saving temporary file {} to {}.",
         temp_file_path.as_ref().display(),
-        final_file_path.display()
+        file_path.display()
     );
-    std::fs::create_dir_all(&final_file_path.parent().ok_or_else(|| {
+    std::fs::create_dir_all(&file_path.parent().ok_or_else(|| {
         SeqError::new(
             "Invalid file path",
             SeqErrorType::BadRequestError,
-            format!("The file path {} is not a valid path.", final_file_path.display()),
+            format!("The file path {} is not a valid path.", file_path.display()),
             "The file path is invalid.",
         )
     })?)?;
-    std::fs::rename(temp_file_path, final_file_path)?;
+    std::fs::rename(temp_file_path, file_path)?;
     Ok(())
 }
 

@@ -11,8 +11,8 @@ use super::{
         patch_global_data_comment, patch_global_data_name,
     },
     global_data_file_controller::{
-        delete_global_data_files_by_path, get_global_data_files, post_global_data_add_file,
-        post_global_data_add_folder,
+        delete_files_by_path, get_files, post_add_file,
+        post_add_folder,
     },
     pipeline_controller::{get_pipeline_blueprints, get_pipeline_instance},
 };
@@ -45,7 +45,6 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/experiments/{id}/comment", web::patch().to(patch_experiment_comment))
     .route("/api/experiments/{id}/mail", web::patch().to(patch_experiment_mail))
     .route("/api/experiments/{id}/name", web::patch().to(patch_experiment_name))
-    
     // Global data repositories
     .route("/api/globals", web::get().to(list_global_data))
     .route("/api/globals", web::post().to(create_global_data))
@@ -53,10 +52,11 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/globals/{id}", web::delete().to(delete_global_data))
     .route("/api/globals/{id}/comment", web::patch().to(patch_global_data_comment))
     .route("/api/globals/{id}/name", web::patch().to(patch_global_data_name))
-    .route("/api/globals/{id}/files", web::get().to(get_global_data_files))
-    .route("/api/globals/{id}/files", web::post().to(post_global_data_add_file))
-    .route("/api/globals/{id}/files", web::delete().to(delete_global_data_files_by_path))
-    .route("/api/globals/{id}/folders", web::post().to(post_global_data_add_folder))
+    // Files
+    .route("/api/files/{category}/{id}", web::get().to(get_files))
+    .route("/api/files/{category}/{id}", web::post().to(post_add_file))
+    .route("/api/files/{category}/{id}", web::delete().to(delete_files_by_path))
+    .route("/api/folders/{category}/{id}", web::post().to(post_add_folder))
     // Registers static frontend resources. Needs to be last to not overwrite other routes.
     .service(Files::new("/", "./static_dist").show_files_listing());
 }
