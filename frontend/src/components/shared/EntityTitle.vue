@@ -49,6 +49,7 @@ import { matEdit } from "@quasar/extras/material-icons";
 const props = defineProps({
   title: { type: String, required: true },
   entityId: { type: Number, required: true },
+  endpointType: { type: String, required: true },
 });
 
 const emit = defineEmits<{
@@ -71,7 +72,11 @@ function updateTitle() {
     },
   };
   axios
-    .patch("/api/experiments/" + props.entityId + "/name", formData, config)
+    .patch(
+      "/api/" + props.endpointType + "/" + props.entityId + "/name",
+      formData,
+      config
+    )
     .then(() => {
       emit("update:title", titleModel.value);
     })

@@ -9,16 +9,18 @@
         </div>
         <div v-else>
           <q-card-section>
-            <experiment-title
+            <entity-title
               :title="experiment.name"
               :entity-id="experiment.id"
+              endpoint-type="experiments"
               @update:title="updateTitle"
             />
           </q-card-section>
           <q-card-section>
-            <experiment-comment
+            <entity-comment
               :comment="experiment.comment"
               :entity-id="experiment.id"
+              endpoint-type="experiments"
             />
           </q-card-section>
           <q-card-section>
@@ -64,8 +66,8 @@ import axios from "axios";
 import { ref, onMounted, type Ref } from "vue";
 import ErrorPopup from "../ErrorPopup.vue";
 import FileTree from "../FileTree.vue";
-import ExperimentTitle from "./ExperimentTitle.vue";
-import ExperimentComment from "./ExperimentComment.vue";
+import EntityComment from "../shared/EntityComment.vue";
+import EntityTitle from "../shared/EntityTitle.vue";
 import { symOutlinedAccountTree } from "@quasar/extras/material-symbols-outlined";
 
 const files: Ref<Array<FileDetails>> = ref([]);

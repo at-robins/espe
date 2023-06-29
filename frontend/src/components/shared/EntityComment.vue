@@ -150,6 +150,7 @@ const props = defineProps({
     required: false,
   },
   entityId: { type: Number, required: true },
+  endpointType: { type: String, required: true },
 });
 
 const isUpdatingComment = ref(false);
@@ -196,7 +197,7 @@ function updateComment() {
     };
     axios
       .patch(
-        "/api/experiments/" + props.entityId + "/comment",
+        "/api/" + props.endpointType + "/" + props.entityId + "/comment",
         formData,
         config
       )

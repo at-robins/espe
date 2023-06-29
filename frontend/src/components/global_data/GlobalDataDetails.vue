@@ -9,16 +9,18 @@
         </div>
         <div v-else>
           <q-card-section>
-            <global-data-title
+            <entity-title
               :title="globalData.name"
-              :global-data-id="globalData.id"
+              :entity-id="globalData.id"
+              endpoint-type="globals"
               @update:title="updateTitle"
             />
           </q-card-section>
           <q-card-section>
-            <global-data-comment
+            <entity-comment
               :comment="globalData.comment"
-              :global-data-id="globalData.id"
+              :entity-id="globalData.id"
+              endpoint-type="globals"
             />
           </q-card-section>
           <q-card-section>
@@ -64,8 +66,8 @@ import axios from "axios";
 import { ref, onMounted, type Ref } from "vue";
 import ErrorPopup from "../ErrorPopup.vue";
 import FileTree from "../FileTree.vue";
-import GlobalDataTitle from "./GlobalDataTitle.vue";
-import GlobalDataComment from "./GlobalDataComment.vue";
+import EntityComment from "../shared/EntityComment.vue";
+import EntityTitle from "../shared/EntityTitle.vue";
 import { symOutlinedAccountTree } from "@quasar/extras/material-symbols-outlined";
 
 const files: Ref<Array<FileDetails>> = ref([]);
