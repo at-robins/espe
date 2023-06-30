@@ -5,7 +5,7 @@ extern crate lazy_static;
 
 use std::{collections::HashMap, sync::Arc};
 
-use actix_web::{middleware, App, HttpServer};
+use actix_web::{middleware, App, HttpServer, web};
 use application::{config::Configuration, environment::LOG_LEVEL, error::SeqError};
 use controller::routing::routing_config;
 use dotenv::dotenv;
@@ -22,8 +22,8 @@ async fn main() -> Result<(), SeqError> {
         log::error!("{}", enviroment_error);
     }
     // Setup the configuration.
-    let app_config = Arc::new(Configuration::create_from_environment()?);
-    let app_config_internal = Arc::clone(&app_config);
+    let app_config = web::Data::new(Configuration::create_from_environment()?);
+    let server_address = app_config.server_address_and_port();
     // Load all pipelines into memory.
     let pipelines = load_pipelines(Arc::clone(&app_config))?;
     let mut pipeline_map = HashMap::new();
@@ -42,11 +42,11 @@ async fn main() -> Result<(), SeqError> {
     Ok(HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .app_data(Arc::clone(&app_config_internal))
+            .app_data(web::Data::clone(&app_config))
             .app_data(Arc::clone(&pipeline_map))
             .configure(routing_config)
     })
-    .bind(app_config.server_address_and_port())?
+    .bind(server_address)?
     .run()
     .await?)
 }

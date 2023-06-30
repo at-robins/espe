@@ -19,9 +19,8 @@ pub const PATH_FILES_EXPERIMENTS_SAMPLES: &str = "samples";
 /// The folder where global data is stored.
 pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
 
-use std::{borrow::Borrow, path::PathBuf, sync::Arc, time::SystemTime};
+use std::{path::PathBuf, time::SystemTime};
 
-use actix_web::HttpRequest;
 use diesel::{connection::SimpleConnection, Connection, SqliteConnection};
 use getset::Getters;
 use serde::{Deserialize, Serialize};
@@ -94,20 +93,6 @@ impl Configuration {
             context_folder: context_folder.into(),
             pipeline_folder: pipeline_folder.into(),
         }
-    }
-
-    /// Extracts the application [`Configuration`] from a [`HttpRequest`].
-    ///
-    /// # Parameters
-    ///
-    /// * `request` - the request to extract the configuration from
-    pub fn from_request<T: Borrow<HttpRequest>>(request: T) -> Arc<Self> {
-        Arc::clone(
-            request
-                .borrow()
-                .app_data::<Arc<Configuration>>()
-                .expect("The configuration must be accessible."),
-        )
     }
 
     /// Creates a new configuration if all enviroment variables are setup correctly.

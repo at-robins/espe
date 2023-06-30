@@ -17,7 +17,7 @@ use crate::{
     },
 };
 use actix_multipart::Multipart;
-use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web::{web, HttpResponse};
 use diesel::SqliteConnection;
 use serde::{Deserialize, Serialize};
 
@@ -37,7 +37,7 @@ impl FileRequestCategory {
     /// # Parameters
     /// * `app_config` - the application's [`Configuration`]
     /// * `id` - the ID corresponding to the request category entity
-    pub fn base_path(&self, app_config: Arc<Configuration>, id: i32) -> PathBuf {
+    pub fn base_path(&self, app_config: web::Data<Configuration>, id: i32) -> PathBuf {
         match self {
             FileRequestCategory::Globals => app_config.global_data_path(id.to_string()),
             FileRequestCategory::Experiments => app_config.experiment_input_path(id.to_string()),
@@ -62,12 +62,10 @@ impl FileRequestCategory {
 }
 
 pub async fn get_files(
-    request: HttpRequest,
+    app_config:  web::Data<Configuration>,
     params: web::Path<(FileRequestCategory, i32)>,
 ) -> Result<HttpResponse, SeqError> {
     let (category, id) = params.into_inner();
-    // Retrieve the app config.
-    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     category.entity_exists(id, &mut connection)?;
 
@@ -113,15 +111,13 @@ pub async fn get_files(
 }
 
 pub async fn delete_files_by_path(
-    request: HttpRequest,
+    app_config:  web::Data<Configuration>,
     params: web::Path<(FileRequestCategory, i32)>,
     path: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
     let (category, id) = params.into_inner();
     let delete_info = path.into_inner();
     let delete_path = delete_info.file_path();
-    // Retrieve the app config.
-    let app_config = Configuration::from_request(request);
     let mut connection = app_config.database_connection()?;
     category.entity_exists(id, &mut connection)?;
 
@@ -143,13 +139,11 @@ pub async fn delete_files_by_path(
 }
 
 pub async fn post_add_file(
-    request: HttpRequest,
+    app_config:  web::Data<Configuration>,
     params: web::Path<(FileRequestCategory, i32)>,
     payload: Multipart,
 ) -> Result<HttpResponse, SeqError> {
     let (category, id) = params.into_inner();
-    // Retrieve the app config.
-    let app_config = Configuration::from_request(request);
 
     let (temporary_file_path, temporary_file_id) = create_temporary_file(Arc::clone(&app_config))?;
 
@@ -158,7 +152,7 @@ pub async fn post_add_file(
         id,
         category,
         temporary_file_path.as_path(),
-        Arc::clone(&app_config),
+        web::Data::clone(&app_config),
     )
     .await
     .map_err(|error| {
@@ -177,7 +171,7 @@ pub async fn post_add_file(
 }
 
 pub async fn post_add_folder(
-    request: HttpRequest,
+    app_config:  web::Data<Configuration>,
     params: web::Path<(FileRequestCategory, i32)>,
     upload_info: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
@@ -192,8 +186,7 @@ pub async fn post_add_folder(
             "The specified path is invalid.",
         ));
     }
-    // Retrieve the app config.
-    let app_config = Configuration::from_request(request);
+
     let mut connection = app_config.database_connection()?;
 
     // Validate the existance of the entity.
@@ -226,7 +219,7 @@ async fn persist_multipart<P: AsRef<Path>>(
     id: i32,
     category: FileRequestCategory,
     temporary_file_path: P,
-    app_config: Arc<Configuration>,
+    app_config: web::Data<Configuration>,
 ) -> Result<(), SeqError> {
     let mut connection = app_config.database_connection()?;
 
@@ -248,7 +241,7 @@ async fn persist_multipart<P: AsRef<Path>>(
 
     // Validate that the file path is not already existent.
     let full_path = category
-        .base_path(Arc::clone(&app_config), id)
+        .base_path(web::Data::clone(&app_config), id)
         .join(upload_info.file_path());
     if full_path.exists() {
         return Err(SeqError::new(

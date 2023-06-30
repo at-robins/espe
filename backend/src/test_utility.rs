@@ -2,12 +2,12 @@ use crate::{application::config::Configuration, controller::routing::routing_con
 use actix_web::{
     body::MessageBody,
     dev::{ServiceFactory, ServiceRequest, ServiceResponse},
-    middleware, App, Error,
+    middleware, web, App, Error,
 };
 use diesel::{connection::SimpleConnection, Connection, SqliteConnection};
 use diesel_migrations::MigrationHarness;
 use dotenv::dotenv;
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 use uuid::Uuid;
 
 /// The test resource path.
@@ -34,7 +34,7 @@ pub fn create_test_app(
     env_logger::try_init_from_env(env_logger::Env::new().filter("debug")).ok();
     App::new()
         .wrap(middleware::Logger::default())
-        .app_data(Arc::clone(&Arc::<Configuration>::new(context.into())))
+        .app_data(web::Data::clone(&web::Data::<Configuration>::new(context.into())))
         .configure(routing_config)
 }
 
