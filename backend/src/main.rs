@@ -1,7 +1,5 @@
 #[macro_use]
 extern crate diesel;
-#[macro_use]
-extern crate lazy_static;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -9,7 +7,7 @@ use actix_web::{middleware, App, HttpServer, web};
 use application::{config::Configuration, environment::LOG_LEVEL, error::SeqError};
 use controller::routing::routing_config;
 use dotenv::dotenv;
-use service::pipeline_service::load_pipelines;
+use service::pipeline_service::{load_pipelines, LoadedPipelines};
 
 #[actix_web::main]
 async fn main() -> Result<(), SeqError> {
@@ -37,13 +35,13 @@ async fn main() -> Result<(), SeqError> {
             );
         }
     }
-    let pipeline_map = Arc::new(pipeline_map);
+    let loaded_pipelines = web::Data::new(LoadedPipelines::new(web::Data::clone(&app_config))?);
     // Setup the application.
     Ok(HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
             .app_data(web::Data::clone(&app_config))
-            .app_data(Arc::clone(&pipeline_map))
+            .app_data(web::Data::clone(&loaded_pipelines))
             .configure(routing_config)
     })
     .bind(server_address)?

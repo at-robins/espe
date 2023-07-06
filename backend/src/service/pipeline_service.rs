@@ -1,9 +1,13 @@
 use std::{
+    collections::HashMap,
     ffi::OsString,
     path::{Path, PathBuf},
     process::Command,
     sync::Arc,
 };
+
+use actix_web::web;
+use parking_lot::Mutex;
 
 use crate::{
     application::{
@@ -17,6 +21,92 @@ use crate::{
         },
     },
 };
+
+#[derive(Debug)]
+/// All pipelines currently loaded by the application.
+pub struct LoadedPipelines {
+    pipeline_map: Mutex<HashMap<String, Arc<ContextualisedPipelineBlueprint>>>,
+}
+
+impl LoadedPipelines {
+    /// Loads and stores all pipelines based on the supplied application [`Configuration`].
+    ///
+    /// # Parameters
+    ///
+    /// * `app_config` - the app [`Configuration`]
+    pub fn new(app_config: web::Data<Configuration>) -> Result<Self, SeqError> {
+        Ok(Self {
+            pipeline_map: Mutex::new(Self::load_pipeline_map(app_config)?),
+        })
+    }
+
+    /// Returns the pipeline with the specified ID if loaded.
+    ///
+    /// # Parameters
+    ///
+    /// * `id` - the pipeline ID
+    pub fn get<T: AsRef<String>>(&self, id: T) -> Option<Arc<ContextualisedPipelineBlueprint>> {
+        self.pipeline_map
+            .lock()
+            .get(id.as_ref())
+            .map(|value| Arc::clone(value))
+    }
+
+    /// Returns all loaded pipelines.
+    pub fn pipelines(&self) -> Vec<Arc<ContextualisedPipelineBlueprint>> {
+        self.pipeline_map
+            .lock()
+            .values()
+            .map(|value| Arc::clone(value))
+            .collect()
+    }
+
+    /// Returns the pipeline with the specified ID if loaded.
+    ///
+    /// # Parameters
+    ///
+    /// * `id` - the pipeline ID
+    pub fn is_loaded<T: AsRef<String>>(&self, id: T) -> bool {
+        self.pipeline_map.lock().contains_key(id.as_ref())
+    }
+
+    /// Updates the currently loaded pipelines.
+    ///
+    /// # Parameters
+    ///
+    /// * `app_config` - the app [`Configuration`]
+    pub fn update_loaded_pipelines(
+        &self,
+        app_config: web::Data<Configuration>,
+    ) -> Result<(), SeqError> {
+        *(self.pipeline_map.lock()) = Self::load_pipeline_map(app_config)?;
+        Ok(())
+    }
+
+    /// Creates a map of loaded pipelines by their respective ID.
+    ///
+    /// # Parameters
+    ///
+    /// * `app_config` - the app [`Configuration`]
+    fn load_pipeline_map(
+        app_config: web::Data<Configuration>,
+    ) -> Result<HashMap<String, Arc<ContextualisedPipelineBlueprint>>, SeqError> {
+        let pipelines = load_pipelines(Arc::clone(&app_config))?;
+        let mut pipeline_map = HashMap::new();
+        for pipeline in pipelines {
+            let duplicate =
+                pipeline_map.insert(pipeline.pipeline().id().clone(), Arc::new(pipeline));
+            if let Some(duplicate_pipeline) = duplicate {
+                log::warn!(
+                    "The pipeline {:?} was overwritten due to pipeline ID {} not being unique.",
+                    duplicate_pipeline,
+                    duplicate_pipeline.pipeline().id()
+                );
+            }
+        }
+        Ok(pipeline_map)
+    }
+}
 
 /// Returns all pipelines defined in the respective directory.
 ///

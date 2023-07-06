@@ -5,16 +5,18 @@ use log::error;
 use crate::application::error::SeqError;
 
 use super::{
-    experiment_controller::{create_experiment, delete_experiment, get_experiment, list_experiment, patch_experiment_name, patch_experiment_comment, patch_experiment_mail},
+    experiment_controller::{
+        create_experiment, delete_experiment, get_experiment, list_experiment,
+        patch_experiment_comment, patch_experiment_mail, patch_experiment_name,
+    },
+    file_controller::{delete_files_by_path, get_files, post_add_file, post_add_folder},
     global_data_controller::{
         create_global_data, delete_global_data, get_global_data, list_global_data,
         patch_global_data_comment, patch_global_data_name,
     },
-    file_controller::{
-        delete_files_by_path, get_files, post_add_file,
-        post_add_folder,
+    pipeline_controller::{
+        get_pipeline_blueprints, get_pipeline_instance, patch_pipeline_blueprints,
     },
-    pipeline_controller::{get_pipeline_blueprints, get_pipeline_instance},
 };
 
 /// Serve the entry point to the single page web app.
@@ -35,8 +37,9 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/ui", web::get().to(index))
     .route("/ui/{rest:.*}", web::get().to(index))
     // Pipelines
-    .route("/api/pipeline/instance/{id}", web::get().to(get_pipeline_instance))
-    .route("/api/pipeline/blueprint", web::get().to(get_pipeline_blueprints))
+    .route("/api/pipelines/instances/{id}", web::get().to(get_pipeline_instance))
+    .route("/api/pipelines/blueprints", web::get().to(get_pipeline_blueprints))
+    .route("/api/pipelines/blueprints", web::patch().to(patch_pipeline_blueprints))
     // Experiments
     .route("/api/experiments", web::get().to(list_experiment))
     .route("/api/experiments", web::post().to(create_experiment))

@@ -1,23 +1,17 @@
-use std::sync::Arc;
-
-use actix_web::{web, HttpRequest, Responder};
+use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
-use diesel::RunQueryDsl;
 use rand::{thread_rng, Rng};
 
 use crate::{
-    application::{
-        config::Configuration,
-        error::{SeqError, SeqErrorType},
-    },
+    application::{config::Configuration, error::SeqError},
     model::{
-        db::pipeline::Pipeline,
         exchange::{
             pipeline_blueprint_details::PipelineBlueprintDetails,
             pipeline_step_details::PipelineStepDetails,
         },
         internal::step::PipelineStepStatus,
     },
+    service::pipeline_service::LoadedPipelines,
 };
 
 pub async fn get_pipeline_instance(wrapped_id: web::Path<u64>) -> Result<impl Responder, SeqError> {
@@ -105,25 +99,26 @@ pub async fn get_pipeline_instance(wrapped_id: web::Path<u64>) -> Result<impl Re
     Ok(web::Json(dummy_response))
 }
 
-/// Return all pipeline blueprints that are present in the database.
-pub async fn get_pipeline_blueprints(request: HttpRequest) -> Result<impl Responder, SeqError> {
-    // Retrieve the app config.
-    let app_config = request.app_data::<Arc<Configuration>>().ok_or_else(|| {
-        SeqError::new(
-            "Configuration",
-            SeqErrorType::InternalServerError,
-            "The server configuration could not be accessed.",
-            "Missing configuration.",
-        )
-    })?;
-    let mut connection = app_config.database_connection()?;
-    let pipelines = crate::schema::pipeline::table.load::<Pipeline>(&mut connection)?;
+/// Return all pipeline blueprints that are currently loaded.
+pub async fn get_pipeline_blueprints(
+    pipelines: web::Data<LoadedPipelines>,
+) -> Result<impl Responder, SeqError> {
     Ok(web::Json(
         pipelines
+            .pipelines()
             .iter()
             .map(|pipeline| PipelineBlueprintDetails::from(pipeline))
             .collect::<Vec<PipelineBlueprintDetails>>(),
     ))
+}
+
+/// Update the currently loaded pipeline blueprints.
+pub async fn patch_pipeline_blueprints(
+    pipelines: web::Data<LoadedPipelines>,
+    app_config: web::Data<Configuration>,
+) -> Result<HttpResponse, SeqError> {
+    pipelines.update_loaded_pipelines(app_config)?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 fn random_status() -> PipelineStepStatus {

@@ -27,7 +27,7 @@
             <div class="row">
               <div class="q-ma-md">
                 <q-btn :icon="symOutlinedAccountTree" round>
-                  <q-tooltip>Upload files to the global repository.</q-tooltip>
+                  <q-tooltip>Upload files as experiment input.</q-tooltip>
                 </q-btn>
               </div>
               <q-separator vertical class="q-ml-md q-mr-md" />

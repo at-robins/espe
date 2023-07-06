@@ -13,16 +13,16 @@ export enum PipelineStepStatus {
 }
 
 export type PipelineBlueprintDetail = {
-  id: number;
+  id: string;
   name: string;
-  comment: PipelineStepStatus;
+  comment: string;
 };
 
 export type ExperimentUpload = {
   name: string;
   mail: string | undefined;
   comment: string | undefined;
-  pipelineId: number;
+  pipelineId: string;
 };
 
 export type ExperimentDetails = {
