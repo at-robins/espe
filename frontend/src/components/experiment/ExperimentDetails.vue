@@ -24,6 +24,13 @@
             />
           </q-card-section>
           <q-card-section>
+            <entity-pipeline
+              :pipeline-id="experiment.pipelineId"
+              :entity-id="experiment.id"
+              endpoint-type="experiments"
+            />
+          </q-card-section>
+          <q-card-section>
             <div class="row">
               <div class="q-ma-md">
                 <q-btn :icon="symOutlinedAccountTree" round>
@@ -69,6 +76,7 @@ import FileTree from "../FileTree.vue";
 import EntityComment from "../shared/EntityComment.vue";
 import EntityTitle from "../shared/EntityTitle.vue";
 import { symOutlinedAccountTree } from "@quasar/extras/material-symbols-outlined";
+import EntityPipeline from "../shared/EntityPipeline.vue";
 
 const files: Ref<Array<FileDetails>> = ref([]);
 const experiment: Ref<ExperimentDetails | null> = ref(null);

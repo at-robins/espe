@@ -3,7 +3,10 @@ use chrono::Utc;
 use rand::{thread_rng, Rng};
 
 use crate::{
-    application::{config::Configuration, error::SeqError},
+    application::{
+        config::Configuration,
+        error::{SeqError, SeqErrorType},
+    },
     model::{
         exchange::{
             pipeline_blueprint_details::PipelineBlueprintDetails,
@@ -102,7 +105,7 @@ pub async fn get_pipeline_instance(wrapped_id: web::Path<u64>) -> Result<impl Re
 /// Return all pipeline blueprints that are currently loaded.
 pub async fn get_pipeline_blueprints(
     pipelines: web::Data<LoadedPipelines>,
-) -> Result<impl Responder, SeqError> {
+) -> Result<web::Json<Vec<PipelineBlueprintDetails>>, SeqError> {
     Ok(web::Json(
         pipelines
             .pipelines()
@@ -110,6 +113,24 @@ pub async fn get_pipeline_blueprints(
             .map(|pipeline| PipelineBlueprintDetails::from(pipeline))
             .collect::<Vec<PipelineBlueprintDetails>>(),
     ))
+}
+
+/// Return all pipeline blueprints that are currently loaded.
+pub async fn get_pipeline_blueprint(
+    pipelines: web::Data<LoadedPipelines>,
+    id: web::Json<String>,
+) -> Result<web::Json<PipelineBlueprintDetails>, SeqError> {
+    let id = id.into_inner();
+    if let Some(pipeline) = pipelines.get(&id) {
+        Ok(web::Json(PipelineBlueprintDetails::from(&pipeline)))
+    } else {
+        Err(SeqError::new(
+            "Not Fount",
+            SeqErrorType::NotFoundError,
+            format!("No pipeline with ID {} is loaded.", id),
+            "Invalid ID.",
+        ))
+    }
 }
 
 /// Update the currently loaded pipeline blueprints.

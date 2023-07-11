@@ -8,6 +8,7 @@ use super::{
     experiment_controller::{
         create_experiment, delete_experiment, get_experiment, list_experiment,
         patch_experiment_comment, patch_experiment_mail, patch_experiment_name,
+        patch_experiment_pipeline,
     },
     file_controller::{delete_files_by_path, get_files, post_add_file, post_add_folder},
     global_data_controller::{
@@ -15,7 +16,8 @@ use super::{
         patch_global_data_comment, patch_global_data_name,
     },
     pipeline_controller::{
-        get_pipeline_blueprints, get_pipeline_instance, patch_pipeline_blueprints,
+        get_pipeline_blueprint, get_pipeline_blueprints, get_pipeline_instance,
+        patch_pipeline_blueprints,
     },
 };
 
@@ -38,6 +40,7 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/ui/{rest:.*}", web::get().to(index))
     // Pipelines
     .route("/api/pipelines/instances/{id}", web::get().to(get_pipeline_instance))
+    .route("/api/pipelines/blueprint", web::get().to(get_pipeline_blueprint))
     .route("/api/pipelines/blueprints", web::get().to(get_pipeline_blueprints))
     .route("/api/pipelines/blueprints", web::patch().to(patch_pipeline_blueprints))
     // Experiments
@@ -48,6 +51,7 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/experiments/{id}/comment", web::patch().to(patch_experiment_comment))
     .route("/api/experiments/{id}/mail", web::patch().to(patch_experiment_mail))
     .route("/api/experiments/{id}/name", web::patch().to(patch_experiment_name))
+    .route("/api/experiments/{id}/pipeline", web::patch().to(patch_experiment_pipeline))
     // Global data repositories
     .route("/api/globals", web::get().to(list_global_data))
     .route("/api/globals", web::post().to(create_global_data))

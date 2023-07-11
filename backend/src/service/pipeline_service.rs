@@ -45,7 +45,7 @@ impl LoadedPipelines {
     /// # Parameters
     ///
     /// * `id` - the pipeline ID
-    pub fn get<T: AsRef<String>>(&self, id: T) -> Option<Arc<ContextualisedPipelineBlueprint>> {
+    pub fn get<T: AsRef<str>>(&self, id: T) -> Option<Arc<ContextualisedPipelineBlueprint>> {
         self.pipeline_map
             .lock()
             .get(id.as_ref())
@@ -66,7 +66,7 @@ impl LoadedPipelines {
     /// # Parameters
     ///
     /// * `id` - the pipeline ID
-    pub fn is_loaded<T: AsRef<String>>(&self, id: T) -> bool {
+    pub fn is_loaded<T: AsRef<str>>(&self, id: T) -> bool {
         self.pipeline_map.lock().contains_key(id.as_ref())
     }
 
