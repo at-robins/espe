@@ -8,10 +8,11 @@
     <q-separator vertical class="q-ml-md q-mr-md" />
 
     <div class="col">
-      <div class="q-ma-md">
+      <div class="q-ma-md row">
         <q-select
           v-model="pipelineModel"
           :options="pipelineOptions"
+          :readonly="isUpdatingPipeline"
           option-label="name"
           option-value="id"
           clearable
@@ -21,7 +22,23 @@
           :error="!!pipelineErrorMessage"
           :error-message="pipelineErrorMessage"
           bottom-slots
+          class="col"
         />
+        <div class="q-ml-md q-mt-md">
+          <q-btn
+            round
+            outline
+            :icon="symOutlinedSync"
+            @click="updateAllPipelines"
+            color="primary"
+            :loading="isUpdatingAllPipelines"
+          >
+            <q-tooltip> Reload all pipelines. </q-tooltip>
+          </q-btn>
+        </div>
+      </div>
+      <div v-if="pipelineModel?.comment" class="q-ma-md">
+        <span v-html="pipelineModel.comment" />
       </div>
     </div>
   </div>
@@ -30,7 +47,10 @@
 <script setup lang="ts">
 import axios from "axios";
 import { ref, type PropType, type Ref, onMounted } from "vue";
-import { symOutlinedRoute } from "@quasar/extras/material-symbols-outlined";
+import {
+  symOutlinedRoute,
+  symOutlinedSync,
+} from "@quasar/extras/material-symbols-outlined";
 import {
   type ErrorResponse,
   type PipelineBlueprintDetail,
@@ -48,6 +68,7 @@ const props = defineProps({
 });
 
 const isLoading = ref(false);
+const isUpdatingAllPipelines = ref(false);
 const isUpdatingPipeline = ref(false);
 const pipelineErrorMessage = ref("");
 const pipelineModel: Ref<PipelineBlueprintDetail | null> = ref(null);
@@ -104,6 +125,24 @@ function updatePipeline() {
       })
       .finally(() => {
         isUpdatingPipeline.value = false;
+      });
+  }
+}
+
+function updateAllPipelines() {
+  if (!isUpdatingAllPipelines.value) {
+    isUpdatingAllPipelines.value = true;
+    pipelineErrorMessage.value = "";
+    axios
+      .patch("/api/pipelines/blueprints")
+      .then(() => {
+        loadPipelineDetails();
+      })
+      .catch((error) => {
+        pipelineErrorMessage.value = error_to_string(error.response.data);
+      })
+      .finally(() => {
+        isUpdatingAllPipelines.value = false;
       });
   }
 }
