@@ -37,8 +37,8 @@
           </q-btn>
         </div>
       </div>
-      <div v-if="pipelineModel?.comment" class="q-ma-md">
-        <span v-html="pipelineModel.comment" />
+      <div v-if="pipelineModel?.description" class="q-ma-md">
+        <span v-html="pipelineModel.description" />
       </div>
     </div>
   </div>
@@ -51,10 +51,8 @@ import {
   symOutlinedRoute,
   symOutlinedSync,
 } from "@quasar/extras/material-symbols-outlined";
-import {
-  type ErrorResponse,
-  type PipelineBlueprintDetail,
-} from "@/scripts/types";
+import { type ErrorResponse } from "@/scripts/types";
+import { PipelineBlueprint } from "@/scripts/pipeline-blueprint";
 import { error_to_string } from "@/scripts/utilities";
 
 const props = defineProps({
@@ -71,8 +69,8 @@ const isLoading = ref(false);
 const isUpdatingAllPipelines = ref(false);
 const isUpdatingPipeline = ref(false);
 const pipelineErrorMessage = ref("");
-const pipelineModel: Ref<PipelineBlueprintDetail | null> = ref(null);
-const pipelineOptions: Ref<Array<PipelineBlueprintDetail>> = ref([]);
+const pipelineModel: Ref<PipelineBlueprint | null> = ref(null);
+const pipelineOptions: Ref<Array<PipelineBlueprint>> = ref([]);
 
 onMounted(() => {
   loadPipelineDetails();

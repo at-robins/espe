@@ -8,11 +8,8 @@ use crate::{
         error::{SeqError, SeqErrorType},
     },
     model::{
-        exchange::{
-            pipeline_blueprint_details::PipelineBlueprintDetails,
-            pipeline_step_details::PipelineStepDetails,
-        },
-        internal::step::PipelineStepStatus,
+        exchange::pipeline_step_details::PipelineStepDetails,
+        internal::{pipeline_blueprint::PipelineBlueprint, step::PipelineStepStatus},
     },
     service::pipeline_service::LoadedPipelines,
 };
@@ -105,13 +102,13 @@ pub async fn get_pipeline_instance(wrapped_id: web::Path<u64>) -> Result<impl Re
 /// Return all pipeline blueprints that are currently loaded.
 pub async fn get_pipeline_blueprints(
     pipelines: web::Data<LoadedPipelines>,
-) -> Result<web::Json<Vec<PipelineBlueprintDetails>>, SeqError> {
+) -> Result<web::Json<Vec<PipelineBlueprint>>, SeqError> {
     Ok(web::Json(
         pipelines
             .pipelines()
             .iter()
-            .map(|pipeline| PipelineBlueprintDetails::from(pipeline))
-            .collect::<Vec<PipelineBlueprintDetails>>(),
+            .map(|pipeline| pipeline.pipeline().clone())
+            .collect::<Vec<PipelineBlueprint>>(),
     ))
 }
 
@@ -119,10 +116,10 @@ pub async fn get_pipeline_blueprints(
 pub async fn get_pipeline_blueprint(
     pipelines: web::Data<LoadedPipelines>,
     id: web::Json<String>,
-) -> Result<web::Json<PipelineBlueprintDetails>, SeqError> {
+) -> Result<web::Json<PipelineBlueprint>, SeqError> {
     let id = id.into_inner();
     if let Some(pipeline) = pipelines.get(&id) {
-        Ok(web::Json(PipelineBlueprintDetails::from(&pipeline)))
+        Ok(web::Json(pipeline.pipeline().clone()))
     } else {
         Err(SeqError::new(
             "Not Fount",
