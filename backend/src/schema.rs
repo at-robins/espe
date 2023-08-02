@@ -48,9 +48,22 @@ table! {
     }
 }
 
+table! {
+    pipeline_step_variable (id) {
+        id -> Integer,
+        pipeline_id -> Text,
+        pipeline_step_id -> Text,
+        experiment_id -> Integer,
+        variable_id -> Text,
+        variable_value -> Nullable<Text>,
+        creation_time -> Timestamp,
+    }
+}
+
 joinable!(pipeline_step -> pipeline (pipeline_id));
 joinable!(pipeline_step_instance -> experiment (experiment_id));
 joinable!(pipeline_step_instance -> pipeline_step (pipeline_step_id));
+joinable!(pipeline_step_variable -> experiment (experiment_id));
 
 allow_tables_to_appear_in_same_query!(
     experiment,
@@ -58,4 +71,5 @@ allow_tables_to_appear_in_same_query!(
     pipeline,
     pipeline_step,
     pipeline_step_instance,
+    pipeline_step_variable,
 );
