@@ -179,6 +179,18 @@ mod tests {
             )
             .unwrap()
         );
+        // After deletion of the experiment the variables should be deleted as well.
+        diesel::delete(crate::schema::experiment::table)
+            .filter(crate::schema::experiment::id.eq(experiment_id))
+            .execute(&mut connection)
+            .unwrap();
+        assert!(PipelineStepVariable::get_by_experiment_and_pipeline(
+            experiment_id,
+            pipeline_id,
+            &mut connection
+        )
+        .unwrap()
+        .is_empty());
     }
 
     #[test]
