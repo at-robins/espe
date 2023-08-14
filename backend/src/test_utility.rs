@@ -1,4 +1,7 @@
-use crate::{application::config::Configuration, controller::routing::routing_config};
+use crate::{
+    application::config::Configuration, controller::routing::routing_config,
+    service::pipeline_service::LoadedPipelines,
+};
 use actix_web::{
     body::MessageBody,
     dev::{ServiceFactory, ServiceRequest, ServiceResponse},
@@ -32,9 +35,11 @@ pub fn create_test_app(
 > {
     dotenv().unwrap();
     env_logger::try_init_from_env(env_logger::Env::new().filter("debug")).ok();
+    let app_config = &web::Data::<Configuration>::new(context.into());
     App::new()
         .wrap(middleware::Logger::default())
-        .app_data(web::Data::clone(&web::Data::<Configuration>::new(context.into())))
+        .app_data(web::Data::clone(&app_config))
+        .app_data(web::Data::new(LoadedPipelines::new(web::Data::clone(&app_config)).unwrap()))
         .configure(routing_config)
 }
 
@@ -42,14 +47,16 @@ pub fn create_test_app(
 /// initialisation and cleanup on a per test basis.
 pub struct TestContext {
     id: Uuid,
+    pipeline_folder_override: Option<String>,
 }
 
 impl TestContext {
     /// Creates a new `TestContext`.
     pub fn new() -> TestContext {
         let id = Uuid::new_v4();
-        let context = TestContext { id };
+        let context = TestContext { id, pipeline_folder_override: None };
         std::fs::create_dir_all(context.context_folder()).unwrap();
+        std::fs::create_dir_all(context.pipeline_folder()).unwrap();
         let con = &mut context.get_connection();
         con.run_pending_migrations(
             diesel_migrations::FileBasedMigrations::find_migrations_directory().unwrap(),
@@ -70,7 +77,20 @@ impl TestContext {
 
     /// Returns the pipeline definition folder.
     pub fn pipeline_folder(&self) -> String {
-        format!("{}/{}_pipelines", self.context_folder(), self.id)
+        if let Some(custom_folder) = &self.pipeline_folder_override {
+            custom_folder.clone()
+        } else {
+            format!("{}/{}_pipelines", self.context_folder(), self.id)
+        }
+    }
+
+    /// Overrides the default testing pipeline folder with a custom one.
+    /// 
+    /// # Parameters
+    /// 
+    /// * `pipeline_folder` - the custom testing pipeline folder
+    pub fn set_pipeline_folder<T: Into<String>>(&mut self, pipeline_folder: T) {
+        self.pipeline_folder_override = Some(pipeline_folder.into());
     }
 
     /// Opens a connection to the test database.

@@ -6,7 +6,9 @@ use crate::{
     diesel::RunQueryDsl,
     model::{
         db::experiment::{Experiment, NewExperiment},
-        exchange::experiment_details::ExperimentDetails,
+        exchange::{
+            experiment_details::ExperimentDetails, experiment_pipeline::ExperimentPipelineBlueprint,
+        },
     },
     service::{
         pipeline_service::LoadedPipelines,
@@ -164,6 +166,22 @@ pub async fn list_experiment(
         .map(|val| val.into())
         .collect();
     Ok(web::Json(experiments))
+}
+
+pub async fn get_experiment_pipelines(
+    app_config: web::Data<Configuration>,
+    pipelines: web::Data<LoadedPipelines>,
+    id: web::Path<i32>,
+) -> Result<web::Json<Vec<ExperimentPipelineBlueprint>>, SeqError> {
+    let experiment_id: i32 = id.into_inner();
+    let mut connection = app_config.database_connection()?;
+    let mut experiment_pipelines = Vec::new();
+    for pipeline in pipelines.pipelines() {
+        let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
+        experiment_pipelines
+            .push(ExperimentPipelineBlueprint::from_internal(pipeline.pipeline(), values));
+    }
+    Ok(web::Json(experiment_pipelines))
 }
 
 #[cfg(test)]

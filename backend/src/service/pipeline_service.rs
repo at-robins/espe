@@ -330,6 +330,10 @@ mod tests {
         // Use a reference to the context, so the context is not dropped early
         // and messes up test context folder deletion.
         let app_config: Arc<Configuration> = Arc::new((&context).into());
+        // Remove the folder that was automatically create with the test context.
+        if PathBuf::from(context.pipeline_folder()).exists() {
+            std::fs::remove_dir_all(context.pipeline_folder()).unwrap();
+        }
         let pipelines = load_pipelines(app_config);
         // The pipeline folder does not exist.
         assert!(pipelines.is_err());
@@ -342,6 +346,10 @@ mod tests {
         // Use a reference to the context, so the context is not dropped early
         // and messes up test context folder deletion.
         let app_config: Arc<Configuration> = Arc::new((&context).into());
+        // Remove the folder that was automatically create with the test context.
+        if PathBuf::from(context.pipeline_folder()).exists() {
+            std::fs::remove_dir_all(context.pipeline_folder()).unwrap();
+        }
         std::fs::create_dir_all(context.pipeline_folder()).unwrap();
         let pipelines = load_pipelines(app_config).unwrap();
         assert!(pipelines.is_empty());

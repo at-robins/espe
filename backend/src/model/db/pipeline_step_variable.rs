@@ -102,19 +102,19 @@ impl NewPipelineStepVariable {
     /// * `pipeline_step_id` - the ID of the pipeline step the variable belongs to
     /// * `variable_id` - the id of the variable
     /// * `variable_value` - the value of the variable
-    pub fn new(
+    pub fn new<Q: Into<String>, R: Into<String>, S: Into<String>, T: Into<String>>(
         experiment_id: i32,
-        pipeline_id: String,
-        pipeline_step_id: String,
-        variable_id: String,
-        variable_value: String,
+        pipeline_id: Q,
+        pipeline_step_id: R,
+        variable_id: S,
+        variable_value: T,
     ) -> Self {
         Self {
             experiment_id,
-            pipeline_id,
-            pipeline_step_id,
-            variable_id,
-            variable_value: Some(variable_value),
+            pipeline_id: pipeline_id.into(),
+            pipeline_step_id: pipeline_step_id.into(),
+            variable_id: variable_id.into(),
+            variable_value: Some(variable_value.into()),
             creation_time: Utc::now().naive_utc(),
         }
     }

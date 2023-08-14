@@ -2,8 +2,11 @@ use super::*;
 
 use crate::{
     application::config::Configuration,
-    model::db::experiment::Experiment,
-    test_utility::{create_test_app, TestContext},
+    model::{
+        db::{experiment::Experiment, pipeline_step_variable::NewPipelineStepVariable},
+        internal::pipeline_blueprint::PipelineStepVariableCategory,
+    },
+    test_utility::{create_test_app, TestContext, TEST_RESOURCES_PATH},
 };
 
 use actix_web::{http::StatusCode, test};
@@ -190,6 +193,96 @@ async fn test_list_experiment() {
         assert_eq!(fetched_data[i].pipeline_id, new_records[i].pipeline_id);
         assert_eq!(fetched_data[i].creation_time, new_records[i].creation_time);
     }
+}
+
+#[actix_web::test]
+async fn test_get_experiment_pipelines() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let id = 42;
+    let new_experiment_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some("Dummy ID".to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let new_variable_records = vec![
+        NewPipelineStepVariable::new(id, "testing_pipeline", "fastqc", "number", "123"),
+        NewPipelineStepVariable::new(id, "testing_pipeline", "fastqc", "string", "abc"),
+    ];
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&new_variable_records)
+        .execute(&mut connection)
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/experiments/{}/pipelines", id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let fetched_data: Vec<ExperimentPipelineBlueprint> = test::read_body_json(resp).await;
+    format!("{}/pipelines", TEST_RESOURCES_PATH);
+    assert_eq!(fetched_data.len(), 1);
+    let pipeline = &fetched_data[0];
+    assert_eq!(pipeline.id(), "testing_pipeline");
+    assert_eq!(pipeline.name(), "Testing pipeline");
+    assert_eq!(pipeline.description(), "This pipeline is for testing purposes.");
+    assert_eq!(pipeline.steps().len(), 1);
+    let step = &pipeline.steps()[0];
+    assert_eq!(step.id(), "fastqc");
+    assert_eq!(step.name(), "FastQC");
+    assert_eq!(step.description(), "Performs a quality control.");
+    assert_eq!(step.container(), "fastqc");
+    assert_eq!(step.dependencies(), &vec!["123", "456"]);
+    assert_eq!(step.variables().len(), 5);
+    assert_eq!(step.variables()[0].id(), "bool");
+    assert_eq!(step.variables()[0].name(), "Boolean");
+    assert_eq!(step.variables()[0].description(), "A boolean checkbox.");
+    assert_eq!(step.variables()[0].category(), &PipelineStepVariableCategory::Boolean);
+    assert_eq!(step.variables()[0].required(), &Some(true));
+    assert_eq!(step.variables()[0].value(), &None);
+    assert_eq!(step.variables()[1].id(), "global");
+    assert_eq!(step.variables()[1].name(), "Global");
+    assert_eq!(step.variables()[1].description(), "A global data reference.");
+    assert_eq!(step.variables()[1].category(), &PipelineStepVariableCategory::Global);
+    assert_eq!(step.variables()[1].required(), &Some(false));
+    assert_eq!(step.variables()[1].value(), &None);
+    assert_eq!(step.variables()[2].id(), "number");
+    assert_eq!(step.variables()[2].name(), "Number");
+    assert_eq!(step.variables()[2].description(), "A number field.");
+    assert_eq!(step.variables()[2].category(), &PipelineStepVariableCategory::Number);
+    assert_eq!(step.variables()[2].required(), &None);
+    assert_eq!(step.variables()[2].value(), &Some("123".to_string()));
+    assert_eq!(step.variables()[3].id(), "option");
+    assert_eq!(step.variables()[3].name(), "Option");
+    assert_eq!(step.variables()[3].description(), "An option dropdown.");
+    if let PipelineStepVariableCategory::Option(options) = step.variables()[3].category() {
+        assert_eq!(options.len(), 2);
+        assert_eq!(options[0].name(), "Option 1");
+        assert_eq!(options[0].value(), "option1");
+        assert_eq!(options[1].name(), "Option 2");
+        assert_eq!(options[1].value(), "option2");
+    } else {
+        panic!("Not an option variable!");
+    }
+    assert_eq!(step.variables()[3].required(), &None);
+    assert_eq!(step.variables()[3].value(), &None);
+    assert_eq!(step.variables()[4].id(), "string");
+    assert_eq!(step.variables()[4].name(), "String");
+    assert_eq!(step.variables()[4].description(), "A string text field.");
+    assert_eq!(step.variables()[4].category(), &PipelineStepVariableCategory::String);
+    assert_eq!(step.variables()[4].required(), &None);
+    assert_eq!(step.variables()[4].value(), &Some("abc".to_string()));
 }
 
 #[actix_web::test]
