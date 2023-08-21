@@ -52,7 +52,7 @@ import {
   symOutlinedSync,
 } from "@quasar/extras/material-symbols-outlined";
 import { type ErrorResponse } from "@/scripts/types";
-import { PipelineBlueprint } from "@/scripts/pipeline-blueprint";
+import { type PipelineBlueprint } from "@/scripts/pipeline-blueprint";
 import { error_to_string } from "@/scripts/utilities";
 
 const props = defineProps({
@@ -72,6 +72,10 @@ const pipelineErrorMessage = ref("");
 const pipelineModel: Ref<PipelineBlueprint | null> = ref(null);
 const pipelineOptions: Ref<Array<PipelineBlueprint>> = ref([]);
 
+const emit = defineEmits<{
+  (event: "update:selectedPipeline", value: PipelineBlueprint | null): void;
+}>();
+
 onMounted(() => {
   loadPipelineDetails();
 });
@@ -83,13 +87,16 @@ function loadPipelineDetails() {
   isLoading.value = true;
   pipelineErrorMessage.value = "";
   axios
-    .get("/api/pipelines/blueprints")
+    .get("/api/" + props.endpointType + "/" + props.entityId + "/pipelines")
     .then((response) => {
       pipelineOptions.value = response.data;
       const selectedPipeline = pipelineOptions.value.find(
         (pipeline) => pipeline.id === props.pipelineId
       );
       pipelineModel.value = selectedPipeline ? selectedPipeline : null;
+    })
+    .then(() => {
+      emit("update:selectedPipeline", pipelineModel.value);
     })
     .catch((error: ErrorResponse) => {
       pipelineOptions.value = [];
@@ -118,6 +125,9 @@ function updatePipeline() {
         formData,
         config
       )
+      .then(() => {
+        emit("update:selectedPipeline", pipelineModel.value);
+      })
       .catch((error) => {
         pipelineErrorMessage.value = error_to_string(error.response.data);
       })

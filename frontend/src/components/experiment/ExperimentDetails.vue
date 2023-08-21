@@ -28,6 +28,14 @@
               :pipeline-id="experiment.pipelineId"
               :entity-id="experiment.id"
               endpoint-type="experiments"
+              @update:selected-pipeline="selectedPipeline = $event"
+            />
+          </q-card-section>
+          <q-card-section v-if="selectedPipeline">
+            <entity-pipeline-variables
+              :pipeline="selectedPipeline"
+              :entity-id="experiment.id"
+              endpoint-type="experiments"
             />
           </q-card-section>
           <q-card-section>
@@ -77,6 +85,8 @@ import EntityComment from "../shared/EntityComment.vue";
 import EntityTitle from "../shared/EntityTitle.vue";
 import { symOutlinedAccountTree } from "@quasar/extras/material-symbols-outlined";
 import EntityPipeline from "../shared/EntityPipeline.vue";
+import EntityPipelineVariables from "../shared/EntityPipelineVariables.vue";
+import type { PipelineBlueprint } from "@/scripts/pipeline-blueprint";
 
 const files: Ref<Array<FileDetails>> = ref([]);
 const experiment: Ref<ExperimentDetails | null> = ref(null);
@@ -85,6 +95,8 @@ const isLoadingDetails = ref(false);
 const loadingError: Ref<ErrorResponse | null> = ref(null);
 const deletionError: Ref<ErrorResponse | null> = ref(null);
 const showDeletionError = ref(false);
+const selectedPipeline: Ref<PipelineBlueprint | null> = ref(null);
+
 
 const props = defineProps({
   id: { type: String, required: true },
