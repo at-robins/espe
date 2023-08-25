@@ -51,9 +51,9 @@ table! {
 table! {
     pipeline_step_variable (id) {
         id -> Integer,
+        experiment_id -> Integer,
         pipeline_id -> Text,
         pipeline_step_id -> Text,
-        experiment_id -> Integer,
         variable_id -> Text,
         variable_value -> Nullable<Text>,
         creation_time -> Timestamp,

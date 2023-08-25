@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::schema::pipeline_step_variable::{self};
 use chrono::{NaiveDateTime, Utc};
 use diesel::{
-    BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, QueryDsl, Queryable,
-    RunQueryDsl, SelectableHelper, SqliteConnection,
+    BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, OptionalExtension,
+    QueryDsl, Queryable, RunQueryDsl, SelectableHelper, SqliteConnection,
 };
 use getset::Getters;
 
@@ -23,6 +23,37 @@ pub struct PipelineStepVariable {
 }
 
 impl PipelineStepVariable {
+    /// Returns the variable with the specified IDs if present in the database.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment the variable belongs to
+    /// * `pipeline_id` - the ID of the pipeline the variable belongs to
+    /// * `pipeline_step_id` - the ID of the pipeline step the variable belongs to
+    /// * `variable_id` - the ID of the variable
+    /// * `connection` - the database connection
+    pub fn get<T: Into<String>, S: Into<String>, R: Into<String>>(
+        experiment_id: i32,
+        pipeline_id: T,
+        pipeline_step_id: S,
+        variable_id: R,
+        connection: &mut SqliteConnection,
+    ) -> Result<Option<PipelineStepVariable>, diesel::result::Error> {
+        crate::schema::pipeline_step_variable::table
+            .filter(
+                crate::schema::pipeline_step_variable::experiment_id
+                    .eq(experiment_id)
+                    .and(crate::schema::pipeline_step_variable::pipeline_id.eq(pipeline_id.into()))
+                    .and(
+                        crate::schema::pipeline_step_variable::pipeline_step_id
+                            .eq(pipeline_step_id.into()),
+                    )
+                    .and(crate::schema::pipeline_step_variable::variable_id.eq(variable_id.into())),
+            )
+            .first(connection)
+            .optional()
+    }
+
     /// Returns all variable values belonging to the specified experiment and pipeline.
     /// The keys of the returned map is a concatenation of pipeline step ID and variable ID.
     /// The values of the map are the string representation of the variable value.
@@ -102,7 +133,7 @@ impl NewPipelineStepVariable {
     /// * `pipeline_step_id` - the ID of the pipeline step the variable belongs to
     /// * `variable_id` - the id of the variable
     /// * `variable_value` - the value of the variable
-    pub fn new<Q: Into<String>, R: Into<String>, S: Into<String>, T: Into<String>>(
+    pub fn new<Q: Into<String>, R: Into<String>, S: Into<String>, T: Into<Option<String>>>(
         experiment_id: i32,
         pipeline_id: Q,
         pipeline_step_id: R,
@@ -114,7 +145,7 @@ impl NewPipelineStepVariable {
             pipeline_id: pipeline_id.into(),
             pipeline_step_id: pipeline_step_id.into(),
             variable_id: variable_id.into(),
-            variable_value: Some(variable_value.into()),
+            variable_value: variable_value.into(),
             creation_time: Utc::now().naive_utc(),
         }
     }
@@ -248,6 +279,84 @@ mod tests {
                 &mut connection
             )
             .unwrap()
+        );
+    }
+    #[test]
+    fn test_get() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let mut connection = context.get_connection();
+        // Create dummy experiments.
+        let experiment = NewExperiment::new("0".to_string());
+        let experiment_id: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        // Dummy variable setup.
+        let pipeline_variable_row_id: i32 = 42;
+        let pipeline_id = "Dummy pipeline";
+        let pipeline_step_id = "Dummy step";
+        let variable_id = "Dummy variable";
+        let mut pipeline_variable = PipelineStepVariable {
+            id: pipeline_variable_row_id,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: pipeline_step_id.to_string(),
+            variable_id: variable_id.to_string(),
+            variable_value: Some("Dummy value".to_string()),
+            creation_time: chrono::Utc::now().naive_local(),
+        };
+        assert!(PipelineStepVariable::get(
+            experiment_id,
+            pipeline_id,
+            pipeline_step_id,
+            variable_id,
+            &mut connection
+        )
+        .unwrap()
+        .is_none());
+        // Setting the variable
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&pipeline_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert_eq!(
+            &PipelineStepVariable::get(
+                experiment_id,
+                pipeline_id,
+                pipeline_step_id,
+                variable_id,
+                &mut connection
+            )
+            .unwrap()
+            .unwrap(),
+            &pipeline_variable
+        );
+        // Clearing the variable value.
+        pipeline_variable.variable_value = None;
+        diesel::update(
+            crate::schema::pipeline_step_variable::table
+                .filter(crate::schema::pipeline_step_variable::id.eq(pipeline_variable.id)),
+        )
+        .set(
+            crate::schema::pipeline_step_variable::variable_value
+                .eq(pipeline_variable.variable_value.clone()),
+        )
+        .execute(&mut connection)
+        .unwrap();
+        assert_eq!(
+            &PipelineStepVariable::get(
+                experiment_id,
+                pipeline_id,
+                pipeline_step_id,
+                variable_id,
+                &mut connection
+            )
+            .unwrap()
+            .unwrap(),
+            &pipeline_variable
         );
     }
 }

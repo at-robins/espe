@@ -38,9 +38,9 @@ CREATE TABLE global_data (
 );
 CREATE TABLE pipeline_step_variable (
     id INTEGER PRIMARY KEY NOT NULL,
+    experiment_id INTEGER NOT NULL,
     pipeline_id TEXT NOT NULL,
     pipeline_step_id TEXT NOT NULL,
-    experiment_id INTEGER NOT NULL,
     variable_id TEXT NOT NULL,
     variable_value TEXT,
     creation_time DATETIME NOT NULL,

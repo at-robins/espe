@@ -5,9 +5,14 @@ use crate::{
     },
     diesel::RunQueryDsl,
     model::{
-        db::experiment::{Experiment, NewExperiment},
+        db::{
+            experiment::{Experiment, NewExperiment},
+            pipeline_step_variable::{NewPipelineStepVariable, PipelineStepVariable},
+        },
         exchange::{
-            experiment_details::ExperimentDetails, experiment_pipeline::ExperimentPipelineBlueprint,
+            experiment_details::ExperimentDetails,
+            experiment_pipeline::ExperimentPipelineBlueprint,
+            pipeline_variable_upload::PipelineStepVariableUpload,
         },
     },
     service::{
@@ -182,6 +187,66 @@ pub async fn get_experiment_pipelines(
             .push(ExperimentPipelineBlueprint::from_internal(pipeline.pipeline(), values));
     }
     Ok(web::Json(experiment_pipelines))
+}
+
+pub async fn post_experiment_pipeline_variable(
+    app_config: web::Data<Configuration>,
+    pipelines: web::Data<LoadedPipelines>,
+    experiment_id: web::Path<i32>,
+    new_variable: web::Json<PipelineStepVariableUpload>,
+) -> Result<HttpResponse, SeqError> {
+    let experiment_id: i32 = experiment_id.into_inner();
+    let new_variable: PipelineStepVariableUpload = new_variable.into_inner();
+    if !pipelines.has_variable(
+        &new_variable.pipeline_id,
+        &new_variable.pipeline_step_id,
+        &new_variable.variable_id,
+    ) {
+        return Err(SeqError::new(
+            "Not Found",
+            SeqErrorType::NotFoundError,
+            format!(
+                "No pipeline variable with corresponding properties is currently loaded, thus variable {:?} cannot be inserted.",
+                new_variable
+            ),
+            "The variable is invalid.",
+        ));
+    }
+    let mut connection = app_config.database_connection()?;
+    Experiment::exists_err(experiment_id, &mut connection)?;
+    connection.immediate_transaction(|connection| {
+        if let Some(existing_variable) = PipelineStepVariable::get(
+            experiment_id,
+            &new_variable.pipeline_id,
+            &new_variable.pipeline_step_id,
+            &new_variable.variable_id,
+            connection,
+        )? {
+            // Update if the variable already exists.
+            diesel::update(
+                crate::schema::pipeline_step_variable::table
+                    .filter(crate::schema::pipeline_step_variable::id.eq(existing_variable.id)),
+            )
+            .set(
+                crate::schema::pipeline_step_variable::variable_value
+                    .eq(new_variable.variable_value),
+            )
+            .execute(connection)
+        } else {
+            // Insert if the variable does not exist.
+            let new_variable = NewPipelineStepVariable::new(
+                experiment_id,
+                new_variable.pipeline_id,
+                new_variable.pipeline_step_id,
+                new_variable.variable_id,
+                new_variable.variable_value,
+            );
+            diesel::insert_into(crate::schema::pipeline_step_variable::table)
+                .values(&new_variable)
+                .execute(connection)
+        }
+    })?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[cfg(test)]

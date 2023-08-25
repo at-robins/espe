@@ -52,6 +52,35 @@ impl LoadedPipelines {
             .map(|value| Arc::clone(value))
     }
 
+    /// Returns ```true``` if the specified variable exists in the loaded pipelines.
+    ///
+    /// # Parameters
+    ///
+    /// * `pipeline_id` - the ID of the pipeline the variable belongs to
+    /// * `pipeline_step_id` - the ID of the pipeline step the variable belongs to
+    /// * `variable_id` - the ID of the variable
+    pub fn has_variable<T: AsRef<str>, R: AsRef<str>, S: AsRef<str>>(
+        &self,
+        pipeline_id: T,
+        pipeline_step_id: R,
+        variable_id: S,
+    ) -> bool {
+        if let Some(pipeline) = self.get(pipeline_id) {
+            pipeline
+                .pipeline()
+                .steps()
+                .iter()
+                .filter(|step| step.id() == pipeline_step_id.as_ref())
+                .any(|step| {
+                    step.variables()
+                        .iter()
+                        .any(|variable| variable.id() == variable_id.as_ref())
+                })
+        } else {
+            false
+        }
+    }
+
     /// Returns all loaded pipelines.
     pub fn pipelines(&self) -> Vec<Arc<ContextualisedPipelineBlueprint>> {
         self.pipeline_map
@@ -420,5 +449,30 @@ mod tests {
         assert_eq!(step.variables()[4].description(), "A string text field.");
         assert_eq!(step.variables()[4].category(), &PipelineStepVariableCategory::String);
         assert_eq!(step.variables()[4].required(), &None);
+    }
+
+    #[test]
+    #[serial]
+    fn test_loaded_pipelines_has_varaible() {
+        let context = TestContext::new();
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let app_config: web::Data<Configuration> = web::Data::new(Configuration::new(
+            context.database_url(),
+            "info",
+            "127.0.0.1",
+            "8080",
+            context.context_folder(),
+            format!("{}/pipelines", TEST_RESOURCES_PATH),
+        ));
+        let pipelines = LoadedPipelines::new(app_config).unwrap();
+        assert!(pipelines.has_variable("testing_pipeline", "fastqc", "bool"));
+        assert!(pipelines.has_variable("testing_pipeline", "fastqc", "global"));
+        assert!(pipelines.has_variable("testing_pipeline", "fastqc", "number"));
+        assert!(pipelines.has_variable("testing_pipeline", "fastqc", "option"));
+        assert!(pipelines.has_variable("testing_pipeline", "fastqc", "string"));
+        assert!(!pipelines.has_variable("invalid_pipeline", "fastqc", "string"));
+        assert!(!pipelines.has_variable("testing_pipeline", "invalid_step", "string"));
+        assert!(!pipelines.has_variable("testing_pipeline", "fastqc", "invalid_variable"));
     }
 }
