@@ -102,8 +102,8 @@ const props = defineProps({
     required: true,
   },
   globalOptions: {
-    type: Array as PropType<GlobalDataDetails[] | undefined>,
-    default: undefined,
+    type: Array as PropType<GlobalDataDetails[]>,
+    default: () => [],
     required: false,
   },
 });
@@ -114,15 +114,34 @@ const numberModel: Ref<number | null> = ref(null);
 const optionModel: Ref<PipelineStepBlueprintVariableOption | null> = ref(null);
 const stringModel: Ref<string | null> = ref(null);
 
-watch(props.pipelineVariable, (newValue) => {
+watch(
+  () => props.pipelineVariable,
+  (newValue) => {
+    setVariableModel(newValue);
+  },
+  { immediate: true }
+);
+
+watch(
+  () => props.globalOptions,
+  () => {
+    setVariableModel(props.pipelineVariable);
+  }
+);
+
+const emit = defineEmits<{
+  (event: "update:modelValue", value: string | null): void;
+}>();
+
+function setVariableModel(newValue: PipelineStepBlueprintVariable) {
   if (isBoolean(newValue)) {
-    if (newValue === undefined || newValue.value === null) {
+    if (newValue.value === undefined || newValue.value === null) {
       booleanModel.value = null;
     } else {
       booleanModel.value = newValue.value?.toLowerCase() === "true";
     }
   } else if (isGlobal(newValue)) {
-    if (newValue === undefined || newValue.value === null) {
+    if (newValue.value === undefined || newValue.value === null) {
       globalModel.value = null;
     } else {
       const query = props.globalOptions?.find(
@@ -131,13 +150,13 @@ watch(props.pipelineVariable, (newValue) => {
       globalModel.value = query === undefined ? null : query;
     }
   } else if (isNumber(newValue)) {
-    if (newValue === undefined || newValue.value === null) {
+    if (newValue.value === undefined || newValue.value === null) {
       numberModel.value = null;
     } else {
       numberModel.value = Number(newValue.value);
     }
   } else if (isOption(newValue)) {
-    if (newValue === undefined || newValue.value === null) {
+    if (newValue.value === undefined || newValue.value === null) {
       optionModel.value = null;
     } else {
       const query = contentAsOptions(newValue.category).find(
@@ -146,17 +165,13 @@ watch(props.pipelineVariable, (newValue) => {
       optionModel.value = query === undefined ? null : query;
     }
   } else if (isString(newValue)) {
-    if (newValue === undefined || newValue.value === null) {
+    if (newValue.value === undefined || newValue.value === null) {
       stringModel.value = null;
     } else {
       stringModel.value = newValue.value === undefined ? null : newValue.value;
     }
   }
-});
-
-const emit = defineEmits<{
-  (event: "update:modelValue", value: string | null): void;
-}>();
+}
 
 function updateModelValueBooleanNumberString(
   newValue: boolean | number | string | null

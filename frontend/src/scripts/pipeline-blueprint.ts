@@ -33,6 +33,13 @@ export type PipelineStepBlueprintVariableOption = {
   value: string;
 };
 
+export type PipelineStepVariableUpload = {
+  pipelineId: string;
+  pipelineStepId: string;
+  variableId: string;
+  variableValue: string | null | undefined;
+};
+
 /**
  * Returns ```true``` if the variable is a boolean checkbox.
  *

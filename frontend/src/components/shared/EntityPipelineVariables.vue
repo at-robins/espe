@@ -47,6 +47,14 @@
                 <entity-pipeline-variable
                   :pipeline-variable="pipelineVariable"
                   :global-options="loadedGlobalRepos"
+                  @update:model-value="
+                    uploadVariable(
+                      pipeline.id,
+                      pipelineStep.id,
+                      pipelineVariable.id,
+                      $event
+                    )
+                  "
                 />
               </div>
               <q-separator
@@ -70,13 +78,14 @@ import { symOutlinedVariables } from "@quasar/extras/material-symbols-outlined";
 import {
   hasRequiredVariable,
   type PipelineBlueprint,
+  type PipelineStepVariableUpload,
 } from "@/scripts/pipeline-blueprint";
 import EntityPipelineVariable from "@/components/shared/EntityPipelineVariable.vue";
 import type { ErrorResponse, GlobalDataDetails } from "@/scripts/types";
 import axios from "axios";
 import { matPriorityHigh } from "@quasar/extras/material-icons";
 
-defineProps({
+const props = defineProps({
   pipeline: {
     type: Object as PropType<PipelineBlueprint>,
     required: true,
@@ -112,6 +121,36 @@ function loadGlobalDataDetails() {
     })
     .finally(() => {
       isLoadingGlobals.value = false;
+    });
+}
+
+function uploadVariable(
+  pipelineId: string,
+  pipelineStepId: string,
+  variableId: string,
+  variableValue: string | null
+) {
+  const variableUpload: PipelineStepVariableUpload = {
+    pipelineId,
+    pipelineStepId,
+    variableId,
+    variableValue,
+  };
+  const formData = JSON.stringify(variableUpload);
+  const config = {
+    headers: {
+      "Content-Type": "application/json",
+    },
+  };
+  axios
+    .post(
+      "/api/" + props.endpointType + "/" + props.entityId + "/variable",
+      formData,
+      config
+    )
+    .catch((error) => {
+      loadingError.value = error.response.data;
+      showLoadingError.value = true;
     });
 }
 </script>
