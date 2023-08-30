@@ -925,3 +925,209 @@ async fn test_post_experiment_pipeline_variable_invalid_variable_id() {
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
+#[actix_web::test]
+async fn test_post_execute_experiment() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id: i32 = 42;
+    let pipeline_id = "testing_pipeline";
+    let new_experiment_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let required_variable = NewPipelineStepVariable::new(
+        experiment_id,
+        pipeline_id,
+        "fastqc",
+        "bool",
+        Some("false".to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&required_variable)
+        .execute(&mut connection)
+        .unwrap();
+    assert!(ExperimentExecution::get_by_experiment(experiment_id, &mut connection)
+        .unwrap()
+        .is_empty());
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let execution_steps =
+        ExperimentExecution::get_by_experiment(experiment_id, &mut connection).unwrap();
+    assert_eq!(execution_steps.len(), 1);
+    assert_eq!(execution_steps[0].experiment_id, experiment_id);
+    assert_eq!(execution_steps[0].pipeline_id, pipeline_id);
+    assert_eq!(execution_steps[0].pipeline_step_id, "fastqc");
+}
+
+#[actix_web::test]
+async fn test_post_execute_experiment_unset_pipeline() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id: i32 = 42;
+    let pipeline_id = "testing_pipeline";
+    let new_experiment_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let required_variable = NewPipelineStepVariable::new(
+        experiment_id,
+        pipeline_id,
+        "fastqc",
+        "bool",
+        Some("false".to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&required_variable)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_post_execute_experiment_invalid_pipeline() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id: i32 = 42;
+    let pipeline_id = "testing_pipeline";
+    let new_experiment_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(format!("{}_invalid", pipeline_id)),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let required_variable = NewPipelineStepVariable::new(
+        experiment_id,
+        pipeline_id,
+        "fastqc",
+        "bool",
+        Some("false".to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&required_variable)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+
+#[actix_web::test]
+async fn test_post_execute_experiment_unset_required_variable() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id: i32 = 42;
+    let pipeline_id = "testing_pipeline";
+    let new_experiment_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+
+#[actix_web::test]
+async fn test_post_execute_experiment_already_running() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id: i32 = 42;
+    let pipeline_id = "testing_pipeline";
+    let new_experiment_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let required_variable = NewPipelineStepVariable::new(
+        experiment_id,
+        pipeline_id,
+        "fastqc",
+        "bool",
+        Some("false".to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&required_variable)
+        .execute(&mut connection)
+        .unwrap();
+    // First execution should run normally.
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    // Second execution should fail since the experiment pipeline is already scheduled for execution.
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}

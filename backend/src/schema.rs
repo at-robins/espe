@@ -10,6 +10,19 @@ table! {
 }
 
 table! {
+    experiment_execution (id) {
+        id -> Integer,
+        experiment_id -> Integer,
+        pipeline_id -> Text,
+        pipeline_step_id -> Text,
+        execution_status -> Text,
+        start_time -> Nullable<Timestamp>,
+        end_time -> Nullable<Timestamp>,
+        creation_time -> Timestamp,
+    }
+}
+
+table! {
     global_data (id) {
         id -> Integer,
         global_data_name -> Text,
@@ -30,10 +43,12 @@ table! {
     }
 }
 
+joinable!(experiment_execution -> experiment (experiment_id));
 joinable!(pipeline_step_variable -> experiment (experiment_id));
 
 allow_tables_to_appear_in_same_query!(
     experiment,
+    experiment_execution,
     global_data,
     pipeline_step_variable,
 );

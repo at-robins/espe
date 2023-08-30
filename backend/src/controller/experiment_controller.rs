@@ -7,6 +7,7 @@ use crate::{
     model::{
         db::{
             experiment::{Experiment, NewExperiment},
+            experiment_execution::{ExperimentExecution, NewExperimentExecution},
             pipeline_step_variable::{NewPipelineStepVariable, PipelineStepVariable},
         },
         exchange::{
@@ -247,6 +248,91 @@ pub async fn post_experiment_pipeline_variable(
         }
     })?;
     Ok(HttpResponse::Ok().finish())
+}
+
+pub async fn post_execute_experiment(
+    app_config: web::Data<Configuration>,
+    experiment_id: web::Path<i32>,
+    pipelines: web::Data<LoadedPipelines>,
+) -> Result<HttpResponse, SeqError> {
+    let experiment_id: i32 = experiment_id.into_inner();
+    let mut connection = app_config.database_connection()?;
+    // Error if the experiment was already submitted for execution.
+    if ExperimentExecution::has_experiment_execution_entries(experiment_id, &mut connection)? {
+        return Err(SeqError::new(
+            "Invalid run",
+            SeqErrorType::BadRequestError,
+            format!("The experiment {} was already executed.", experiment_id),
+            "The requested run is invalid.",
+        ));
+    }
+    if let Some(pipeline_id) = Experiment::get(experiment_id, &mut connection)?.pipeline_id {
+        if let Some(pipeline) = pipelines.get(&pipeline_id) {
+            let pipeline = pipeline.pipeline();
+            let experiment_variables = PipelineStepVariable::get_values_by_experiment_and_pipeline(
+                experiment_id,
+                pipeline_id,
+                &mut connection,
+            )?;
+            let mut execution_steps: Vec<NewExperimentExecution> =
+                Vec::with_capacity(pipeline.steps().len());
+            for step in pipeline.steps() {
+                execution_steps.push(NewExperimentExecution::new(
+                    experiment_id,
+                    pipeline.id(),
+                    step.id(),
+                ));
+                for variable in step.variables() {
+                    if variable.required().unwrap_or(false) {
+                        // Error if required variables are not set.
+                        if !experiment_variables.contains_key(&format!(
+                            "{}{}",
+                            step.id(),
+                            variable.id()
+                        )) {
+                            return Err(SeqError::new(
+                                "Invalid run",
+                                SeqErrorType::BadRequestError,
+                                format!("The experiment {} is missing the required variable with pipeline id {} step id {} and variable id {}.", experiment_id, pipeline.id(), step.id(), variable.id()),
+                                "The requested run parameters are invalid.",
+                            ));
+                        }
+                    }
+                }
+            }
+            diesel::insert_into(crate::schema::experiment_execution::table)
+                .values(&execution_steps)
+                .execute(&mut connection)?;
+            log::info!(
+                "Submitted experiment {} with pipeline {} for execution.",
+                experiment_id,
+                pipeline.id()
+            );
+            Ok(HttpResponse::Ok().finish())
+        } else {
+            // Error if the pipeline is not loaded.
+            Err(SeqError::new(
+                "Invalid run",
+                SeqErrorType::BadRequestError,
+                format!(
+                    "The selected pipeline {} for experiment {} is not loaded.",
+                    pipeline_id, experiment_id
+                ),
+                "The requested run parameters are invalid.",
+            ))
+        }
+    } else {
+        // Error if no pipeline was selected.
+        Err(SeqError::new(
+            "Invalid run",
+            SeqErrorType::BadRequestError,
+            format!(
+                "No pipeline was selected for experiment {}, so i cannot be run.",
+                experiment_id
+            ),
+            "The requested run parameters are invalid.",
+        ))
+    }
 }
 
 #[cfg(test)]
