@@ -57,14 +57,32 @@
               />
             </div>
           </q-card-section>
+          <q-card-section>
+            <div class="row">
+              <div class="q-ma-md">
+                <q-btn
+                  :icon="matPlayCircle"
+                  label="Submit"
+                  color="positive"
+                  :loading="isSubmitting"
+                  @click="submitExperiment"
+                >
+                  <q-tooltip>
+                    Submit the experiment for execution with the specified
+                    pipeline.
+                  </q-tooltip>
+                </q-btn>
+              </div>
+            </div>
+          </q-card-section>
         </div>
       </div>
       <div v-else>
         <error-popup :error-response="loadingError" />
       </div>
     </q-card>
-    <q-dialog v-model="showDeletionError" v-if="deletionError">
-      <error-popup :error-response="deletionError" />
+    <q-dialog v-model="showServerError" v-if="serverError">
+      <error-popup :error-response="serverError" />
     </q-dialog>
   </div>
 </template>
@@ -87,16 +105,17 @@ import { symOutlinedAccountTree } from "@quasar/extras/material-symbols-outlined
 import EntityPipeline from "../shared/EntityPipeline.vue";
 import EntityPipelineVariables from "../shared/EntityPipelineVariables.vue";
 import type { PipelineBlueprint } from "@/scripts/pipeline-blueprint";
+import { matPlayCircle } from "@quasar/extras/material-icons";
 
 const files: Ref<Array<FileDetails>> = ref([]);
 const experiment: Ref<ExperimentDetails | null> = ref(null);
 const fileNodes: Ref<Array<FileTreeNode>> = ref([]);
 const isLoadingDetails = ref(false);
 const loadingError: Ref<ErrorResponse | null> = ref(null);
-const deletionError: Ref<ErrorResponse | null> = ref(null);
-const showDeletionError = ref(false);
+const serverError: Ref<ErrorResponse | null> = ref(null);
+const showServerError = ref(false);
 const selectedPipeline: Ref<PipelineBlueprint | null> = ref(null);
-
+const isSubmitting = ref(false);
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -260,8 +279,8 @@ function deletePath(node: FileTreeNode) {
         data: JSON.stringify(pathUpload),
       })
       .catch((error) => {
-        deletionError.value = error.response.data;
-        showDeletionError.value = true;
+        serverError.value = error.response.data;
+        showServerError.value = true;
       });
   }
 }
@@ -278,8 +297,23 @@ function deleteAll() {
       data: JSON.stringify(pathUpload),
     })
     .catch((error) => {
-      deletionError.value = error.response.data;
-      showDeletionError.value = true;
+      serverError.value = error.response.data;
+      showServerError.value = true;
     });
+}
+
+function submitExperiment() {
+  if (!isSubmitting.value) {
+    isSubmitting.value = true;
+    axios
+      .post("/api/experiments/" + props.id)
+      .catch((error) => {
+        serverError.value = error.response.data;
+        showServerError.value = true;
+      })
+      .finally(() => {
+        isSubmitting.value = false;
+      });
+  }
 }
 </script>

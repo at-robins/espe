@@ -4,7 +4,8 @@ use crate::{
 };
 use chrono::{NaiveDateTime, Utc};
 use diesel::{
-    ExpressionMethods, Identifiable, Insertable, QueryDsl, Queryable, RunQueryDsl, SqliteConnection,
+    BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, QueryDsl, Queryable,
+    RunQueryDsl, SqliteConnection,
 };
 use getset::Getters;
 
@@ -130,6 +131,22 @@ impl ExperimentExecution {
             .load::<ExperimentExecution>(connection)
     }
 
+    /// Returns all entities with the specified [`ExecutionStatus`].
+    ///
+    /// # Parameters
+    ///
+    /// * `status` - the [`ExecutionStatus`]
+    /// * `connection` - the database connection
+    pub fn get_by_status(
+        status: ExecutionStatus,
+        connection: &mut SqliteConnection,
+    ) -> Result<Vec<ExperimentExecution>, diesel::result::Error> {
+        let status: String = status.into();
+        crate::schema::experiment_execution::table
+            .filter(crate::schema::experiment_execution::execution_status.eq(status))
+            .load::<ExperimentExecution>(connection)
+    }
+
     /// Deletes all entities that belong to the specified experiment.
     ///
     /// # Parameters
@@ -155,6 +172,36 @@ impl ExperimentExecution {
         connection: &mut SqliteConnection,
     ) -> Result<Vec<ExperimentExecution>, diesel::result::Error> {
         crate::schema::experiment_execution::table.load::<ExperimentExecution>(connection)
+    }
+
+    /// Sets the [`ExecutionStatus`] of all steps belonging to the specified experiment that are not finished.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiemnt_id` - the ID of the experiment
+    /// * `connection` - the database connection
+    pub fn update_scheduled_status_by_experiment(
+        experiment_id: i32,
+        status: ExecutionStatus,
+        connection: &mut SqliteConnection,
+    ) -> Result<usize, diesel::result::Error> {
+        let status: String = status.into();
+        let status_not_finished: Vec<String> = vec![
+            ExecutionStatus::Running.into(),
+            ExecutionStatus::Waiting.into(),
+        ];
+        diesel::update(
+            crate::schema::experiment_execution::table.filter(
+                crate::schema::experiment_execution::experiment_id
+                    .eq(experiment_id)
+                    .and(
+                        crate::schema::experiment_execution::execution_status
+                            .eq_any(status_not_finished),
+                    ),
+            ),
+        )
+        .set(crate::schema::experiment_execution::execution_status.eq(status))
+        .execute(connection)
     }
 }
 
@@ -253,7 +300,6 @@ mod tests {
         // Create a dummy experiments.
         let experiment_0 = NewExperiment::new("0".to_string());
         let experiment_1 = NewExperiment::new("1".to_string());
-        // experiment.
         let experiment_id_0: i32 = diesel::insert_into(crate::schema::experiment::table)
             .values(&experiment_0)
             .returning(crate::schema::experiment::id)
@@ -264,7 +310,7 @@ mod tests {
             .returning(crate::schema::experiment::id)
             .get_result(&mut connection)
             .unwrap();
-        // Dummy variable setup.
+        // Dummy record setup.
         assert!(ExperimentExecution::get_by_experiment(experiment_id_0, &mut connection)
             .unwrap()
             .is_empty());
@@ -316,7 +362,6 @@ mod tests {
         // Create a dummy experiments.
         let experiment_0 = NewExperiment::new("0".to_string());
         let experiment_1 = NewExperiment::new("1".to_string());
-        // experiment.
         let experiment_id_0: i32 = diesel::insert_into(crate::schema::experiment::table)
             .values(&experiment_0)
             .returning(crate::schema::experiment::id)
@@ -327,7 +372,7 @@ mod tests {
             .returning(crate::schema::experiment::id)
             .get_result(&mut connection)
             .unwrap();
-        // Dummy variable setup.
+        // Dummy record setup.
         assert!(ExperimentExecution::get_all(&mut connection)
             .unwrap()
             .is_empty());
@@ -364,7 +409,6 @@ mod tests {
         // Create a dummy experiments.
         let experiment_0 = NewExperiment::new("0".to_string());
         let experiment_1 = NewExperiment::new("1".to_string());
-        // experiment.
         let experiment_id_0: i32 = diesel::insert_into(crate::schema::experiment::table)
             .values(&experiment_0)
             .returning(crate::schema::experiment::id)
@@ -375,7 +419,7 @@ mod tests {
             .returning(crate::schema::experiment::id)
             .get_result(&mut connection)
             .unwrap();
-        // Dummy variable setup.
+        // Dummy record setup.
         assert!(ExperimentExecution::get_all(&mut connection)
             .unwrap()
             .is_empty());
@@ -429,8 +473,16 @@ mod tests {
             .get_result(&mut connection)
             .unwrap();
         // Dummy record setup.
-        assert!(!ExperimentExecution::has_experiment_execution_entries(experiment_id_0, &mut connection).unwrap());
-        assert!(!ExperimentExecution::has_experiment_execution_entries(experiment_id_1, &mut connection).unwrap());
+        assert!(!ExperimentExecution::has_experiment_execution_entries(
+            experiment_id_0,
+            &mut connection
+        )
+        .unwrap());
+        assert!(!ExperimentExecution::has_experiment_execution_entries(
+            experiment_id_1,
+            &mut connection
+        )
+        .unwrap());
         let number_of_records = 42;
         let new_records_all: Vec<ExperimentExecution> = (0..number_of_records)
             .map(|id| ExperimentExecution {
@@ -448,7 +500,153 @@ mod tests {
             .values(&new_records_all)
             .execute(&mut connection)
             .unwrap();
-        assert!(ExperimentExecution::has_experiment_execution_entries(experiment_id_0, &mut connection).unwrap());
-        assert!(!ExperimentExecution::has_experiment_execution_entries(experiment_id_1, &mut connection).unwrap());
+        assert!(ExperimentExecution::has_experiment_execution_entries(
+            experiment_id_0,
+            &mut connection
+        )
+        .unwrap());
+        assert!(!ExperimentExecution::has_experiment_execution_entries(
+            experiment_id_1,
+            &mut connection
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn test_get_by_status() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let mut connection = context.get_connection();
+        // Create a dummy experiments.
+        let experiment_0 = NewExperiment::new("0".to_string());
+        let experiment_id_0: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_0)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let new_records_expected: Vec<ExperimentExecution> = vec![
+            ExecutionStatus::Aborted,
+            ExecutionStatus::Failed,
+            ExecutionStatus::Finished,
+            ExecutionStatus::Running,
+            ExecutionStatus::Finished,
+            ExecutionStatus::Waiting,
+        ]
+        .iter()
+        .enumerate()
+        .map(|(id, status)| ExperimentExecution {
+            id: id as i32,
+            experiment_id: experiment_id_0,
+            pipeline_id: id.to_string(),
+            pipeline_step_id: id.to_string(),
+            execution_status: status.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        })
+        .collect();
+        assert!(ExperimentExecution::get_by_status(ExecutionStatus::Finished, &mut connection)
+            .unwrap()
+            .is_empty());
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_expected)
+            .execute(&mut connection)
+            .unwrap();
+
+        let finished_records =
+            ExperimentExecution::get_by_status(ExecutionStatus::Finished, &mut connection).unwrap();
+            assert_eq!(finished_records.len(), 2);
+            assert_eq!(finished_records[0], new_records_expected[2]);
+            assert_eq!(finished_records[1], new_records_expected[4]);
+    }
+
+    #[test]
+    fn test_update_scheduled_status_by_experiment() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let mut connection = context.get_connection();
+        // Create a dummy experiments.
+        let experiment_0 = NewExperiment::new("0".to_string());
+        let experiment_id_0: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_0)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let new_records_expected: Vec<ExperimentExecution> = vec![
+            ExecutionStatus::Aborted,
+            ExecutionStatus::Failed,
+            ExecutionStatus::Finished,
+            ExecutionStatus::Running,
+            ExecutionStatus::Waiting,
+        ]
+        .iter()
+        .enumerate()
+        .map(|(id, status)| ExperimentExecution {
+            id: id as i32,
+            experiment_id: experiment_id_0,
+            pipeline_id: id.to_string(),
+            pipeline_step_id: id.to_string(),
+            execution_status: status.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        })
+        .collect();
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_expected)
+            .execute(&mut connection)
+            .unwrap();
+        let all_records_before_update =
+            ExperimentExecution::get_by_experiment(experiment_id_0, &mut connection).unwrap();
+        assert_eq!(
+            all_records_before_update[0].execution_status().unwrap(),
+            ExecutionStatus::Aborted
+        );
+        assert_eq!(
+            all_records_before_update[1].execution_status().unwrap(),
+            ExecutionStatus::Failed
+        );
+        assert_eq!(
+            all_records_before_update[2].execution_status().unwrap(),
+            ExecutionStatus::Finished
+        );
+        assert_eq!(
+            all_records_before_update[3].execution_status().unwrap(),
+            ExecutionStatus::Running
+        );
+        assert_eq!(
+            all_records_before_update[4].execution_status().unwrap(),
+            ExecutionStatus::Waiting
+        );
+        ExperimentExecution::update_scheduled_status_by_experiment(
+            experiment_id_0,
+            ExecutionStatus::Failed,
+            &mut connection,
+        )
+        .unwrap();
+        let all_records_after_update =
+            ExperimentExecution::get_by_experiment(experiment_id_0, &mut connection).unwrap();
+        assert_eq!(
+            all_records_after_update[0].execution_status().unwrap(),
+            ExecutionStatus::Aborted
+        );
+        assert_eq!(
+            all_records_after_update[1].execution_status().unwrap(),
+            ExecutionStatus::Failed
+        );
+        assert_eq!(
+            all_records_after_update[2].execution_status().unwrap(),
+            ExecutionStatus::Finished
+        );
+        assert_eq!(
+            all_records_after_update[3].execution_status().unwrap(),
+            ExecutionStatus::Failed
+        );
+        assert_eq!(
+            all_records_after_update[4].execution_status().unwrap(),
+            ExecutionStatus::Failed
+        );
     }
 }
