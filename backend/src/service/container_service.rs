@@ -2,7 +2,7 @@ use std::{
     ffi::OsString,
     io::{BufWriter, Write},
     path::Path,
-    process::{Child, Command, Output},
+    process::{Child, Command, Output, Stdio},
 };
 
 use actix_web::web;
@@ -44,9 +44,13 @@ pub fn build_pipeline_step<P: AsRef<Path>, T: AsRef<str>>(
     pipeline_step_path.push("container");
     pipeline_step_path.push(step.container());
     let build_arg: OsString = "build".into();
-    let name_spec: OsString = "t".into();
+    let name_spec: OsString = "-t".into();
     let name_arg: OsString = format_container_name(pipeline_id, step.id()).into();
+
     let child = Command::new("docker")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .args([
             build_arg.as_os_str(),
             name_spec.as_os_str(),
@@ -87,17 +91,17 @@ pub fn run_pipeline_step<T: AsRef<str>>(
         "--name".into(),
         format_container_name(&pipeline_id, step.id()).into(),
         "--rm".into(),
-        pipeline_step_mount(output_path, "/output", false),
     ];
+    arguments.extend(pipeline_step_mount(output_path, "/output", false));
     // Set initial sample input mount.
-    arguments.push(pipeline_step_mount(
+    arguments.extend(pipeline_step_mount(
         app_config.experiment_samples_path(&experiment_id),
         "/input/samples",
         true,
     ));
     // Set input mounts / dependencies.
     for dependency_id in step.dependencies() {
-        arguments.push(pipeline_step_mount(
+        arguments.extend(pipeline_step_mount(
             app_config.experiment_step_path(&experiment_id, dependency_id),
             format!("/input/steps/{}", dependency_id),
             true,
@@ -110,7 +114,7 @@ pub fn run_pipeline_step<T: AsRef<str>>(
         // Filter out variables without values.
         .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), value)))
         .for_each(|(global_var_id, global_var_value)| {
-            arguments.push(pipeline_step_mount(
+            arguments.extend(pipeline_step_mount(
                 app_config.global_data_path(global_var_value),
                 format!("/input/globals/{}", global_var_id),
                 true,
@@ -122,15 +126,24 @@ pub fn run_pipeline_step<T: AsRef<str>>(
         .iter()
         .filter(|var_instance| !var_instance.is_global_data_reference())
         // Filter out variables without values.
-        .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), value)))
-        .for_each(|(other_var_id, other_var_value)| {
-            arguments.push(format!("--env {}='{}'", other_var_id, other_var_value).into());
+        .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), var_instance.category(), value)))
+        .for_each(|(other_var_id, other_var_category, other_var_value)| {
+            arguments.push("--env".into());
+            match other_var_category {
+                crate::model::internal::pipeline_blueprint::PipelineStepVariableCategory::Number => arguments.push(format!("{}={}", other_var_id, other_var_value).into()),
+                _ => arguments.push(format!("{}='{}'", other_var_id, other_var_value).into()),
+            }
         });
 
     // Set container to run.
     arguments.push(format_container_name(pipeline_id, step.id()).into());
 
-    let output = Command::new("docker").args(arguments).spawn()?;
+    let output = Command::new("docker")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .args(arguments)
+        .spawn()?;
     Ok(output)
 }
 
@@ -144,15 +157,17 @@ fn pipeline_step_mount<P: AsRef<Path>, Q: AsRef<Path>>(
     source: P,
     target: Q,
     readonly: bool,
-) -> OsString {
-    let mut mount_arg: OsString = "--mount type=bind,source=".into();
+) -> Vec<OsString> {
+    let mut mount_args: Vec<OsString> = vec!["--mount".into()];
+    let mut mount_arg: OsString = "type=bind,source=".into();
     mount_arg.push(source.as_ref());
     mount_arg.push(OsString::from(",target="));
     mount_arg.push(target.as_ref());
     if readonly {
         mount_arg.push(OsString::from(",readonly"));
     }
-    mount_arg
+    mount_args.push(mount_arg);
+    mount_args
 }
 
 /// Characters allowed in container names.
@@ -288,7 +303,7 @@ impl ContainerHandler {
                 ))
                 .execute(connection)
         })?;
-        log::info!("Building {:?}", &step);
+        log::info!("Starting {:?}", &step);
         self.executed_step = Some(step);
         Ok(())
     }
@@ -378,12 +393,14 @@ impl ContainerHandler {
 
     /// Returns the current [`ExperimentExecution`] or an error if none is set.
     fn get_executed_step(&self) -> Result<&ExperimentExecution, SeqError> {
-        (&self.executed_step).as_ref().ok_or(SeqError::new(
-            "Invalid execution state",
-            SeqErrorType::InternalServerError,
-            "Expected an execution step to be set.",
-            "Execution state is invalid.",
-        ))
+        (&self.executed_step).as_ref().ok_or_else(|| {
+            SeqError::new(
+                "Invalid execution state",
+                SeqErrorType::InternalServerError,
+                "Expected an execution step to be set.",
+                "Execution state is invalid.",
+            )
+        })
     }
 
     /// Logs the output and returns an error if the exit status was unsuccessful.
@@ -409,11 +426,11 @@ impl ContainerHandler {
                 .append(false)
                 .open(log_path)?;
             let mut buffered_writer = BufWriter::new(log_file);
-            buffered_writer.write_all("[[ STDOUT ]]/n".as_bytes())?;
+            buffered_writer.write_all("[[ STDOUT ]]\n".as_bytes())?;
             buffered_writer.write_all(&output.stdout)?;
-            buffered_writer.write_all("/n/n[[ STDERR ]]/n".as_bytes())?;
+            buffered_writer.write_all("\n\n[[ STDERR ]]\n".as_bytes())?;
             buffered_writer.write_all(&output.stderr)?;
-            buffered_writer.write_all("/n/n[[ EXIT STATUS ]]/n".as_bytes())?;
+            buffered_writer.write_all("\n\n[[ EXIT STATUS ]]\n".as_bytes())?;
             buffered_writer.write_all(output.status.to_string().as_bytes())?;
             if output.status.success() {
                 Ok(())
@@ -467,14 +484,17 @@ impl ContainerHandler {
                     connection.immediate_transaction(|connection| {
                         let finished_status: String = ExecutionStatus::Finished.into();
                         diesel::update(crate::schema::experiment_execution::table.find(step_db_id))
-                            .set((
-                                crate::schema::experiment_execution::execution_status
-                                    .eq(finished_status),
-                                crate::schema::experiment_execution::end_time
-                                    .eq(Some(chrono::Utc::now().naive_local())),
-                            ))
-                            .execute(connection)
+                        .set((
+                            crate::schema::experiment_execution::execution_status
+                            .eq(finished_status),
+                            crate::schema::experiment_execution::end_time
+                            .eq(Some(chrono::Utc::now().naive_local())),
+                        ))
+                        .execute(connection)
                     })?;
+                    log::info!("Finished {:?}", &self.executed_step);
+                    // Reset the internal state if finished successfully.
+                    self.reset();
                     Ok(true)
                 } else {
                     Err(SeqError::new(
@@ -524,6 +544,7 @@ impl ContainerHandler {
                 .iter()
                 .find(|s| s.id() == &step.pipeline_step_id)
             {
+                log::info!("Building {:?}", &step);
                 self.build_process = Some(build_pipeline_step(
                     step_blueprint,
                     &step.pipeline_id,
@@ -563,6 +584,7 @@ impl ContainerHandler {
                 .iter()
                 .find(|s| s.id() == &step.pipeline_step_id)
             {
+                log::info!("Running {:?}", &step);
                 self.run_process = Some(run_pipeline_step(
                     &step.pipeline_id,
                     step_blueprint,
@@ -601,16 +623,6 @@ enum ProcessStatus {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use serial_test::serial;
-
-    use crate::{
-        application::config::Configuration,
-        model::internal::pipeline_blueprint::PipelineStepVariableCategory,
-        test_utility::{TestContext, TEST_RESOURCES_PATH},
-    };
-
     use super::*;
 
     #[test]
@@ -620,18 +632,20 @@ mod tests {
             "/input/steps/step_id",
             true,
         );
-        let correct_input_arg: OsString =
-            "--mount type=bind,source=/app/context/experiments/experiment_id/steps/step_id,target=/input/steps/step_id,readonly"
-                .into();
+        let correct_input_arg: Vec<OsString> =
+            vec!["--mount".into(), "type=bind,source=/app/context/experiments/experiment_id/steps/step_id,target=/input/steps/step_id,readonly"
+                .into()];
         assert_eq!(input_arg, correct_input_arg);
         let output_arg = pipeline_step_mount(
             "/app/context/experiments/experiment_id/steps/step_id",
             "/output",
             false,
         );
-        let correct_output_arg: OsString =
-            "--mount type=bind,source=/app/context/experiments/experiment_id/steps/step_id,target=/output"
-                .into();
+        let correct_output_arg: Vec<OsString> = vec![
+            "--mount".into(),
+            "type=bind,source=/app/context/experiments/experiment_id/steps/step_id,target=/output"
+                .into(),
+        ];
         assert_eq!(output_arg, correct_output_arg);
     }
 }
