@@ -1,10 +1,4 @@
-use std::{
-    collections::HashMap,
-    ffi::OsString,
-    path::{Path, PathBuf},
-    process::Command,
-    sync::Arc,
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use actix_web::web;
 use parking_lot::Mutex;
@@ -14,12 +8,7 @@ use crate::{
         config::{Configuration, PIPELINE_DEFINITION_FILE},
         error::{SeqError, SeqErrorType},
     },
-    model::{
-        exchange::pipeline_step_details::PipelineStepVariableInstance,
-        internal::pipeline_blueprint::{
-            ContextualisedPipelineBlueprint, PipelineBlueprint, PipelineStepBlueprint,
-        },
-    },
+    model::internal::pipeline_blueprint::{ContextualisedPipelineBlueprint, PipelineBlueprint},
 };
 
 #[derive(Debug)]
@@ -90,7 +79,7 @@ impl LoadedPipelines {
             .collect()
     }
 
-    /// Returns the pipeline with the specified ID if loaded.
+    /// Returns ```true``` if the pipeline with the specified ID is loaded.
     ///
     /// # Parameters
     ///
@@ -193,126 +182,6 @@ pub fn load_pipelines(
     }
 }
 
-// pub fn run_pipeline(pipeline: ContextualisedPipelineBlueprint) {
-//     Command::new("docker").args(["build", &format!("-t {}", pipeline)]);
-// }
-
-/// Builds the specifc pipeline step container at the specified context.
-///
-/// # Parameters
-///
-/// * `step` - the [`PipelineStepBlueprint`] to build the container for
-/// * `context` - the context directory contianing the pipeline
-pub fn build_pipeline_step<P: AsRef<Path>>(
-    step: &PipelineStepBlueprint,
-    context: P,
-) -> Result<std::process::Output, SeqError> {
-    let mut pipeline_step_path = context.as_ref().to_path_buf();
-    pipeline_step_path.push("container");
-    pipeline_step_path.push(step.container());
-    let build_arg: OsString = "build".into();
-    let name_arg: OsString = format!("-t {}", step.id()).into();
-    let output = Command::new("docker")
-        .args([
-            build_arg.as_os_str(),
-            name_arg.as_os_str(),
-            pipeline_step_path.as_os_str(),
-        ])
-        .output()?;
-    Ok(output)
-}
-
-/// Runs the specifc pipeline step replacing all its previous output.
-///
-/// # Parameters
-///
-/// * `step` - the [`PipelineStepBlueprint`] to run
-/// * `variables` - the variables that were specified for step execution
-/// * `experiment_id` - the ID of the experiment
-/// * `app_cofig` - the app [`Configuration`]
-pub fn run_pipeline_step<P: AsRef<str>>(
-    step: &PipelineStepBlueprint,
-    variables: &Vec<PipelineStepVariableInstance>,
-    experiment_id: P,
-    app_config: Arc<Configuration>,
-) -> Result<std::process::Output, SeqError> {
-    // Create the output directory.
-    let output_path = app_config.experiment_step_path(&experiment_id, step.id());
-    // Clear the output folder if the step has been run before.
-    if output_path.exists() {
-        std::fs::remove_dir_all(&output_path)?;
-    }
-    // Then create the output directory.
-    std::fs::create_dir_all(&output_path)?;
-    // Set basic arguments.
-    let mut arguments: Vec<OsString> = vec![
-        "run".into(),
-        format!("--name {}", step.id()).into(),
-        "--rm".into(),
-        pipeline_step_mount(output_path, "/output", false),
-    ];
-    // Set initial sample input mount.
-    arguments.push(pipeline_step_mount(
-        app_config.experiment_samples_path(&experiment_id),
-        "/input/samples",
-        true,
-    ));
-    // Set input mounts / dependencies.
-    for dependency_id in step.dependencies() {
-        arguments.push(pipeline_step_mount(
-            app_config.experiment_step_path(&experiment_id, dependency_id),
-            format!("/input/steps/{}", dependency_id),
-            true,
-        ));
-    }
-    // Set global mounts.
-    variables
-        .iter()
-        .filter(|var_instance| var_instance.is_global_data_reference())
-        .for_each(|global_var| {
-            arguments.push(pipeline_step_mount(
-                app_config.global_data_path(&global_var.value),
-                format!("/input/globals/{}", &global_var.id),
-                true,
-            ));
-        });
-
-    // Set other variables.
-    variables
-        .iter()
-        .filter(|var_instance| !var_instance.is_global_data_reference())
-        .for_each(|other_var| {
-            arguments.push(format!("--env {}='{}'", other_var.id, other_var.value).into());
-        });
-
-    // Set container to run.
-    arguments.push(step.id().into());
-
-    let output = Command::new("docker").args(arguments).output()?;
-    Ok(output)
-}
-
-/// Creates an [`OsString`] for a container mount.
-///
-/// # Parameters
-///
-/// * `source` - the path to the local directory
-/// * `target` - the path to the bound container directory
-fn pipeline_step_mount<P: AsRef<Path>, Q: AsRef<Path>>(
-    source: P,
-    target: Q,
-    readonly: bool,
-) -> OsString {
-    let mut mount_arg: OsString = "--mount type=bind,source=".into();
-    mount_arg.push(source.as_ref());
-    mount_arg.push(OsString::from(",target="));
-    mount_arg.push(target.as_ref());
-    if readonly {
-        mount_arg.push(OsString::from(",readonly"));
-    }
-    mount_arg
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -326,28 +195,6 @@ mod tests {
     };
 
     use super::*;
-
-    #[test]
-    fn test_pipeline_step_mount() {
-        let input_arg = pipeline_step_mount(
-            "/app/context/experiments/experiment_id/steps/step_id",
-            "/input/steps/step_id",
-            true,
-        );
-        let correct_input_arg: OsString =
-            "--mount type=bind,source=/app/context/experiments/experiment_id/steps/step_id,target=/input/steps/step_id,readonly"
-                .into();
-        assert_eq!(input_arg, correct_input_arg);
-        let output_arg = pipeline_step_mount(
-            "/app/context/experiments/experiment_id/steps/step_id",
-            "/output",
-            false,
-        );
-        let correct_output_arg: OsString =
-            "--mount type=bind,source=/app/context/experiments/experiment_id/steps/step_id,target=/output"
-                .into();
-        assert_eq!(output_arg, correct_output_arg);
-    }
 
     // The tests need to be serial to prevent the same context UUID to be issued
     // to different tests at the same time.

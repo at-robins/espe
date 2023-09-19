@@ -158,12 +158,69 @@ impl ExperimentPipelineStepVariable {
             value,
         }
     }
+
+    /// Returns `true` if the variable is an instance of a reference to global data.
+    pub fn is_global_data_reference(&self) -> bool {
+        self.category.eq(&PipelineStepVariableCategory::Global)
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn test_variable_is_global_data_reference_false() {
+        let pipeline_step_variable: PipelineStepVariable = serde_json::from_str(
+            "
+            {
+                \"id\": \"option\",
+                \"name\": \"Option\",
+                \"description\": \"An option dropdown.\",
+                \"category\": {
+                    \"tag\": \"Option\",
+                    \"content\": [
+                        {
+                            \"name\": \"Option 1\",
+                            \"value\": \"option1\"
+                        },
+                        {
+                            \"name\": \"Option 2\",
+                            \"value\": \"option2\"
+                        }
+                    ]
+                }
+            }
+            ",
+        )
+        .unwrap();
+        let value = Some("dummy".to_string());
+        let experiment_variable =
+            ExperimentPipelineStepVariable::from_internal(&pipeline_step_variable, value.clone());
+        assert!(!experiment_variable.is_global_data_reference());
+    }
+
+    #[test]
+    fn test_variable_is_global_data_reference_true() {
+        let pipeline_step_variable: PipelineStepVariable = serde_json::from_str(
+            "
+            {
+                \"id\": \"global\",
+                \"name\": \"Global\",
+                \"description\": \"A global reference.\",
+                \"category\": {
+                    \"tag\": \"Global\"
+                }
+            }
+            ",
+        )
+        .unwrap();
+        let value = Some("dummy".to_string());
+        let experiment_variable =
+            ExperimentPipelineStepVariable::from_internal(&pipeline_step_variable, value.clone());
+        assert!(experiment_variable.is_global_data_reference());
+    }
 
     #[test]
     fn test_variable_from_internal() {
@@ -188,23 +245,23 @@ mod tests {
                 }
             }
             ",
-            )
-            .unwrap();
-            let value = Some("dummy".to_string());
-            let experiment_variable =
-                ExperimentPipelineStepVariable::from_internal(&pipeline_step_variable, value.clone());
-            assert_eq!(experiment_variable.id(), pipeline_step_variable.id());
-            assert_eq!(experiment_variable.name(), pipeline_step_variable.name());
-            assert_eq!(experiment_variable.description(), pipeline_step_variable.description());
-            assert_eq!(experiment_variable.category(), pipeline_step_variable.category());
-            assert_eq!(experiment_variable.required(), pipeline_step_variable.required());
-            assert_eq!(experiment_variable.value(), &value);
-        }
+        )
+        .unwrap();
+        let value = Some("dummy".to_string());
+        let experiment_variable =
+            ExperimentPipelineStepVariable::from_internal(&pipeline_step_variable, value.clone());
+        assert_eq!(experiment_variable.id(), pipeline_step_variable.id());
+        assert_eq!(experiment_variable.name(), pipeline_step_variable.name());
+        assert_eq!(experiment_variable.description(), pipeline_step_variable.description());
+        assert_eq!(experiment_variable.category(), pipeline_step_variable.category());
+        assert_eq!(experiment_variable.required(), pipeline_step_variable.required());
+        assert_eq!(experiment_variable.value(), &value);
+    }
 
-        #[test]
-        fn test_step_from_internal() {
-            let pipeline_step: PipelineStepBlueprint = serde_json::from_str(
-                "
+    #[test]
+    fn test_step_from_internal() {
+        let pipeline_step: PipelineStepBlueprint = serde_json::from_str(
+            "
             {
                 \"id\": \"fastqc\",
                 \"name\": \"FastQC\",
@@ -342,8 +399,7 @@ mod tests {
         values.insert("fastqc2bool".to_string(), "10".to_string());
         values.insert("fastqc2global".to_string(), "11".to_string());
 
-        let experiment_pipeline =
-            ExperimentPipelineBlueprint::from_internal(&pipeline, values);
+        let experiment_pipeline = ExperimentPipelineBlueprint::from_internal(&pipeline, values);
         assert_eq!(experiment_pipeline.id(), pipeline.id());
         assert_eq!(experiment_pipeline.name(), pipeline.name());
         assert_eq!(experiment_pipeline.description(), pipeline.description());
@@ -370,6 +426,5 @@ mod tests {
                 assert_eq!(experiment_vars[j].value(), &Some(expected_value));
             }
         }
-
     }
 }

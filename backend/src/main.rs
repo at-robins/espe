@@ -7,7 +7,7 @@ use actix_web::{middleware, App, HttpServer, web};
 use application::{config::Configuration, environment::LOG_LEVEL, error::SeqError};
 use controller::routing::routing_config;
 use dotenv::dotenv;
-use service::pipeline_service::{load_pipelines, LoadedPipelines};
+use service::{pipeline_service::{load_pipelines, LoadedPipelines}, execution_service::ExecutionScheduler};
 
 #[actix_web::main]
 async fn main() -> Result<(), SeqError> {
@@ -36,6 +36,15 @@ async fn main() -> Result<(), SeqError> {
         }
     }
     let loaded_pipelines = web::Data::new(LoadedPipelines::new(web::Data::clone(&app_config))?);
+    let execution_config = web::Data::clone(&app_config);
+    let execution_pipelines = web::Data::clone(&loaded_pipelines);
+    std::thread::spawn(move || {
+        let mut scheduler = ExecutionScheduler::new(execution_config, execution_pipelines);
+        loop {
+            std::thread::sleep(std::time::Duration::new(10, 0));
+            scheduler.update_pipeline_execution();
+        }
+    });
     // Setup the application.
     Ok(HttpServer::new(move || {
         App::new()
