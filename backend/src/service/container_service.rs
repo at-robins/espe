@@ -1,5 +1,6 @@
 use std::{
     ffi::OsString,
+    hash::{Hash, Hasher},
     io::{BufWriter, Write},
     path::Path,
     process::{Child, Command, Output, Stdio},
@@ -8,6 +9,7 @@ use std::{
 use actix_web::web;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use twox_hash::XxHash64;
 
 use crate::{
     application::{
@@ -24,10 +26,6 @@ use crate::{
 };
 
 use super::pipeline_service::LoadedPipelines;
-
-// pub fn run_pipeline(pipeline: ContextualisedPipelineBlueprint) {
-//     Command::new("docker").args(["build", &format!("-t {}", pipeline)]);
-// }
 
 /// Builds the specifc pipeline step container at the specified context.
 ///
@@ -126,13 +124,10 @@ pub fn run_pipeline_step<T: AsRef<str>>(
         .iter()
         .filter(|var_instance| !var_instance.is_global_data_reference())
         // Filter out variables without values.
-        .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), var_instance.category(), value)))
-        .for_each(|(other_var_id, other_var_category, other_var_value)| {
+        .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), value)))
+        .for_each(|(other_var_id, other_var_value)| {
             arguments.push("--env".into());
-            match other_var_category {
-                crate::model::internal::pipeline_blueprint::PipelineStepVariableCategory::Number => arguments.push(format!("{}={}", other_var_id, other_var_value).into()),
-                _ => arguments.push(format!("{}='{}'", other_var_id, other_var_value).into()),
-            }
+            arguments.push(format!("{}={}", other_var_id, other_var_value).into());
         });
 
     // Set container to run.
@@ -170,15 +165,6 @@ fn pipeline_step_mount<P: AsRef<Path>, Q: AsRef<Path>>(
     mount_args
 }
 
-/// Characters allowed in container names.
-const CONTAINER_NAME_ALLOWED_LETTERS: [char; 36] = [
-    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
-    't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-];
-
-/// Character limitof container names.
-const CONTAINER_NAME_MAX_LENGTH: usize = 128;
-
 /// Converts the specified name to a valid container name.
 ///
 /// # Parameters
@@ -188,13 +174,10 @@ fn format_container_name<T: AsRef<str>, R: AsRef<str>>(
     pipeline_id: T,
     pipeline_step_id: R,
 ) -> String {
-    // TODO: Replace this with randomly generated container UUIDs or a hash to prevent potential naming clashes.
     let name = format!("{}{}", pipeline_id.as_ref(), pipeline_step_id.as_ref());
-    name.chars()
-        .flat_map(|letter| letter.to_lowercase())
-        .filter(|letter| CONTAINER_NAME_ALLOWED_LETTERS.contains(&letter))
-        .take(CONTAINER_NAME_MAX_LENGTH)
-        .collect()
+    let mut hasher = XxHash64::with_seed(154);
+    name.hash(&mut hasher);
+    hasher.finish().to_string()
 }
 
 pub struct ContainerHandler {
@@ -417,13 +400,15 @@ impl ContainerHandler {
             let process_type = if build { "build" } else { "run" };
             std::fs::create_dir_all(&log_path)?;
             log_path.push(format!(
-                "{}_{}_{}.log",
-                &step.pipeline_id, &step.pipeline_step_id, &process_type
+                "{}_{}.log",
+                format_container_name(&step.pipeline_id, &step.pipeline_step_id),
+                &process_type
             ));
             let log_file = std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
                 .append(false)
+                .truncate(true)
                 .open(log_path)?;
             let mut buffered_writer = BufWriter::new(log_file);
             buffered_writer.write_all("[[ STDOUT ]]\n".as_bytes())?;
@@ -484,13 +469,13 @@ impl ContainerHandler {
                     connection.immediate_transaction(|connection| {
                         let finished_status: String = ExecutionStatus::Finished.into();
                         diesel::update(crate::schema::experiment_execution::table.find(step_db_id))
-                        .set((
-                            crate::schema::experiment_execution::execution_status
-                            .eq(finished_status),
-                            crate::schema::experiment_execution::end_time
-                            .eq(Some(chrono::Utc::now().naive_local())),
-                        ))
-                        .execute(connection)
+                            .set((
+                                crate::schema::experiment_execution::execution_status
+                                    .eq(finished_status),
+                                crate::schema::experiment_execution::end_time
+                                    .eq(Some(chrono::Utc::now().naive_local())),
+                            ))
+                            .execute(connection)
                     })?;
                     log::info!("Finished {:?}", &self.executed_step);
                     // Reset the internal state if finished successfully.

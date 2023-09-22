@@ -12,7 +12,7 @@ then
     FASTQC_OPTIONS="${FASTQC_OPTIONS} --kmers ${KMERS}";
 fi
 
-if [[ ! -z "${SVG}" ]] && [["${SVG}" == 'true']]
+if [[ ! -z "${SVG}" ]] && [[ "${SVG}" == 'true' ]]
 then
     FASTQC_OPTIONS="${FASTQC_OPTIONS} --svg";
 fi
