@@ -8,6 +8,10 @@ const router = useRouter();
 function navigateToGlobals() {
   router.push({ name: "globals" });
 }
+
+function navigateToExperiments() {
+  router.push({ name: "experiments" });
+}
 </script>
 
 <template>
@@ -23,10 +27,10 @@ function navigateToGlobals() {
         />
 
         <q-toolbar-title>
-          <q-avatar>
+          <q-avatar class="q-mr-md">
             <img src="/icon_main.svg" />
           </q-avatar>
-          Wiedemann Sequencing Pipeline
+          <b>E</b>ncapsulated <b>S</b>equencing <b>P</b>ipeline <b>E</b>ngine
         </q-toolbar-title>
       </q-toolbar>
     </q-header>
@@ -39,6 +43,9 @@ function navigateToGlobals() {
       @mouseleave="leftMenuOpen = false"
     >
       <q-list separator>
+        <q-item clickable v-ripple @click="navigateToExperiments">
+          <q-item-section>Experiments</q-item-section>
+        </q-item>
         <q-item clickable v-ripple @click="navigateToGlobals">
           <q-item-section>Global data repositories</q-item-section>
         </q-item>

@@ -2,7 +2,7 @@
   <div class="q-pa-md">
     <q-card>
       <div v-if="!loadingError">
-        <div v-if="isLoadingGlobalDataDetails || !globalData">
+        <div v-if="isLoadingDetails || !experiment">
           <q-card-section class="flex-center row">
             <q-spinner color="primary" size="xl" />
           </q-card-section>
@@ -10,30 +10,45 @@
         <div v-else>
           <q-card-section>
             <entity-title
-              :title="globalData.name"
-              :entity-id="globalData.id"
-              endpoint-type="globals"
+              :title="experiment.name"
+              :entity-id="experiment.id"
+              endpoint-type="experiments"
               @update:title="updateTitle"
             />
           </q-card-section>
           <q-card-section>
             <entity-comment
-              :comment="globalData.comment"
-              :entity-id="globalData.id"
-              endpoint-type="globals"
+              :comment="experiment.comment"
+              :entity-id="experiment.id"
+              endpoint-type="experiments"
+            />
+          </q-card-section>
+          <q-card-section>
+            <entity-pipeline
+              :pipeline-id="experiment.pipelineId"
+              :entity-id="experiment.id"
+              endpoint-type="experiments"
+              @update:selected-pipeline="selectedPipeline = $event"
+            />
+          </q-card-section>
+          <q-card-section v-if="selectedPipeline">
+            <entity-pipeline-variables
+              :pipeline="selectedPipeline"
+              :entity-id="experiment.id"
+              endpoint-type="experiments"
             />
           </q-card-section>
           <q-card-section>
             <div class="row">
               <div class="q-ma-md">
                 <q-btn :icon="symOutlinedAccountTree" round>
-                  <q-tooltip>Upload files to the global repository.</q-tooltip>
+                  <q-tooltip>Upload files as experiment input.</q-tooltip>
                 </q-btn>
               </div>
               <q-separator vertical class="q-ml-md q-mr-md" />
               <file-tree
                 v-model="fileNodes"
-                :base-directory-label="globalData ? globalData.name : 'Root'"
+                :base-directory-label="experiment ? experiment.name : 'Root'"
                 @added-file="uploadFile"
                 @added-folder="uploadFolder"
                 @deleted-path="deletePath"
@@ -42,14 +57,32 @@
               />
             </div>
           </q-card-section>
+          <q-card-section>
+            <div class="row">
+              <div class="q-ma-md">
+                <q-btn
+                  :icon="matPlayCircle"
+                  label="Submit"
+                  color="positive"
+                  :loading="isSubmitting"
+                  @click="submitExperiment"
+                >
+                  <q-tooltip>
+                    Submit the experiment for execution with the specified
+                    pipeline.
+                  </q-tooltip>
+                </q-btn>
+              </div>
+            </div>
+          </q-card-section>
         </div>
       </div>
       <div v-else>
         <error-popup :error-response="loadingError" />
       </div>
     </q-card>
-    <q-dialog v-model="showDeletionError" v-if="deletionError">
-      <error-popup :error-response="deletionError" />
+    <q-dialog v-model="showServerError" v-if="serverError">
+      <error-popup :error-response="serverError" />
     </q-dialog>
   </div>
 </template>
@@ -57,10 +90,10 @@
 <script setup lang="ts">
 import {
   type ErrorResponse,
-  type GlobalDataDetails,
   type FileDetails,
   type FileTreeNode,
   type FilePath,
+  type ExperimentDetails,
 } from "@/scripts/types";
 import axios from "axios";
 import { ref, onMounted, type Ref } from "vue";
@@ -69,22 +102,28 @@ import FileTree from "../FileTree.vue";
 import EntityComment from "../shared/EntityComment.vue";
 import EntityTitle from "../shared/EntityTitle.vue";
 import { symOutlinedAccountTree } from "@quasar/extras/material-symbols-outlined";
+import EntityPipeline from "../shared/EntityPipeline.vue";
+import EntityPipelineVariables from "../shared/EntityPipelineVariables.vue";
+import type { PipelineBlueprint } from "@/scripts/pipeline-blueprint";
+import { matPlayCircle } from "@quasar/extras/material-icons";
 
 const files: Ref<Array<FileDetails>> = ref([]);
-const globalData: Ref<GlobalDataDetails | null> = ref(null);
+const experiment: Ref<ExperimentDetails | null> = ref(null);
 const fileNodes: Ref<Array<FileTreeNode>> = ref([]);
-const isLoadingGlobalDataDetails = ref(false);
+const isLoadingDetails = ref(false);
 const loadingError: Ref<ErrorResponse | null> = ref(null);
-const deletionError: Ref<ErrorResponse | null> = ref(null);
-const showDeletionError = ref(false);
+const serverError: Ref<ErrorResponse | null> = ref(null);
+const showServerError = ref(false);
+const selectedPipeline: Ref<PipelineBlueprint | null> = ref(null);
+const isSubmitting = ref(false);
 
 const props = defineProps({
   id: { type: String, required: true },
 });
 
 function updateTitle(title: string) {
-  if (globalData.value) {
-    globalData.value.name = title;
+  if (experiment.value) {
+    experiment.value.name = title;
   }
 }
 
@@ -119,33 +158,33 @@ function getFileTreeNodes(files: FileDetails[]): FileTreeNode[] {
 }
 
 onMounted(() => {
-  loadGlobalDataDetails();
+  loadDetails();
 });
 
 /**
  * Initial loading of details from the server.
  */
-function loadGlobalDataDetails() {
-  isLoadingGlobalDataDetails.value = true;
+function loadDetails() {
+  isLoadingDetails.value = true;
   loadingError.value = null;
   axios
-    .get("/api/globals/" + props.id)
+    .get("/api/experiments/" + props.id)
     .then((response) => {
-      globalData.value = response.data;
-      return axios.get("/api/files/globals/" + props.id);
+      experiment.value = response.data;
+      return axios.get("/api/files/experiments/" + props.id);
     })
     .then((response) => {
       files.value = response.data;
       fileNodes.value = getFileTreeNodes(files.value);
     })
     .catch((error) => {
-      globalData.value = null;
+      experiment.value = null;
       files.value = [];
       fileNodes.value = [];
       loadingError.value = error.response.data;
     })
     .finally(() => {
-      isLoadingGlobalDataDetails.value = false;
+      isLoadingDetails.value = false;
     });
 }
 
@@ -178,7 +217,7 @@ function uploadFolder(node: FileTreeNode) {
       };
       axios
         .post(
-          "/api/folders/globals/" + props.id,
+          "/api/folders/experiments/" + props.id,
           JSON.stringify(uploadInfo),
           config
         )
@@ -212,7 +251,7 @@ function uploadFile(file: File, node: FileTreeNode) {
         },
       };
       axios
-        .post("/api/files/globals/" + props.id, formData, config)
+        .post("/api/files/experiments/" + props.id, formData, config)
         .catch((error) => {
           queryFileNode.error = error.response.data;
         })
@@ -233,15 +272,15 @@ function deletePath(node: FileTreeNode) {
       pathComponents: pathComponents,
     };
     axios
-      .delete("/api/files/globals/" + props.id, {
+      .delete("/api/files/experiments/" + props.id, {
         headers: {
           "content-type": "application/json",
         },
         data: JSON.stringify(pathUpload),
       })
       .catch((error) => {
-        deletionError.value = error.response.data;
-        showDeletionError.value = true;
+        serverError.value = error.response.data;
+        showServerError.value = true;
       });
   }
 }
@@ -251,15 +290,30 @@ function deleteAll() {
     pathComponents: [],
   };
   axios
-    .delete("/api/files/globals/" + props.id, {
+    .delete("/api/files/experiments/" + props.id, {
       headers: {
         "content-type": "application/json",
       },
       data: JSON.stringify(pathUpload),
     })
     .catch((error) => {
-      deletionError.value = error.response.data;
-      showDeletionError.value = true;
+      serverError.value = error.response.data;
+      showServerError.value = true;
     });
+}
+
+function submitExperiment() {
+  if (!isSubmitting.value) {
+    isSubmitting.value = true;
+    axios
+      .post("/api/experiments/" + props.id)
+      .catch((error) => {
+        serverError.value = error.response.data;
+        showServerError.value = true;
+      })
+      .finally(() => {
+        isSubmitting.value = false;
+      });
+  }
 }
 </script>

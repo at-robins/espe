@@ -5,16 +5,20 @@ use log::error;
 use crate::application::error::SeqError;
 
 use super::{
+    experiment_controller::{
+        create_experiment, delete_experiment, get_experiment, get_experiment_pipelines,
+        list_experiment, patch_experiment_comment, patch_experiment_mail, patch_experiment_name,
+        patch_experiment_pipeline, post_experiment_pipeline_variable, post_execute_experiment,
+    },
+    file_controller::{delete_files_by_path, get_files, post_add_file, post_add_folder},
     global_data_controller::{
         create_global_data, delete_global_data, get_global_data, list_global_data,
         patch_global_data_comment, patch_global_data_name,
     },
-    global_data_file_controller::{
-        delete_global_data_files_by_path, get_global_data_files, post_global_data_add_file,
-        post_global_data_add_folder,
+    pipeline_controller::{
+        get_pipeline_blueprint, get_pipeline_blueprints, get_pipeline_instance,
+        patch_pipeline_blueprints,
     },
-    pipeline_controller::{get_pipeline_blueprints, get_pipeline_instance},
-    sample_controller::upload_sample,
 };
 
 /// Serve the entry point to the single page web app.
@@ -34,21 +38,35 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/", web::get().to(index))
     .route("/ui", web::get().to(index))
     .route("/ui/{rest:.*}", web::get().to(index))
-
-    .route("/api/pipeline/instance/{id}", web::get().to(get_pipeline_instance))
-    .route("/api/pipeline/blueprint", web::get().to(get_pipeline_blueprints))
-    .route("/api/experiment", web::post().to(upload_sample))
+    // Pipelines
+    .route("/api/pipelines/instances/{id}", web::get().to(get_pipeline_instance))
+    .route("/api/pipelines/blueprint", web::get().to(get_pipeline_blueprint))
+    .route("/api/pipelines/blueprints", web::get().to(get_pipeline_blueprints))
+    .route("/api/pipelines/blueprints", web::patch().to(patch_pipeline_blueprints))
+    // Experiments
+    .route("/api/experiments", web::get().to(list_experiment))
+    .route("/api/experiments", web::post().to(create_experiment))
+    .route("/api/experiments/{id}", web::delete().to(delete_experiment))
+    .route("/api/experiments/{id}", web::get().to(get_experiment))
+    .route("/api/experiments/{id}", web::post().to(post_execute_experiment))
+    .route("/api/experiments/{id}/comment", web::patch().to(patch_experiment_comment))
+    .route("/api/experiments/{id}/mail", web::patch().to(patch_experiment_mail))
+    .route("/api/experiments/{id}/name", web::patch().to(patch_experiment_name))
+    .route("/api/experiments/{id}/pipeline", web::patch().to(patch_experiment_pipeline))
+    .route("/api/experiments/{id}/pipelines", web::get().to(get_experiment_pipelines))
+    .route("/api/experiments/{id}/variable", web::post().to(post_experiment_pipeline_variable))
+    // Global data repositories
     .route("/api/globals", web::get().to(list_global_data))
     .route("/api/globals", web::post().to(create_global_data))
     .route("/api/globals/{id}", web::get().to(get_global_data))
     .route("/api/globals/{id}", web::delete().to(delete_global_data))
     .route("/api/globals/{id}/comment", web::patch().to(patch_global_data_comment))
     .route("/api/globals/{id}/name", web::patch().to(patch_global_data_name))
-    .route("/api/globals/{id}/files", web::get().to(get_global_data_files))
-    .route("/api/globals/{id}/files", web::post().to(post_global_data_add_file))
-    .route("/api/globals/{id}/files", web::delete().to(delete_global_data_files_by_path))
-    .route("/api/globals/{id}/folders", web::post().to(post_global_data_add_folder))
-
+    // Files
+    .route("/api/files/{category}/{id}", web::get().to(get_files))
+    .route("/api/files/{category}/{id}", web::post().to(post_add_file))
+    .route("/api/files/{category}/{id}", web::delete().to(delete_files_by_path))
+    .route("/api/folders/{category}/{id}", web::post().to(post_add_folder))
     // Registers static frontend resources. Needs to be last to not overwrite other routes.
     .service(Files::new("/", "./static_dist").show_files_listing());
 }

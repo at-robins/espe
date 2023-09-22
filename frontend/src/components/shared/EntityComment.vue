@@ -149,7 +149,8 @@ const props = defineProps({
     default: null,
     required: false,
   },
-  globalDataId: { type: Number, required: true },
+  entityId: { type: Number, required: true },
+  endpointType: { type: String, required: true },
 });
 
 const isUpdatingComment = ref(false);
@@ -196,7 +197,7 @@ function updateComment() {
     };
     axios
       .patch(
-        "/api/globals/" + props.globalDataId + "/comment",
+        "/api/" + props.endpointType + "/" + props.entityId + "/comment",
         formData,
         config
       )

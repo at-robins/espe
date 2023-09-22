@@ -6,6 +6,7 @@
       node-key="id"
       no-nodes-label="No files present."
       text-color="primary"
+      :default-expand-all="true"
       :selected-color="showContextMenu ? 'accent' : 'primary'"
       v-model:selected="selectedNode"
     >
@@ -114,6 +115,24 @@
                       class="q-mr-xs"
                     />
                     <div class="col">Delete</div>
+                  </div>
+                </q-item-section>
+              </q-item>
+              <q-item
+                v-if="prop.node.id === ROOT_ID"
+                clickable
+                v-close-popup
+                @click="deleteAll()"
+              >
+                <q-item-section>
+                  <div class="row flex-center no-wrap">
+                    <q-icon
+                      :name="matDelete"
+                      color="negative"
+                      size="xs"
+                      class="q-mr-xs"
+                    />
+                    <div class="col">Delete all</div>
                   </div>
                 </q-item-section>
               </q-item>
@@ -270,6 +289,7 @@ const emit = defineEmits<{
   (event: "addedFile", file: File, node: FileTreeNode): void;
   (event: "addedFolder", node: FileTreeNode): void;
   (event: "deletedPath", node: FileTreeNode): void;
+  (event: "deletedAll"): void;
 }>();
 
 const fileTree = computed(() => {
@@ -388,6 +408,11 @@ function deleteNode(node: FileTreeNode) {
     );
   }
   emit("deletedPath", node);
+}
+
+function deleteAll() {
+  emit("update:modelValue", []);
+  emit("deletedAll");
 }
 
 function getNodeByPathComponents(

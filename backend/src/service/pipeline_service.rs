@@ -1,22 +1,130 @@
-use std::{
-    ffi::OsString,
-    path::{Path, PathBuf},
-    process::Command,
-    sync::Arc,
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+
+use actix_web::web;
+use parking_lot::Mutex;
 
 use crate::{
     application::{
         config::{Configuration, PIPELINE_DEFINITION_FILE},
         error::{SeqError, SeqErrorType},
     },
-    model::{
-        exchange::pipeline_step_details::PipelineStepVariableInstance,
-        internal::pipeline_blueprint::{
-            ContextualisedPipelineBlueprint, PipelineBlueprint, PipelineStepBlueprint,
-        },
-    },
+    model::internal::pipeline_blueprint::{ContextualisedPipelineBlueprint, PipelineBlueprint},
 };
+
+#[derive(Debug)]
+/// All pipelines currently loaded by the application.
+pub struct LoadedPipelines {
+    pipeline_map: Mutex<HashMap<String, Arc<ContextualisedPipelineBlueprint>>>,
+}
+
+impl LoadedPipelines {
+    /// Loads and stores all pipelines based on the supplied application [`Configuration`].
+    ///
+    /// # Parameters
+    ///
+    /// * `app_config` - the app [`Configuration`]
+    pub fn new(app_config: web::Data<Configuration>) -> Result<Self, SeqError> {
+        Ok(Self {
+            pipeline_map: Mutex::new(Self::load_pipeline_map(app_config)?),
+        })
+    }
+
+    /// Returns the pipeline with the specified ID if loaded.
+    ///
+    /// # Parameters
+    ///
+    /// * `id` - the pipeline ID
+    pub fn get<T: AsRef<str>>(&self, id: T) -> Option<Arc<ContextualisedPipelineBlueprint>> {
+        self.pipeline_map
+            .lock()
+            .get(id.as_ref())
+            .map(|value| Arc::clone(value))
+    }
+
+    /// Returns ```true``` if the specified variable exists in the loaded pipelines.
+    ///
+    /// # Parameters
+    ///
+    /// * `pipeline_id` - the ID of the pipeline the variable belongs to
+    /// * `pipeline_step_id` - the ID of the pipeline step the variable belongs to
+    /// * `variable_id` - the ID of the variable
+    pub fn has_variable<T: AsRef<str>, R: AsRef<str>, S: AsRef<str>>(
+        &self,
+        pipeline_id: T,
+        pipeline_step_id: R,
+        variable_id: S,
+    ) -> bool {
+        if let Some(pipeline) = self.get(pipeline_id) {
+            pipeline
+                .pipeline()
+                .steps()
+                .iter()
+                .filter(|step| step.id() == pipeline_step_id.as_ref())
+                .any(|step| {
+                    step.variables()
+                        .iter()
+                        .any(|variable| variable.id() == variable_id.as_ref())
+                })
+        } else {
+            false
+        }
+    }
+
+    /// Returns all loaded pipelines.
+    pub fn pipelines(&self) -> Vec<Arc<ContextualisedPipelineBlueprint>> {
+        self.pipeline_map
+            .lock()
+            .values()
+            .map(|value| Arc::clone(value))
+            .collect()
+    }
+
+    /// Returns ```true``` if the pipeline with the specified ID is loaded.
+    ///
+    /// # Parameters
+    ///
+    /// * `id` - the pipeline ID
+    pub fn is_loaded<T: AsRef<str>>(&self, id: T) -> bool {
+        self.pipeline_map.lock().contains_key(id.as_ref())
+    }
+
+    /// Updates the currently loaded pipelines.
+    ///
+    /// # Parameters
+    ///
+    /// * `app_config` - the app [`Configuration`]
+    pub fn update_loaded_pipelines(
+        &self,
+        app_config: web::Data<Configuration>,
+    ) -> Result<(), SeqError> {
+        *(self.pipeline_map.lock()) = Self::load_pipeline_map(app_config)?;
+        Ok(())
+    }
+
+    /// Creates a map of loaded pipelines by their respective ID.
+    ///
+    /// # Parameters
+    ///
+    /// * `app_config` - the app [`Configuration`]
+    fn load_pipeline_map(
+        app_config: web::Data<Configuration>,
+    ) -> Result<HashMap<String, Arc<ContextualisedPipelineBlueprint>>, SeqError> {
+        let pipelines = load_pipelines(Arc::clone(&app_config))?;
+        let mut pipeline_map = HashMap::new();
+        for pipeline in pipelines {
+            let duplicate =
+                pipeline_map.insert(pipeline.pipeline().id().clone(), Arc::new(pipeline));
+            if let Some(duplicate_pipeline) = duplicate {
+                log::warn!(
+                    "The pipeline {:?} was overwritten due to pipeline ID {} not being unique.",
+                    duplicate_pipeline,
+                    duplicate_pipeline.pipeline().id()
+                );
+            }
+        }
+        Ok(pipeline_map)
+    }
+}
 
 /// Returns all pipelines defined in the respective directory.
 ///
@@ -74,126 +182,6 @@ pub fn load_pipelines(
     }
 }
 
-// pub fn run_pipeline(pipeline: ContextualisedPipelineBlueprint) {
-//     Command::new("docker").args(["build", &format!("-t {}", pipeline)]);
-// }
-
-/// Builds the specifc pipeline step container at the specified context.
-///
-/// # Parameters
-///
-/// * `step` - the [`PipelineStepBlueprint`] to build the container for
-/// * `context` - the context directory contianing the pipeline
-pub fn build_pipeline_step<P: AsRef<Path>>(
-    step: &PipelineStepBlueprint,
-    context: P,
-) -> Result<std::process::Output, SeqError> {
-    let mut pipeline_step_path = context.as_ref().to_path_buf();
-    pipeline_step_path.push("container");
-    pipeline_step_path.push(step.container());
-    let build_arg: OsString = "build".into();
-    let name_arg: OsString = format!("-t {}", step.id()).into();
-    let output = Command::new("docker")
-        .args([
-            build_arg.as_os_str(),
-            name_arg.as_os_str(),
-            pipeline_step_path.as_os_str(),
-        ])
-        .output()?;
-    Ok(output)
-}
-
-/// Runs the specifc pipeline step replacing all its previous output.
-///
-/// # Parameters
-///
-/// * `step` - the [`PipelineStepBlueprint`] to run
-/// * `variables` - the variables that were specified for step execution
-/// * `experiment_id` - the ID of the experiment
-/// * `app_cofig` - the app [`Configuration`]
-pub fn run_pipeline_step<P: AsRef<str>>(
-    step: &PipelineStepBlueprint,
-    variables: &Vec<PipelineStepVariableInstance>,
-    experiment_id: P,
-    app_config: Arc<Configuration>,
-) -> Result<std::process::Output, SeqError> {
-    // Create the output directory.
-    let output_path = app_config.experiment_step_path(&experiment_id, step.id());
-    // Clear the output folder if the step has been run before.
-    if output_path.exists() {
-        std::fs::remove_dir_all(&output_path)?;
-    }
-    // Then create the output directory.
-    std::fs::create_dir_all(&output_path)?;
-    // Set basic arguments.
-    let mut arguments: Vec<OsString> = vec![
-        "run".into(),
-        format!("--name {}", step.id()).into(),
-        "--rm".into(),
-        pipeline_step_mount(output_path, "/output", false),
-    ];
-    // Set initial sample input mount.
-    arguments.push(pipeline_step_mount(
-        app_config.experiment_samples_path(&experiment_id),
-        "/input/samples",
-        true,
-    ));
-    // Set input mounts / dependencies.
-    for dependency_id in step.dependencies() {
-        arguments.push(pipeline_step_mount(
-            app_config.experiment_step_path(&experiment_id, dependency_id),
-            format!("/input/steps/{}", dependency_id),
-            true,
-        ));
-    }
-    // Set global mounts.
-    variables
-        .iter()
-        .filter(|var_instance| var_instance.is_global_data_reference())
-        .for_each(|global_var| {
-            arguments.push(pipeline_step_mount(
-                app_config.global_data_path(&global_var.value),
-                format!("/input/globals/{}", &global_var.id),
-                true,
-            ));
-        });
-
-    // Set other variables.
-    variables
-        .iter()
-        .filter(|var_instance| !var_instance.is_global_data_reference())
-        .for_each(|other_var| {
-            arguments.push(format!("--env {}='{}'", other_var.id, other_var.value).into());
-        });
-
-    // Set container to run.
-    arguments.push(step.id().into());
-
-    let output = Command::new("docker").args(arguments).output()?;
-    Ok(output)
-}
-
-/// Creates an [`OsString`] for a container mount.
-///
-/// # Parameters
-///
-/// * `source` - the path to the local directory
-/// * `target` - the path to the bound container directory
-fn pipeline_step_mount<P: AsRef<Path>, Q: AsRef<Path>>(
-    source: P,
-    target: Q,
-    readonly: bool,
-) -> OsString {
-    let mut mount_arg: OsString = "--mount type=bind,source=".into();
-    mount_arg.push(source.as_ref());
-    mount_arg.push(OsString::from(",target="));
-    mount_arg.push(target.as_ref());
-    if readonly {
-        mount_arg.push(OsString::from(",readonly"));
-    }
-    mount_arg
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -208,28 +196,6 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_pipeline_step_mount() {
-        let input_arg = pipeline_step_mount(
-            "/app/context/experiments/experiment_id/steps/step_id",
-            "/input/steps/step_id",
-            true,
-        );
-        let correct_input_arg: OsString =
-            "--mount type=bind,source=/app/context/experiments/experiment_id/steps/step_id,target=/input/steps/step_id,readonly"
-                .into();
-        assert_eq!(input_arg, correct_input_arg);
-        let output_arg = pipeline_step_mount(
-            "/app/context/experiments/experiment_id/steps/step_id",
-            "/output",
-            false,
-        );
-        let correct_output_arg: OsString =
-            "--mount type=bind,source=/app/context/experiments/experiment_id/steps/step_id,target=/output"
-                .into();
-        assert_eq!(output_arg, correct_output_arg);
-    }
-
     // The tests need to be serial to prevent the same context UUID to be issued
     // to different tests at the same time.
 
@@ -240,6 +206,10 @@ mod tests {
         // Use a reference to the context, so the context is not dropped early
         // and messes up test context folder deletion.
         let app_config: Arc<Configuration> = Arc::new((&context).into());
+        // Remove the folder that was automatically create with the test context.
+        if PathBuf::from(context.pipeline_folder()).exists() {
+            std::fs::remove_dir_all(context.pipeline_folder()).unwrap();
+        }
         let pipelines = load_pipelines(app_config);
         // The pipeline folder does not exist.
         assert!(pipelines.is_err());
@@ -252,6 +222,10 @@ mod tests {
         // Use a reference to the context, so the context is not dropped early
         // and messes up test context folder deletion.
         let app_config: Arc<Configuration> = Arc::new((&context).into());
+        // Remove the folder that was automatically create with the test context.
+        if PathBuf::from(context.pipeline_folder()).exists() {
+            std::fs::remove_dir_all(context.pipeline_folder()).unwrap();
+        }
         std::fs::create_dir_all(context.pipeline_folder()).unwrap();
         let pipelines = load_pipelines(app_config).unwrap();
         assert!(pipelines.is_empty());
@@ -322,5 +296,30 @@ mod tests {
         assert_eq!(step.variables()[4].description(), "A string text field.");
         assert_eq!(step.variables()[4].category(), &PipelineStepVariableCategory::String);
         assert_eq!(step.variables()[4].required(), &None);
+    }
+
+    #[test]
+    #[serial]
+    fn test_loaded_pipelines_has_varaible() {
+        let context = TestContext::new();
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let app_config: web::Data<Configuration> = web::Data::new(Configuration::new(
+            context.database_url(),
+            "info",
+            "127.0.0.1",
+            "8080",
+            context.context_folder(),
+            format!("{}/pipelines", TEST_RESOURCES_PATH),
+        ));
+        let pipelines = LoadedPipelines::new(app_config).unwrap();
+        assert!(pipelines.has_variable("testing_pipeline", "fastqc", "bool"));
+        assert!(pipelines.has_variable("testing_pipeline", "fastqc", "global"));
+        assert!(pipelines.has_variable("testing_pipeline", "fastqc", "number"));
+        assert!(pipelines.has_variable("testing_pipeline", "fastqc", "option"));
+        assert!(pipelines.has_variable("testing_pipeline", "fastqc", "string"));
+        assert!(!pipelines.has_variable("invalid_pipeline", "fastqc", "string"));
+        assert!(!pipelines.has_variable("testing_pipeline", "invalid_step", "string"));
+        assert!(!pipelines.has_variable("testing_pipeline", "fastqc", "invalid_variable"));
     }
 }

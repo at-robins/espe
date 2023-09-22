@@ -12,17 +12,20 @@ export enum PipelineStepStatus {
   Failed = "Failed",
 }
 
-export type PipelineBlueprintDetail = {
-  id: number;
-  name: string;
-  comment: PipelineStepStatus;
-};
-
 export type ExperimentUpload = {
   name: string;
   mail: string | undefined;
   comment: string | undefined;
-  pipelineId: number;
+  pipelineId: string;
+};
+
+export type ExperimentDetails = {
+  id: number;
+  name: string;
+  pipelineId: string | null | undefined;
+  mail: string | null | undefined;
+  comment: string | null | undefined;
+  creationTime: string;
 };
 
 export type GlobalDataDetails = {
@@ -32,12 +35,12 @@ export type GlobalDataDetails = {
   creationTime: string;
 };
 
-export type GlobalDataFileDetails = {
+export type FileDetails = {
   pathComponents: string[];
   isFile: boolean;
 };
 
-export type GlobalDataFilePath = {
+export type FilePath = {
   pathComponents: string[];
 };
 

@@ -1,7 +1,7 @@
 {
     "id": "wiedemann_atac_paired_end",
     "name": "Wiedemann ATAC paired end pipeline",
-    "description": "This pipeline processes paired end ATAC data.",
+    "description": "<p>This pipeline processes paired end ATAC data.</p>",
     "steps": [
         {
             "id": "fastqc_initial",

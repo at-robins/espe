@@ -1,9 +1,5 @@
-<script setup lang="ts">
-import SampleSubmission from "@/components/SampleSubmission.vue";
-</script>
+<script setup lang="ts"></script>
 
 <template>
-  <main>
-    <sample-submission />
-  </main>
+  <main></main>
 </template>

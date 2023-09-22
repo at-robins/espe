@@ -1,8 +1,5 @@
-use std::sync::Arc;
-
-use actix_web::{web, HttpRequest, Responder};
+use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
-use diesel::RunQueryDsl;
 use rand::{thread_rng, Rng};
 
 use crate::{
@@ -11,13 +8,10 @@ use crate::{
         error::{SeqError, SeqErrorType},
     },
     model::{
-        db::pipeline::Pipeline,
-        exchange::{
-            pipeline_blueprint_details::PipelineBlueprintDetails,
-            pipeline_step_details::PipelineStepDetails,
-        },
-        internal::step::PipelineStepStatus,
+        exchange::pipeline_step_details::PipelineStepDetails,
+        internal::{pipeline_blueprint::PipelineBlueprint, step::PipelineStepStatus},
     },
+    service::pipeline_service::LoadedPipelines,
 };
 
 pub async fn get_pipeline_instance(wrapped_id: web::Path<u64>) -> Result<impl Responder, SeqError> {
@@ -105,25 +99,44 @@ pub async fn get_pipeline_instance(wrapped_id: web::Path<u64>) -> Result<impl Re
     Ok(web::Json(dummy_response))
 }
 
-/// Return all pipeline blueprints that are present in the database.
-pub async fn get_pipeline_blueprints(request: HttpRequest) -> Result<impl Responder, SeqError> {
-    // Retrieve the app config.
-    let app_config = request.app_data::<Arc<Configuration>>().ok_or_else(|| {
-        SeqError::new(
-            "Configuration",
-            SeqErrorType::InternalServerError,
-            "The server configuration could not be accessed.",
-            "Missing configuration.",
-        )
-    })?;
-    let mut connection = app_config.database_connection()?;
-    let pipelines = crate::schema::pipeline::table.load::<Pipeline>(&mut connection)?;
+/// Return all pipeline blueprints that are currently loaded.
+pub async fn get_pipeline_blueprints(
+    pipelines: web::Data<LoadedPipelines>,
+) -> Result<web::Json<Vec<PipelineBlueprint>>, SeqError> {
     Ok(web::Json(
         pipelines
+            .pipelines()
             .iter()
-            .map(|pipeline| PipelineBlueprintDetails::from(pipeline))
-            .collect::<Vec<PipelineBlueprintDetails>>(),
+            .map(|pipeline| pipeline.pipeline().clone())
+            .collect::<Vec<PipelineBlueprint>>(),
     ))
+}
+
+/// Return all pipeline blueprints that are currently loaded.
+pub async fn get_pipeline_blueprint(
+    pipelines: web::Data<LoadedPipelines>,
+    id: web::Json<String>,
+) -> Result<web::Json<PipelineBlueprint>, SeqError> {
+    let id = id.into_inner();
+    if let Some(pipeline) = pipelines.get(&id) {
+        Ok(web::Json(pipeline.pipeline().clone()))
+    } else {
+        Err(SeqError::new(
+            "Not Fount",
+            SeqErrorType::NotFoundError,
+            format!("No pipeline with ID {} is loaded.", id),
+            "Invalid ID.",
+        ))
+    }
+}
+
+/// Update the currently loaded pipeline blueprints.
+pub async fn patch_pipeline_blueprints(
+    pipelines: web::Data<LoadedPipelines>,
+    app_config: web::Data<Configuration>,
+) -> Result<HttpResponse, SeqError> {
+    pipelines.update_loaded_pipelines(app_config)?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 fn random_status() -> PipelineStepStatus {

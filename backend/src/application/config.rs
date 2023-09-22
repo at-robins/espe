@@ -8,14 +8,16 @@ const UUID_NODE_ID: &[u8; 6] = &[12, 221, 33, 14, 35, 16];
 const PATH_FILES_TEMPORARY: &str = "tmp/files";
 /// The context path where data related to specific experiments or samples is stored.
 const PATH_FILES_EXPERIMENTS: &str = "experiments";
-/// The file name of the initially submitted sample before processing.
-pub const PATH_FILES_EXPERIMENT_INITIAL_FASTQ: &str = "00_initial.fastq.gz";
 /// The file inside each pipeline folder defining the pipeline.
 pub const PIPELINE_DEFINITION_FILE: &str = "pipeline.json";
-/// The sub-folder where pipeline step output is stored.
+/// The sub-folder where pipeline step output of an experiment is stored.
 pub const PATH_FILES_EXPERIMENTS_STEPS: &str = "steps";
+/// The sub-folder where experiment input is stored.
+pub const PATH_FILES_EXPERIMENTS_INPUT: &str = "input";
 /// The sub-folder where initial pipeline input samples are stored.
 pub const PATH_FILES_EXPERIMENTS_SAMPLES: &str = "samples";
+/// The sub-folder where all logs are stored.
+pub const PATH_FILES_EXPERIMENTS_LOGS: &str = "logs";
 /// The folder where global data is stored.
 pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
 
@@ -172,6 +174,18 @@ impl Configuration {
         path
     }
 
+    /// The context path where data related to the pipeline input
+    /// of the specified experiment is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    pub fn experiment_input_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
+        let mut path: PathBuf = self.experiment_path(experiment_id);
+        path.push(PATH_FILES_EXPERIMENTS_INPUT);
+        path
+    }
+
     /// The context path where data related to the pipeline execution steps
     /// of the specified experiment is stored.
     ///
@@ -210,6 +224,18 @@ impl Configuration {
     pub fn experiment_samples_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
         let mut path: PathBuf = self.experiment_path(experiment_id);
         path.push(PATH_FILES_EXPERIMENTS_SAMPLES);
+        path
+    }
+
+    /// The context path where data related to the pipeline logs
+    /// of a specified experiment is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    pub fn experiment_logs_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
+        let mut path: PathBuf = self.experiment_path(experiment_id);
+        path.push(PATH_FILES_EXPERIMENTS_LOGS);
         path
     }
 

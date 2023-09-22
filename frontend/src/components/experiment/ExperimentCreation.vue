@@ -3,16 +3,16 @@
     outlined
     bottom-slots
     v-model="name"
-    label="Global data repository name"
+    label="Experiment name"
     counter
     maxlength="512"
-    :readonly="isUploadingGlobalData"
+    :readonly="isUploadingExperiment"
     :error="!!uploadErrorMessage"
     :error-message="uploadErrorMessage"
-    @keydown.enter="uploadGlobalData"
+    @keydown.enter="uploadExperiment"
   >
     <template v-slot:before>
-      <q-icon :name="matPublic" color="primary" />
+      <q-icon :name="symOutlinedScience" color="primary" />
     </template>
 
     <template v-slot:append>
@@ -25,7 +25,7 @@
     </template>
 
     <template v-slot:hint>
-      Specifiy a name to create a new global data repository.
+      Specifiy a name to create a new experiment.
     </template>
 
     <template v-slot:after>
@@ -33,8 +33,8 @@
         round
         color="primary"
         icon="add"
-        :disable="isUploadingGlobalData || !name"
-        @click="uploadGlobalData"
+        :disable="isUploadingExperiment || !name"
+        @click="uploadExperiment"
       />
     </template>
   </q-input>
@@ -44,16 +44,16 @@
 import axios from "axios";
 import { ref, type Ref } from "vue";
 import { useRouter } from "vue-router";
-import { matPublic } from "@quasar/extras/material-icons";
+import { symOutlinedScience } from "@quasar/extras/material-symbols-outlined";
 
 const router = useRouter();
 const name: Ref<string> = ref("");
-const isUploadingGlobalData = ref(false);
+const isUploadingExperiment = ref(false);
 const uploadErrorMessage = ref("");
 
-function uploadGlobalData() {
+function uploadExperiment() {
   if (name.value) {
-    isUploadingGlobalData.value = true;
+    isUploadingExperiment.value = true;
     uploadErrorMessage.value = "";
     const formData = JSON.stringify(name.value);
     const config = {
@@ -62,10 +62,10 @@ function uploadGlobalData() {
       },
     };
     axios
-      .post("/api/globals", formData, config)
+      .post("/api/experiments", formData, config)
       .then((response) => {
         return router.push({
-          name: "globals_detail",
+          name: "experiments_detail",
           params: { id: response.data },
         });
       })
@@ -74,7 +74,7 @@ function uploadGlobalData() {
       })
       .finally(() => {
         name.value = "";
-        isUploadingGlobalData.value = false;
+        isUploadingExperiment.value = false;
       });
   } else {
     uploadErrorMessage.value = "A valid name is required.";

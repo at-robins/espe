@@ -98,11 +98,10 @@ impl NewGlobalData {
     /// # Parameters
     ///
     /// * `name` - the global data's name
-    /// * `comment` - the optional comment describing the global data repository
-    pub fn new<S: Into<String>, T: Into<Option<String>>>(name: S, comment: T) -> Self {
+    pub fn new<S: Into<String>>(name: S) -> Self {
         Self {
             global_data_name: name.into(),
-            comment: comment.into(),
+            comment: None,
             creation_time: Utc::now().naive_utc(),
         }
     }
