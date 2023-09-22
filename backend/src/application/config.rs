@@ -317,7 +317,7 @@ mod tests {
     #[test]
     fn test_experiment_samples_path() {
         let config = Configuration::new("", "", "", "", "./application/context", "");
-        let path: PathBuf = "./application/context/experiments/test_id/samples".into();
+        let path: PathBuf = "./application/context/experiments/test_id/input/samples".into();
         assert_eq!(config.experiment_samples_path("test_id"), path);
     }
 }
