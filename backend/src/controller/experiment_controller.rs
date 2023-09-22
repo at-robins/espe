@@ -26,7 +26,6 @@ use actix_web::{web, HttpResponse};
 use diesel::{ExpressionMethods, QueryDsl};
 
 pub async fn create_experiment(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     name: actix_web::web::Json<String>,
 ) -> Result<HttpResponse, SeqError> {
@@ -68,7 +67,6 @@ pub async fn delete_experiment(
 }
 
 pub async fn get_experiment(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
@@ -83,7 +81,6 @@ pub async fn get_experiment(
 }
 
 pub async fn get_experiment_execution_status(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
@@ -120,7 +117,6 @@ pub async fn get_experiment_execution_status(
 }
 
 pub async fn patch_experiment_name(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
     new_name: web::Json<String>,
@@ -139,7 +135,6 @@ pub async fn patch_experiment_name(
 }
 
 pub async fn patch_experiment_mail(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
     new_name: web::Json<String>,
@@ -158,7 +153,6 @@ pub async fn patch_experiment_mail(
 }
 
 pub async fn patch_experiment_comment(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
     new_comment: web::Json<Option<String>>,
@@ -180,7 +174,6 @@ pub async fn patch_experiment_comment(
 }
 
 pub async fn patch_experiment_pipeline(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
     id: web::Path<i32>,
@@ -209,7 +202,6 @@ pub async fn patch_experiment_pipeline(
 }
 
 pub async fn list_experiment(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
 ) -> Result<web::Json<Vec<ExperimentDetails>>, SeqError> {
     let mut connection = database_manager.database_connection()?;
@@ -221,7 +213,6 @@ pub async fn list_experiment(
 }
 
 pub async fn get_experiment_pipelines(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
     id: web::Path<i32>,
@@ -238,7 +229,6 @@ pub async fn get_experiment_pipelines(
 }
 
 pub async fn post_experiment_pipeline_variable(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
     experiment_id: web::Path<i32>,
@@ -299,7 +289,6 @@ pub async fn post_experiment_pipeline_variable(
 }
 
 pub async fn post_execute_experiment(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     experiment_id: web::Path<i32>,
     pipelines: web::Data<LoadedPipelines>,

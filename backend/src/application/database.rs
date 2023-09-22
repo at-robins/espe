@@ -24,7 +24,6 @@ impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error> fo
 }
 
 pub struct DatabaseManager {
-    config: web::Data<Configuration>,
     /// The database connection pool.
     db_connection_pool: Pool<ConnectionManager<SqliteConnection>>,
 }
@@ -44,7 +43,6 @@ impl DatabaseManager {
                 )
             })?;
         Ok(Self {
-            config,
             db_connection_pool: pool,
         })
     }

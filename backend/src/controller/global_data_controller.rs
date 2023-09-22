@@ -10,7 +10,6 @@ use crate::{
 use actix_web::{web, HttpResponse};
 
 pub async fn create_global_data(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     name: actix_web::web::Json<String>,
 ) -> Result<HttpResponse, SeqError> {
@@ -51,7 +50,6 @@ pub async fn delete_global_data(
 }
 
 pub async fn get_global_data(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
@@ -66,7 +64,6 @@ pub async fn get_global_data(
 }
 
 pub async fn patch_global_data_name(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
     new_name: web::Json<String>,
@@ -85,7 +82,6 @@ pub async fn patch_global_data_name(
 }
 
 pub async fn patch_global_data_comment(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
     new_comment: web::Json<Option<String>>,
@@ -107,7 +103,6 @@ pub async fn patch_global_data_comment(
 }
 
 pub async fn list_global_data(
-    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
 ) -> Result<web::Json<Vec<GlobalDataDetails>>, SeqError> {
     let mut connection = database_manager.database_connection()?;

@@ -14,7 +14,6 @@ use super::{container_service::ContainerHandler, pipeline_service::LoadedPipelin
 
 /// A scheduler for execution of pipeline steps.
 pub struct ExecutionScheduler {
-    config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     loaded_pipelines: web::Data<LoadedPipelines>,
     handler: ContainerHandler,
@@ -27,7 +26,6 @@ impl ExecutionScheduler {
         loaded_pipelines: web::Data<LoadedPipelines>,
     ) -> Self {
         Self {
-            config: web::Data::clone(&config),
             database_manager: web::Data::clone(&database_manager),
             loaded_pipelines: web::Data::clone(&loaded_pipelines),
             handler: ContainerHandler::new(config, database_manager, loaded_pipelines),
