@@ -1,24 +1,40 @@
 {
-    "id": "wiedemann_atac_paired_end",
-    "name": "Wiedemann ATAC paired end pipeline",
-    "description": "<p>This pipeline processes paired end ATAC data.</p>",
-    "steps": [
+  "id": "wiedemann_atac_paired_end",
+  "name": "Wiedemann ATAC paired end pipeline",
+  "description": "<p>This pipeline processes paired end ATAC data.</p>",
+  "steps": [
+    {
+      "id": "fastqc_initial",
+      "name": "FastQC",
+      "description": "Performs an initial quality control of sequenced reads.",
+      "container": "fastqc",
+      "dependencies": [],
+      "variables": [
         {
-            "id": "fastqc_initial",
-            "name": "FastQC",
-            "description": "Performs an initial quality control of sequenced reads.",
-            "container": "fastqc",
-            "dependencies": [],
-            "variables": [
-                {
-                    "id": "SVG",
-                    "name": "SVG images",
-                    "description": "Saves all images as vector files instead of bitmaps.",
-                    "category": {
-                        "tag": "Boolean"
-                    }
-                }
-            ]
-        } 
-    ]
-} 
+          "id": "ADAPTERS",
+          "name": "Adapter sequences",
+          "description": "A custom list of sequencing adapters. The global data repository must contain a file called <var>adapters.txt</var> at its root.",
+          "category": {
+            "tag": "Global"
+          }
+        },
+        {
+          "id": "KMERS",
+          "name": "Kmer length",
+          "description": "An integer that specifies the Kmer length to be used for Kmer content detection. Must be between 2 and 10.",
+          "category": {
+            "tag": "Number"
+          }
+        },
+        {
+          "id": "SVG",
+          "name": "SVG images",
+          "description": "Saves all images as vector files instead of bitmaps.",
+          "category": {
+            "tag": "Boolean"
+          }
+        }
+      ]
+    }
+  ]
+}
