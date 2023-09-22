@@ -222,7 +222,7 @@ impl Configuration {
     ///
     /// * `experiment_id` - the ID of the experiment
     pub fn experiment_samples_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
-        let mut path: PathBuf = self.experiment_path(experiment_id);
+        let mut path: PathBuf = self.experiment_input_path(experiment_id);
         path.push(PATH_FILES_EXPERIMENTS_SAMPLES);
         path
     }

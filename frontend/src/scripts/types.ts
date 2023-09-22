@@ -60,3 +60,12 @@ export type ErrorResponse = {
   name: string;
   message: string;
 };
+
+export enum ExperimentExecutionStatus {
+  Aborted = "Aborted",
+  Failed = "Failed",
+  Finished = "Finished",
+  Running = "Running",
+  Waiting = "Waiting",
+  None = "None",
+}

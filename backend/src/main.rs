@@ -9,6 +9,9 @@ use controller::routing::routing_config;
 use dotenv::dotenv;
 use service::{pipeline_service::{load_pipelines, LoadedPipelines}, execution_service::ExecutionScheduler};
 
+/// The intervall in seconds in which the pipeline execution process is updated.
+const PIPELINE_EXECUTION_UPDATE_INTERVALL: u64 = 10; 
+
 #[actix_web::main]
 async fn main() -> Result<(), SeqError> {
     // Setup default enviroment variables.
@@ -41,8 +44,10 @@ async fn main() -> Result<(), SeqError> {
     std::thread::spawn(move || {
         let mut scheduler = ExecutionScheduler::new(execution_config, execution_pipelines);
         loop {
-            std::thread::sleep(std::time::Duration::new(10, 0));
-            scheduler.update_pipeline_execution();
+            std::thread::sleep(std::time::Duration::new(PIPELINE_EXECUTION_UPDATE_INTERVALL, 0));
+            if let Err(err) = scheduler.update_pipeline_execution() {
+                log::error!("Updating the pipeline execution failed with error: {:?}", err);
+            }
         }
     });
     // Setup the application.

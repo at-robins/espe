@@ -17,6 +17,9 @@
             />
           </q-card-section>
           <q-card-section>
+            <experiment-status-indicator :status="status" />
+          </q-card-section>
+          <q-card-section>
             <entity-comment
               :comment="experiment.comment"
               :entity-id="experiment.id"
@@ -61,6 +64,7 @@
             <div class="row">
               <div class="q-ma-md">
                 <q-btn
+                  v-if="status == ExperimentExecutionStatus.None"
                   :icon="matPlayCircle"
                   label="Submit"
                   color="positive"
@@ -71,6 +75,30 @@
                     Submit the experiment for execution with the specified
                     pipeline.
                   </q-tooltip>
+                </q-btn>
+                <q-btn
+                  v-if="
+                    status == ExperimentExecutionStatus.Running ||
+                    status == ExperimentExecutionStatus.Waiting
+                  "
+                  :icon="matStopCircle"
+                  label="Abort"
+                  color="negative"
+                >
+                  <q-tooltip>
+                    Abort the current experiment execution.
+                  </q-tooltip>
+                </q-btn>
+                <q-btn
+                  v-if="
+                    status == ExperimentExecutionStatus.Failed ||
+                    status == ExperimentExecutionStatus.Finished
+                  "
+                  :icon="matRestartAlt"
+                  label="Restart"
+                  color="positive"
+                >
+                  <q-tooltip> Restart the experiment execution. </q-tooltip>
                 </q-btn>
               </div>
             </div>
@@ -104,8 +132,18 @@ import EntityTitle from "../shared/EntityTitle.vue";
 import { symOutlinedAccountTree } from "@quasar/extras/material-symbols-outlined";
 import EntityPipeline from "../shared/EntityPipeline.vue";
 import EntityPipelineVariables from "../shared/EntityPipelineVariables.vue";
+import ExperimentStatusIndicator from "../shared/ExperimentStatusIndicator.vue";
 import type { PipelineBlueprint } from "@/scripts/pipeline-blueprint";
-import { matPlayCircle } from "@quasar/extras/material-icons";
+import { ExperimentExecutionStatus } from "@/scripts/types";
+import {
+  matPlayCircle,
+  matRestartAlt,
+  matStopCircle,
+} from "@quasar/extras/material-icons";
+import { useRouter } from "vue-router";
+
+// The intervall in which status updates are requested from the server.
+const POLLING_INTERVALL_MILLISECONDS = 10000;
 
 const files: Ref<Array<FileDetails>> = ref([]);
 const experiment: Ref<ExperimentDetails | null> = ref(null);
@@ -116,6 +154,11 @@ const serverError: Ref<ErrorResponse | null> = ref(null);
 const showServerError = ref(false);
 const selectedPipeline: Ref<PipelineBlueprint | null> = ref(null);
 const isSubmitting = ref(false);
+const status = ref(ExperimentExecutionStatus.None);
+const isPolling = ref(false);
+const pollingError: Ref<ErrorResponse | null> = ref(null);
+const router = useRouter();
+const this_route = router.currentRoute.value.fullPath;
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -159,6 +202,7 @@ function getFileTreeNodes(files: FileDetails[]): FileTreeNode[] {
 
 onMounted(() => {
   loadDetails();
+  pollStatusChanges();
 });
 
 /**
@@ -307,12 +351,42 @@ function submitExperiment() {
     isSubmitting.value = true;
     axios
       .post("/api/experiments/" + props.id)
+      .then(() => {
+        status.value = ExperimentExecutionStatus.Waiting;
+      })
       .catch((error) => {
         serverError.value = error.response.data;
         showServerError.value = true;
       })
       .finally(() => {
         isSubmitting.value = false;
+      });
+  }
+}
+
+/**
+ * Conitinuesly polls changes from the server.
+ */
+function pollStatusChanges() {
+  if (
+    !isPolling.value &&
+    !loadingError.value &&
+    !pollingError.value &&
+    // Stop polling if the route changes.
+    router.currentRoute.value.fullPath === this_route
+  ) {
+    pollingError.value = null;
+    axios
+      .get("/api/experiments/" + props.id + "/status")
+      .then((response) => {
+        status.value = response.data;
+        setTimeout(pollStatusChanges, POLLING_INTERVALL_MILLISECONDS);
+      })
+      .catch((error) => {
+        pollingError.value = error.response.data;
+      })
+      .finally(() => {
+        isPolling.value = false;
       });
   }
 }

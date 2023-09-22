@@ -7,7 +7,7 @@ use crate::{
     model::{
         db::{
             experiment::{Experiment, NewExperiment},
-            experiment_execution::{ExperimentExecution, NewExperimentExecution},
+            experiment_execution::{ExperimentExecution, NewExperimentExecution, ExecutionStatus},
             pipeline_step_variable::{NewPipelineStepVariable, PipelineStepVariable},
         },
         exchange::{
@@ -76,6 +76,30 @@ pub async fn get_experiment(
         .first::<Experiment>(&mut connection)?
         .into();
     Ok(HttpResponse::Ok().json(experiment_details))
+}
+
+pub async fn get_experiment_execution_status(
+    app_config: web::Data<Configuration>,
+    id: web::Path<i32>,
+) -> Result<HttpResponse, SeqError> {
+    let id: i32 = id.into_inner();
+    let mut connection = app_config.database_connection()?;
+    Experiment::exists_err(id, &mut connection)?;
+    let execution_steps = ExperimentExecution::get_by_experiment(id, &mut connection)?;
+    let result = if execution_steps.is_empty() {
+        "None".to_string()
+    } else if execution_steps.iter().any(|execution| execution.execution_status == ExecutionStatus::Failed.to_string()) {
+        ExecutionStatus::Failed.to_string()
+    } else if execution_steps.iter().any(|execution| execution.execution_status == ExecutionStatus::Aborted.to_string()) {
+        ExecutionStatus::Aborted.to_string()
+    } else if execution_steps.iter().any(|execution| execution.execution_status == ExecutionStatus::Running.to_string()) {
+        ExecutionStatus::Running.to_string()
+    } else if execution_steps.iter().all(|execution| execution.execution_status == ExecutionStatus::Finished.to_string()) {
+        ExecutionStatus::Finished.to_string()
+    } else {
+        ExecutionStatus::Waiting.to_string()
+    };
+    Ok(HttpResponse::Ok().json(result))
 }
 
 pub async fn patch_experiment_name(

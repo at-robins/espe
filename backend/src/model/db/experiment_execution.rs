@@ -41,7 +41,19 @@ pub enum ExecutionStatus {
 
 impl From<&ExecutionStatus> for String {
     fn from(value: &ExecutionStatus) -> String {
-        match value {
+        value.to_string()
+    }
+}
+
+impl ToString for ExecutionStatus {
+    fn to_string(&self) -> String {
+        (&self).to_string()
+    }
+}
+
+impl ToString for &ExecutionStatus {
+    fn to_string(&self) -> String {
+        match self {
             ExecutionStatus::Aborted => EXECUTION_STATUS_ABORTED.to_string(),
             ExecutionStatus::Failed => EXECUTION_STATUS_FAILED.to_string(),
             ExecutionStatus::Finished => EXECUTION_STATUS_FINISHED.to_string(),
