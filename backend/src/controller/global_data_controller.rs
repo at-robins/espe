@@ -1,5 +1,5 @@
 use crate::{
-    application::{config::Configuration, error::SeqError},
+    application::{config::Configuration, error::SeqError, database::DatabaseManager},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     model::{
         db::global_data::{GlobalData, NewGlobalData},
@@ -11,11 +11,12 @@ use actix_web::{web, HttpResponse};
 
 pub async fn create_global_data(
     app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     name: actix_web::web::Json<String>,
 ) -> Result<HttpResponse, SeqError> {
     let name: String = name.into_inner();
     validate_entity_name(&name)?;
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     log::info!("Creating global data repository with name {}.", &name);
     let new_record = NewGlobalData::new(name);
     let inserted_id: i32 = diesel::insert_into(crate::schema::global_data::table)
@@ -28,10 +29,11 @@ pub async fn create_global_data(
 
 pub async fn delete_global_data(
     app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     GlobalData::exists_err(id, &mut connection)?;
     log::info!("Deleting global data repository with ID {}.", id);
     // Remove all files belonging to the global data repository.
@@ -50,10 +52,11 @@ pub async fn delete_global_data(
 
 pub async fn get_global_data(
     app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     GlobalData::exists_err(id, &mut connection)?;
     let global_repo_details: GlobalDataDetails = crate::schema::global_data::table
         .find(id)
@@ -64,13 +67,14 @@ pub async fn get_global_data(
 
 pub async fn patch_global_data_name(
     app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
     new_name: web::Json<String>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     let new_name = new_name.into_inner();
     validate_entity_name(&new_name)?;
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     GlobalData::exists_err(id, &mut connection)?;
     connection.immediate_transaction(|connection| {
         diesel::update(crate::schema::global_data::table.find(id))
@@ -82,6 +86,7 @@ pub async fn patch_global_data_name(
 
 pub async fn patch_global_data_comment(
     app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
     new_comment: web::Json<Option<String>>,
 ) -> Result<HttpResponse, SeqError> {
@@ -91,7 +96,7 @@ pub async fn patch_global_data_comment(
     if let Some(inner) = &new_comment {
         validate_comment(inner)?;
     }
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     GlobalData::exists_err(id, &mut connection)?;
     connection.immediate_transaction(|connection| {
         diesel::update(crate::schema::global_data::table.find(id))
@@ -103,8 +108,9 @@ pub async fn patch_global_data_comment(
 
 pub async fn list_global_data(
     app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
 ) -> Result<web::Json<Vec<GlobalDataDetails>>, SeqError> {
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     let global_repos: Vec<GlobalDataDetails> = GlobalData::get_all(&mut connection)?
         .into_iter()
         .map(|val| val.into())

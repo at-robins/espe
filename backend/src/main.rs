@@ -4,7 +4,7 @@ extern crate diesel;
 use std::{collections::HashMap, sync::Arc};
 
 use actix_web::{middleware, App, HttpServer, web};
-use application::{config::Configuration, environment::LOG_LEVEL, error::SeqError};
+use application::{config::Configuration, environment::LOG_LEVEL, error::SeqError, database::DatabaseManager};
 use controller::routing::routing_config;
 use dotenv::dotenv;
 use service::{pipeline_service::{load_pipelines, LoadedPipelines}, execution_service::ExecutionScheduler};
@@ -25,6 +25,8 @@ async fn main() -> Result<(), SeqError> {
     // Setup the configuration.
     let app_config = web::Data::new(Configuration::create_from_environment()?);
     let server_address = app_config.server_address_and_port();
+    // Setup database conncetion pool.
+    let database_manager = web::Data::new(DatabaseManager::new(web::Data::clone(&app_config))?);
     // Load all pipelines into memory.
     let pipelines = load_pipelines(Arc::clone(&app_config))?;
     let mut pipeline_map = HashMap::new();
@@ -40,9 +42,10 @@ async fn main() -> Result<(), SeqError> {
     }
     let loaded_pipelines = web::Data::new(LoadedPipelines::new(web::Data::clone(&app_config))?);
     let execution_config = web::Data::clone(&app_config);
+    let execution_db_manager = web::Data::clone(&database_manager);
     let execution_pipelines = web::Data::clone(&loaded_pipelines);
     std::thread::spawn(move || {
-        let mut scheduler = ExecutionScheduler::new(execution_config, execution_pipelines);
+        let mut scheduler = ExecutionScheduler::new(execution_config, execution_db_manager, execution_pipelines);
         loop {
             std::thread::sleep(std::time::Duration::new(PIPELINE_EXECUTION_UPDATE_INTERVALL, 0));
             if let Err(err) = scheduler.update_pipeline_execution() {
@@ -56,6 +59,7 @@ async fn main() -> Result<(), SeqError> {
             .wrap(middleware::Logger::default())
             .app_data(web::Data::clone(&app_config))
             .app_data(web::Data::clone(&loaded_pipelines))
+            .app_data(web::Data::clone(&database_manager))
             .configure(routing_config)
     })
     .bind(server_address)?
