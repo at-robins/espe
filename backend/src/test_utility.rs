@@ -1,5 +1,5 @@
 use crate::{
-    application::config::Configuration, controller::routing::routing_config,
+    application::{config::Configuration, database::DatabaseManager}, controller::routing::routing_config,
     service::pipeline_service::LoadedPipelines,
 };
 use actix_web::{
@@ -36,10 +36,12 @@ pub fn create_test_app(
     dotenv().unwrap();
     env_logger::try_init_from_env(env_logger::Env::new().filter("debug")).ok();
     let app_config = &web::Data::<Configuration>::new(context.into());
+    let database_manager = web::Data::new(DatabaseManager::new(web::Data::clone(&app_config)).unwrap());
     App::new()
         .wrap(middleware::Logger::default())
         .app_data(web::Data::clone(&app_config))
         .app_data(web::Data::new(LoadedPipelines::new(web::Data::clone(&app_config)).unwrap()))
+        .app_data(web::Data::clone(&database_manager))
         .configure(routing_config)
 }
 

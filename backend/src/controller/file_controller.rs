@@ -6,6 +6,7 @@ use std::{
 use crate::{
     application::{
         config::Configuration,
+        database::DatabaseManager,
         error::{SeqError, SeqErrorType},
     },
     model::{
@@ -62,11 +63,12 @@ impl FileRequestCategory {
 }
 
 pub async fn get_files(
-    app_config:  web::Data<Configuration>,
+    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     params: web::Path<(FileRequestCategory, i32)>,
 ) -> Result<HttpResponse, SeqError> {
     let (category, id) = params.into_inner();
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     category.entity_exists(id, &mut connection)?;
 
     let mut all_files: Vec<FileDetails> = Vec::new();
@@ -111,14 +113,15 @@ pub async fn get_files(
 }
 
 pub async fn delete_files_by_path(
-    app_config:  web::Data<Configuration>,
+    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     params: web::Path<(FileRequestCategory, i32)>,
     path: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
     let (category, id) = params.into_inner();
     let delete_info = path.into_inner();
     let delete_path = delete_info.file_path();
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     category.entity_exists(id, &mut connection)?;
 
     let data_path = category.base_path(app_config, id);
@@ -139,7 +142,8 @@ pub async fn delete_files_by_path(
 }
 
 pub async fn post_add_file(
-    app_config:  web::Data<Configuration>,
+    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     params: web::Path<(FileRequestCategory, i32)>,
     payload: Multipart,
 ) -> Result<HttpResponse, SeqError> {
@@ -153,6 +157,7 @@ pub async fn post_add_file(
         category,
         temporary_file_path.as_path(),
         web::Data::clone(&app_config),
+        web::Data::clone(&database_manager),
     )
     .await
     .map_err(|error| {
@@ -171,7 +176,8 @@ pub async fn post_add_file(
 }
 
 pub async fn post_add_folder(
-    app_config:  web::Data<Configuration>,
+    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     params: web::Path<(FileRequestCategory, i32)>,
     upload_info: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
@@ -187,7 +193,7 @@ pub async fn post_add_folder(
         ));
     }
 
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
 
     // Validate the existance of the entity.
     category.entity_exists(id, &mut connection)?;
@@ -220,8 +226,9 @@ async fn persist_multipart<P: AsRef<Path>>(
     category: FileRequestCategory,
     temporary_file_path: P,
     app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
 ) -> Result<(), SeqError> {
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
 
     let (upload_info, temp_file_path) =
         parse_multipart_file::<FilePath, P>(payload, temporary_file_path).await?;

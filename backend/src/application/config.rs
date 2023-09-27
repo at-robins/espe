@@ -23,7 +23,6 @@ pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
 
 use std::{path::PathBuf, time::SystemTime};
 
-use diesel::{connection::SimpleConnection, Connection, SqliteConnection};
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 use uuid::{
@@ -117,18 +116,6 @@ impl Configuration {
     fn get_environment_variable(environment_variable: &str) -> Result<String, SeqError> {
         std::env::var(environment_variable)
             .map_err(|error| SeqError::from_var_error(error, environment_variable))
-    }
-
-    /// Returns a connection to the database if possible.
-    pub fn database_connection(&self) -> Result<SqliteConnection, SeqError> {
-        let mut connection = SqliteConnection::establish(self.database_url())?;
-        connection.batch_execute(
-            "PRAGMA foreign_keys = ON;
-            PRAGMA journal_mode = WAL;
-            PRAGMA synchronous = NORMAL;
-            PRAGMA busy_timeout = 10000;",
-        )?;
-        Ok(connection)
     }
 
     /// The context path where temporary files are stored.

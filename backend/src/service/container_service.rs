@@ -14,7 +14,7 @@ use twox_hash::XxHash64;
 use crate::{
     application::{
         config::Configuration,
-        error::{SeqError, SeqErrorType},
+        error::{SeqError, SeqErrorType}, database::DatabaseManager,
     },
     model::{
         db::experiment_execution::{ExecutionStatus, ExperimentExecution},
@@ -182,6 +182,7 @@ fn format_container_name<T: AsRef<str>, R: AsRef<str>>(
 
 pub struct ContainerHandler {
     config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     loaded_pipelines: web::Data<LoadedPipelines>,
     executed_step: Option<ExperimentExecution>,
     build_process: Option<Child>,
@@ -197,10 +198,12 @@ impl ContainerHandler {
     /// * `loaded_pipelines` - the pipelines loaded by the application
     pub fn new(
         config: web::Data<Configuration>,
+        database_manager: web::Data<DatabaseManager>,
         loaded_pipelines: web::Data<LoadedPipelines>,
     ) -> Self {
         Self {
             config,
+            database_manager,
             loaded_pipelines,
             executed_step: None,
             build_process: None,
@@ -273,7 +276,7 @@ impl ContainerHandler {
             ));
         }
         self.reset();
-        let mut connection = self.config.database_connection()?;
+        let mut connection = self.database_manager.database_connection()?;
         connection.immediate_transaction(|connection| {
             let running_status: String = ExecutionStatus::Running.into();
             let end_time: Option<NaiveDateTime> = None;
@@ -303,7 +306,7 @@ impl ContainerHandler {
             ));
         }
         if let Some(step) = &self.executed_step {
-            let mut connection = self.config.database_connection()?;
+            let mut connection = self.database_manager.database_connection()?;
             let experiment_id = step.experiment_id;
             self.kill()?;
             connection.immediate_transaction(|connection| {
@@ -336,7 +339,7 @@ impl ContainerHandler {
             ));
         }
         if let Some(step) = &self.executed_step {
-            let mut connection = self.config.database_connection()?;
+            let mut connection = self.database_manager.database_connection()?;
             let experiment_id = step.experiment_id;
             self.kill()?;
             connection.immediate_transaction(|connection| {
@@ -465,7 +468,7 @@ impl ContainerHandler {
                     // Handle output.
                     self.parse_output(run.wait_with_output()?, false)?;
                     // Sets the status to finished.
-                    let mut connection = self.config.database_connection()?;
+                    let mut connection = self.database_manager.database_connection()?;
                     connection.immediate_transaction(|connection| {
                         let finished_status: String = ExecutionStatus::Finished.into();
                         diesel::update(crate::schema::experiment_execution::table.find(step_db_id))
@@ -561,7 +564,7 @@ impl ContainerHandler {
     fn start_run_process(&mut self) -> Result<(), SeqError> {
         let step = self.get_executed_step()?;
         if let Some(pipeline) = self.loaded_pipelines.get(&step.pipeline_id) {
-            let mut connection = self.config.database_connection()?;
+            let mut connection = self.database_manager.database_connection()?;
             let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
             let pipeline = ExperimentPipelineBlueprint::from_internal(pipeline.pipeline(), values);
             if let Some(step_blueprint) = pipeline

@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use actix_web::web;
 
 use crate::{
-    application::{config::Configuration, error::SeqError},
+    application::{config::Configuration, error::SeqError, database::DatabaseManager},
     model::{
         db::experiment_execution::{ExecutionStatus, ExperimentExecution},
         internal::pipeline_blueprint::PipelineBlueprint,
@@ -14,7 +14,7 @@ use super::{container_service::ContainerHandler, pipeline_service::LoadedPipelin
 
 /// A scheduler for execution of pipeline steps.
 pub struct ExecutionScheduler {
-    config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     loaded_pipelines: web::Data<LoadedPipelines>,
     handler: ContainerHandler,
 }
@@ -22,18 +22,19 @@ pub struct ExecutionScheduler {
 impl ExecutionScheduler {
     pub fn new(
         config: web::Data<Configuration>,
+        database_manager: web::Data<DatabaseManager>,
         loaded_pipelines: web::Data<LoadedPipelines>,
     ) -> Self {
         Self {
-            config: web::Data::clone(&config),
+            database_manager: web::Data::clone(&database_manager),
             loaded_pipelines: web::Data::clone(&loaded_pipelines),
-            handler: ContainerHandler::new(config, loaded_pipelines),
+            handler: ContainerHandler::new(config, database_manager, loaded_pipelines),
         }
     }
 
     pub fn update_pipeline_execution(&mut self) -> Result<(), SeqError> {
         if self.handler.update()? {
-            let mut connection = self.config.database_connection()?;
+            let mut connection = self.database_manager.database_connection()?;
             // First check if there are execution steps that have the running status, but are not currently executed.
             // This might happen if the application closed unexpectedly.
             let mut running =
@@ -52,7 +53,7 @@ impl ExecutionScheduler {
 
     /// Returns the next execution step to be processed if any.
     fn get_next_execution_step(&self) -> Result<Option<ExperimentExecution>, SeqError> {
-        let mut connection = self.config.database_connection()?;
+        let mut connection = self.database_manager.database_connection()?;
         let mut dependency_map_blueprint: HashMap<PipelineStepKey, Vec<PipelineStepKey>> =
             HashMap::new();
         let contextualised_pipelines = self.loaded_pipelines.pipelines();

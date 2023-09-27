@@ -1,13 +1,14 @@
 use crate::{
     application::{
         config::Configuration,
+        database::DatabaseManager,
         error::{SeqError, SeqErrorType},
     },
     diesel::RunQueryDsl,
     model::{
         db::{
             experiment::{Experiment, NewExperiment},
-            experiment_execution::{ExperimentExecution, NewExperimentExecution, ExecutionStatus},
+            experiment_execution::{ExecutionStatus, ExperimentExecution, NewExperimentExecution},
             pipeline_step_variable::{NewPipelineStepVariable, PipelineStepVariable},
         },
         exchange::{
@@ -25,12 +26,12 @@ use actix_web::{web, HttpResponse};
 use diesel::{ExpressionMethods, QueryDsl};
 
 pub async fn create_experiment(
-    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     name: actix_web::web::Json<String>,
 ) -> Result<HttpResponse, SeqError> {
     let name: String = name.into_inner();
     validate_entity_name(&name)?;
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     log::info!("Creating experiment with name {}.", &name);
     let new_record = NewExperiment::new(name);
     let inserted_id: i32 = diesel::insert_into(crate::schema::experiment::table)
@@ -43,11 +44,12 @@ pub async fn create_experiment(
 
 pub async fn delete_experiment(
     app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     // Retrieve the app config.
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(id, &mut connection)?;
     log::info!("Deleting experiment with ID {}.", id);
     // Remove all files belonging to the experiment.
@@ -65,11 +67,11 @@ pub async fn delete_experiment(
 }
 
 pub async fn get_experiment(
-    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(id, &mut connection)?;
     let experiment_details: ExperimentDetails = crate::schema::experiment::table
         .find(id)
@@ -79,22 +81,34 @@ pub async fn get_experiment(
 }
 
 pub async fn get_experiment_execution_status(
-    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(id, &mut connection)?;
     let execution_steps = ExperimentExecution::get_by_experiment(id, &mut connection)?;
     let result = if execution_steps.is_empty() {
         "None".to_string()
-    } else if execution_steps.iter().any(|execution| execution.execution_status == ExecutionStatus::Failed.to_string()) {
+    } else if execution_steps
+        .iter()
+        .any(|execution| execution.execution_status == ExecutionStatus::Failed.to_string())
+    {
         ExecutionStatus::Failed.to_string()
-    } else if execution_steps.iter().any(|execution| execution.execution_status == ExecutionStatus::Aborted.to_string()) {
+    } else if execution_steps
+        .iter()
+        .any(|execution| execution.execution_status == ExecutionStatus::Aborted.to_string())
+    {
         ExecutionStatus::Aborted.to_string()
-    } else if execution_steps.iter().any(|execution| execution.execution_status == ExecutionStatus::Running.to_string()) {
+    } else if execution_steps
+        .iter()
+        .any(|execution| execution.execution_status == ExecutionStatus::Running.to_string())
+    {
         ExecutionStatus::Running.to_string()
-    } else if execution_steps.iter().all(|execution| execution.execution_status == ExecutionStatus::Finished.to_string()) {
+    } else if execution_steps
+        .iter()
+        .all(|execution| execution.execution_status == ExecutionStatus::Finished.to_string())
+    {
         ExecutionStatus::Finished.to_string()
     } else {
         ExecutionStatus::Waiting.to_string()
@@ -103,14 +117,14 @@ pub async fn get_experiment_execution_status(
 }
 
 pub async fn patch_experiment_name(
-    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
     new_name: web::Json<String>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     let new_name = new_name.into_inner();
     validate_entity_name(&new_name)?;
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(id, &mut connection)?;
     connection.immediate_transaction(|connection| {
         diesel::update(crate::schema::experiment::table.find(id))
@@ -121,14 +135,14 @@ pub async fn patch_experiment_name(
 }
 
 pub async fn patch_experiment_mail(
-    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
     new_name: web::Json<String>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     let new_mail = new_name.into_inner();
     validate_mail(&new_mail)?;
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(id, &mut connection)?;
     connection.immediate_transaction(|connection| {
         diesel::update(crate::schema::experiment::table.find(id))
@@ -139,7 +153,7 @@ pub async fn patch_experiment_mail(
 }
 
 pub async fn patch_experiment_comment(
-    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     id: web::Path<i32>,
     new_comment: web::Json<Option<String>>,
 ) -> Result<HttpResponse, SeqError> {
@@ -149,7 +163,7 @@ pub async fn patch_experiment_comment(
     if let Some(inner) = &new_comment {
         validate_comment(inner)?;
     }
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(id, &mut connection)?;
     connection.immediate_transaction(|connection| {
         diesel::update(crate::schema::experiment::table.find(id))
@@ -160,7 +174,7 @@ pub async fn patch_experiment_comment(
 }
 
 pub async fn patch_experiment_pipeline(
-    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
     id: web::Path<i32>,
     new_pipeline: web::Json<Option<String>>,
@@ -177,7 +191,7 @@ pub async fn patch_experiment_pipeline(
             ));
         }
     }
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(id, &mut connection)?;
     connection.immediate_transaction(|connection| {
         diesel::update(crate::schema::experiment::table.find(id))
@@ -188,9 +202,9 @@ pub async fn patch_experiment_pipeline(
 }
 
 pub async fn list_experiment(
-    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
 ) -> Result<web::Json<Vec<ExperimentDetails>>, SeqError> {
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     let experiments: Vec<ExperimentDetails> = Experiment::get_all(&mut connection)?
         .into_iter()
         .map(|val| val.into())
@@ -199,12 +213,12 @@ pub async fn list_experiment(
 }
 
 pub async fn get_experiment_pipelines(
-    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
     id: web::Path<i32>,
 ) -> Result<web::Json<Vec<ExperimentPipelineBlueprint>>, SeqError> {
     let experiment_id: i32 = id.into_inner();
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     let mut experiment_pipelines = Vec::new();
     for pipeline in pipelines.pipelines() {
         let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
@@ -215,7 +229,7 @@ pub async fn get_experiment_pipelines(
 }
 
 pub async fn post_experiment_pipeline_variable(
-    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
     experiment_id: web::Path<i32>,
     new_variable: web::Json<PipelineStepVariableUpload>,
@@ -237,7 +251,7 @@ pub async fn post_experiment_pipeline_variable(
             "The variable is invalid.",
         ));
     }
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection)?;
     connection.immediate_transaction(|connection| {
         if let Some(existing_variable) = PipelineStepVariable::get(
@@ -275,12 +289,12 @@ pub async fn post_experiment_pipeline_variable(
 }
 
 pub async fn post_execute_experiment(
-    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
     experiment_id: web::Path<i32>,
     pipelines: web::Data<LoadedPipelines>,
 ) -> Result<HttpResponse, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
-    let mut connection = app_config.database_connection()?;
+    let mut connection = database_manager.database_connection()?;
     // Error if the experiment was already submitted for execution.
     if ExperimentExecution::has_experiment_execution_entries(experiment_id, &mut connection)? {
         return Err(SeqError::new(
