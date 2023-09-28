@@ -94,7 +94,7 @@ pub fn run_pipeline_step<T: AsRef<str>>(
     arguments.extend(pipeline_step_mount(output_path, "/output", false));
     // Set initial sample input mount.
     arguments.extend(pipeline_step_mount(
-        app_config.experiment_samples_path(&experiment_id),
+        app_config.experiment_input_path(&experiment_id),
         "/input/samples",
         true,
     ));

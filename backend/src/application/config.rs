@@ -14,8 +14,6 @@ pub const PIPELINE_DEFINITION_FILE: &str = "pipeline.json";
 pub const PATH_FILES_EXPERIMENTS_STEPS: &str = "steps";
 /// The sub-folder where experiment input is stored.
 pub const PATH_FILES_EXPERIMENTS_INPUT: &str = "input";
-/// The sub-folder where initial pipeline input samples are stored.
-pub const PATH_FILES_EXPERIMENTS_SAMPLES: &str = "samples";
 /// The sub-folder where all logs are stored.
 pub const PATH_FILES_EXPERIMENTS_LOGS: &str = "logs";
 /// The folder where global data is stored.
@@ -202,18 +200,6 @@ impl Configuration {
         path
     }
 
-    /// The context path where data related to the initial pipeline input samples
-    /// of a specified experiment is stored.
-    ///
-    /// # Parameters
-    ///
-    /// * `experiment_id` - the ID of the experiment
-    pub fn experiment_samples_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
-        let mut path: PathBuf = self.experiment_input_path(experiment_id);
-        path.push(PATH_FILES_EXPERIMENTS_SAMPLES);
-        path
-    }
-
     /// The context path where data related to the pipeline logs
     /// of a specified experiment is stored.
     ///
@@ -299,12 +285,5 @@ mod tests {
         let config = Configuration::new("", "", "", "", "./application/context", "");
         let path: PathBuf = "./application/context/experiments/experiment_id/steps/step_id".into();
         assert_eq!(config.experiment_step_path("experiment_id", "step_id"), path);
-    }
-
-    #[test]
-    fn test_experiment_samples_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
-        let path: PathBuf = "./application/context/experiments/test_id/input/samples".into();
-        assert_eq!(config.experiment_samples_path("test_id"), path);
     }
 }
