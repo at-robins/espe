@@ -129,8 +129,19 @@ impl ExecutionScheduler {
     }
 
     /// Aborts the currently running pipeline.
-    pub fn abort(&mut self) -> Result<(), SeqError> {
-        self.handler.abort()
+    /// 
+    /// # Parameters
+    /// 
+    /// * `experiment_id` - the ID of the experiment to abort
+    pub fn abort(&mut self, experiment_id: i32) -> Result<(), SeqError> {
+        self.database_manager.database_connection()?.immediate_transaction(|connection| {
+            ExperimentExecution::update_scheduled_status_by_experiment(
+                experiment_id,
+                ExecutionStatus::Aborted,
+                connection,
+            )
+        })?;
+        self.handler.abort(experiment_id)
     }
 }
 

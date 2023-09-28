@@ -18,8 +18,9 @@ use crate::{
         },
     },
     service::{
+        execution_service::ExecutionScheduler,
         pipeline_service::LoadedPipelines,
-        validation_service::{validate_comment, validate_entity_name, validate_mail}, execution_service::ExecutionScheduler,
+        validation_service::{validate_comment, validate_entity_name, validate_mail},
     },
 };
 use actix_web::{web, HttpResponse};
@@ -375,11 +376,18 @@ pub async fn post_execute_experiment(
 }
 
 pub async fn post_experiment_abort(
+    database_manager: web::Data<DatabaseManager>,
     scheduler: web::Data<Mutex<ExecutionScheduler>>,
     experiment_id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
-    scheduler.lock().abort()?;
+    {
+        // The block drops the connection since its no longer needed and a
+        // new connection is retrieved in the scheduler.
+        let mut connection = database_manager.database_connection()?;
+        Experiment::exists_err(experiment_id, &mut connection)?;
+    }
+    scheduler.lock().abort(experiment_id)?;
     Ok(HttpResponse::Ok().finish())
 }
 

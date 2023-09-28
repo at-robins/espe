@@ -14,7 +14,8 @@ use twox_hash::XxHash64;
 use crate::{
     application::{
         config::Configuration,
-        error::{SeqError, SeqErrorType}, database::DatabaseManager,
+        database::DatabaseManager,
+        error::{SeqError, SeqErrorType},
     },
     model::{
         db::experiment_execution::{ExecutionStatus, ExperimentExecution},
@@ -327,35 +328,17 @@ impl ContainerHandler {
         Ok(())
     }
 
-    /// Aborts the current pipeline step and all other pipeline steps belonging to the experiment.
-    /// Returns an error if no step is currently running.
-    pub fn abort(&mut self) -> Result<(), SeqError> {
-        if !self.is_running() {
-            return Err(SeqError::new(
-                "No process running",
-                SeqErrorType::InternalServerError,
-                "No process is running and can thus not be aborted.",
-                "No process is currently running.",
-            ));
-        }
+    /// Aborts the the pipeline step belonging to the specified experiment
+    /// if currently executed.
+    /// 
+    /// # Parameters
+    /// 
+    /// * `experiment_id` - the ID of the experiment to abort 
+    pub fn abort(&mut self, experiment_id: i32) -> Result<(), SeqError> {
         if let Some(step) = &self.executed_step {
-            let mut connection = self.database_manager.database_connection()?;
-            let experiment_id = step.experiment_id;
-            self.kill()?;
-            connection.immediate_transaction(|connection| {
-                ExperimentExecution::update_scheduled_status_by_experiment(
-                    experiment_id,
-                    ExecutionStatus::Aborted,
-                    connection,
-                )
-            })?;
-        } else {
-            return Err(SeqError::new(
-                "No process running",
-                SeqErrorType::InternalServerError,
-                "No process is specified and can thus not be aborted.",
-                "No process is currently running.",
-            ));
+            if experiment_id == step.experiment_id {
+                self.kill()?;
+            }
         }
         Ok(())
     }
