@@ -84,6 +84,7 @@
                   :icon="matStopCircle"
                   label="Abort"
                   color="negative"
+                  @click="aborExperiment"
                 >
                   <q-tooltip>
                     Abort the current experiment execution.
@@ -91,6 +92,7 @@
                 </q-btn>
                 <q-btn
                   v-if="
+                    status == ExperimentExecutionStatus.Aborted ||
                     status == ExperimentExecutionStatus.Failed ||
                     status == ExperimentExecutionStatus.Finished
                   "
@@ -153,6 +155,7 @@ const loadingError: Ref<ErrorResponse | null> = ref(null);
 const serverError: Ref<ErrorResponse | null> = ref(null);
 const showServerError = ref(false);
 const selectedPipeline: Ref<PipelineBlueprint | null> = ref(null);
+const isAborting = ref(false);
 const isSubmitting = ref(false);
 const status = ref(ExperimentExecutionStatus.None);
 const isPolling = ref(false);
@@ -360,6 +363,24 @@ function submitExperiment() {
       })
       .finally(() => {
         isSubmitting.value = false;
+      });
+  }
+}
+
+function aborExperiment() {
+  if (!isAborting.value) {
+    isAborting.value = true;
+    axios
+      .post("/api/experiments/" + props.id + "/abort")
+      .then(() => {
+        status.value = ExperimentExecutionStatus.Aborted;
+      })
+      .catch((error) => {
+        serverError.value = error.response.data;
+        showServerError.value = true;
+      })
+      .finally(() => {
+        isAborting.value = false;
       });
   }
 }

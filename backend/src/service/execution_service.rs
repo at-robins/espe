@@ -20,6 +20,13 @@ pub struct ExecutionScheduler {
 }
 
 impl ExecutionScheduler {
+    /// Creates a new `ExecutionScheduler`.
+    /// 
+    /// # Parameters
+    /// 
+    /// * `config` - the application's [`Configuration`]
+    /// * `database_manager` - the application's [`DatabaseManager`]
+    /// * `loaded_pipelines` - the pipelines loaded by the application
     pub fn new(
         config: web::Data<Configuration>,
         database_manager: web::Data<DatabaseManager>,
@@ -32,6 +39,7 @@ impl ExecutionScheduler {
         }
     }
 
+    /// Updates the pipeline execution.
     pub fn update_pipeline_execution(&mut self) -> Result<(), SeqError> {
         if self.handler.update()? {
             let mut connection = self.database_manager.database_connection()?;
@@ -118,6 +126,11 @@ impl ExecutionScheduler {
             }
         });
         Ok(next)
+    }
+
+    /// Aborts the currently running pipeline.
+    pub fn abort(&mut self) -> Result<(), SeqError> {
+        self.handler.abort()
     }
 }
 

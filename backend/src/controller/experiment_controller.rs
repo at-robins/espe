@@ -19,11 +19,12 @@ use crate::{
     },
     service::{
         pipeline_service::LoadedPipelines,
-        validation_service::{validate_comment, validate_entity_name, validate_mail},
+        validation_service::{validate_comment, validate_entity_name, validate_mail}, execution_service::ExecutionScheduler,
     },
 };
 use actix_web::{web, HttpResponse};
 use diesel::{ExpressionMethods, QueryDsl};
+use parking_lot::Mutex;
 
 pub async fn create_experiment(
     database_manager: web::Data<DatabaseManager>,
@@ -371,6 +372,15 @@ pub async fn post_execute_experiment(
             "The requested run parameters are invalid.",
         ))
     }
+}
+
+pub async fn post_experiment_abort(
+    scheduler: web::Data<Mutex<ExecutionScheduler>>,
+    experiment_id: web::Path<i32>,
+) -> Result<HttpResponse, SeqError> {
+    let experiment_id: i32 = experiment_id.into_inner();
+    scheduler.lock().abort()?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[cfg(test)]
