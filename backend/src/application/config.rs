@@ -19,10 +19,11 @@ pub const PATH_FILES_EXPERIMENTS_LOGS: &str = "logs";
 /// The folder where global data is stored.
 pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
 
-use std::{path::PathBuf, time::SystemTime};
+use std::{hash::Hash, hash::Hasher, path::PathBuf, time::SystemTime};
 
 use getset::Getters;
 use serde::{Deserialize, Serialize};
+use twox_hash::XxHash64;
 use uuid::{
     v1::{Context, Timestamp},
     Uuid,
@@ -196,7 +197,10 @@ impl Configuration {
         step_id: Q,
     ) -> PathBuf {
         let mut path: PathBuf = self.experiment_steps_path(experiment_id);
-        path.push(step_id.as_ref());
+        // Hashing the ID prevents invalid characters in file paths.
+        let mut hasher = XxHash64::with_seed(154);
+        step_id.as_ref().hash(&mut hasher);
+        path.push(hasher.finish().to_string());
         path
     }
 
@@ -283,7 +287,8 @@ mod tests {
     #[test]
     fn test_experiment_step_path() {
         let config = Configuration::new("", "", "", "", "./application/context", "");
-        let path: PathBuf = "./application/context/experiments/experiment_id/steps/step_id".into();
+        // Hash of step_id.
+        let path: PathBuf = "./application/context/experiments/experiment_id/steps/4363919453614495606".into();
         assert_eq!(config.experiment_step_path("experiment_id", "step_id"), path);
     }
 }
