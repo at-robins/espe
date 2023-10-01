@@ -340,9 +340,11 @@ pub async fn post_execute_experiment(
                     }
                 }
             }
-            diesel::insert_into(crate::schema::experiment_execution::table)
-                .values(&execution_steps)
-                .execute(&mut connection)?;
+            connection.immediate_transaction(|connection| {
+                diesel::insert_into(crate::schema::experiment_execution::table)
+                    .values(&execution_steps)
+                    .execute(connection)
+            })?;
             log::info!(
                 "Submitted experiment {} with pipeline {} for execution.",
                 experiment_id,
@@ -375,7 +377,7 @@ pub async fn post_execute_experiment(
     }
 }
 
-pub async fn post_experiment_abort(
+pub async fn post_experiment_execution_abort(
     database_manager: web::Data<DatabaseManager>,
     scheduler: web::Data<Mutex<ExecutionScheduler>>,
     experiment_id: web::Path<i32>,
@@ -388,6 +390,34 @@ pub async fn post_experiment_abort(
         Experiment::exists_err(experiment_id, &mut connection)?;
     }
     scheduler.lock().abort(experiment_id)?;
+    Ok(HttpResponse::Ok().finish())
+}
+
+pub async fn post_experiment_execution_reset(
+    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
+    experiment_id: web::Path<i32>,
+) -> Result<HttpResponse, SeqError> {
+    let experiment_id: i32 = experiment_id.into_inner();
+    let mut connection = database_manager.database_connection()?;
+    Experiment::exists_err(experiment_id, &mut connection)?;
+    // Delete output files and logs.
+    log::info!("Deleting output from experiment with ID {}.", experiment_id);
+    let experiment_steps_path = app_config.experiment_steps_path(experiment_id.to_string());
+    if experiment_steps_path.exists() {
+        std::fs::remove_dir_all(experiment_steps_path)?;
+    }
+    let experiment_logs_path = app_config.experiment_logs_path(experiment_id.to_string());
+    if experiment_logs_path.exists() {
+        std::fs::remove_dir_all(experiment_logs_path)?;
+    }
+    // Delete execution steps from the database.
+    connection.immediate_transaction(|connection| {
+        diesel::delete(crate::schema::experiment_execution::table)
+            .filter(crate::schema::experiment_execution::experiment_id.eq(experiment_id))
+            .execute(connection)
+    })?;
+
     Ok(HttpResponse::Ok().finish())
 }
 

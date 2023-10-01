@@ -84,7 +84,8 @@
                   :icon="matStopCircle"
                   label="Abort"
                   color="negative"
-                  @click="aborExperiment"
+                  :loading="isAborting"
+                  @click="abortExperiment"
                 >
                   <q-tooltip>
                     Abort the current experiment execution.
@@ -99,6 +100,8 @@
                   :icon="matRestartAlt"
                   label="Restart"
                   color="positive"
+                  :loading="isRestarting"
+                  @click="restartExperiment"
                 >
                   <q-tooltip> Restart the experiment execution. </q-tooltip>
                 </q-btn>
@@ -156,6 +159,7 @@ const serverError: Ref<ErrorResponse | null> = ref(null);
 const showServerError = ref(false);
 const selectedPipeline: Ref<PipelineBlueprint | null> = ref(null);
 const isAborting = ref(false);
+const isRestarting = ref(false);
 const isSubmitting = ref(false);
 const status = ref(ExperimentExecutionStatus.None);
 const isPolling = ref(false);
@@ -367,7 +371,7 @@ function submitExperiment() {
   }
 }
 
-function aborExperiment() {
+function abortExperiment() {
   if (!isAborting.value) {
     isAborting.value = true;
     axios
@@ -381,6 +385,27 @@ function aborExperiment() {
       })
       .finally(() => {
         isAborting.value = false;
+      });
+  }
+}
+
+function restartExperiment() {
+  if (!isRestarting.value) {
+    isRestarting.value = true;
+    axios
+      .post("/api/experiments/" + props.id + "/reset")
+      .then(() => {
+        return axios.post("/api/experiments/" + props.id);
+      })
+      .then(() => {
+        status.value = ExperimentExecutionStatus.Waiting;
+      })
+      .catch((error) => {
+        serverError.value = error.response.data;
+        showServerError.value = true;
+      })
+      .finally(() => {
+        isRestarting.value = false;
       });
   }
 }
