@@ -4,11 +4,72 @@
   "description": "<p>This pipeline processes paired end ATAC data.</p>",
   "steps": [
     {
-      "id": "fastqc_initial",
-      "name": "FastQC",
+      "id": "qc_initial",
+      "name": "Initial QC",
       "description": "Performs an initial quality control of sequenced reads.",
-      "container": "fastqc",
+      "container": "fastqc_initial",
       "dependencies": [],
+      "variables": [
+        {
+          "id": "ADAPTERS",
+          "name": "Adapter sequences",
+          "description": "A custom list of sequencing adapters. The global data repository must contain a file called <var>adapters.txt</var> at its root.",
+          "category": {
+            "tag": "Global"
+          }
+        },
+        {
+          "id": "KMERS",
+          "name": "Kmer length",
+          "description": "An integer that specifies the Kmer length to be used for Kmer content detection. Must be between 2 and 10.",
+          "category": {
+            "tag": "Number"
+          }
+        },
+        {
+          "id": "SVG",
+          "name": "SVG images",
+          "description": "Saves all images as vector files instead of bitmaps.",
+          "category": {
+            "tag": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "id": "trimming",
+      "name": "Trimming",
+      "description": "Performs trimming of adapters and low quality bases.",
+      "container": "trimmomatic",
+      "dependencies": [],
+      "variables": [
+        {
+          "id": "PHRED",
+          "name": "PHRED score",
+          "description": "Specify which PHRED score encoding to use.",
+          "required": false,
+          "category": {
+            "tag": "Option",
+            "content": [
+              {
+                "name": "PHRED33",
+                "value": "PHRED33"
+              },
+              {
+                "name": "PHRED64",
+                "value": "PHRED64"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "qc_trimming",
+      "name": "Trimming QC",
+      "description": "Performs a quality control of the trimmed reads.",
+      "container": "fastqc_trimming",
+      "dependencies": ["trimming"],
       "variables": [
         {
           "id": "ADAPTERS",
