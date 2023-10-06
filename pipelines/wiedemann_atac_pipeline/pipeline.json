@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_atac_paired_end",
   "name": "Wiedemann ATAC paired end pipeline",
-  "description": "<p>This pipeline processes paired end ATAC data.</p>",
+  "description": "<p>This pipeline processes paired end ATAC data. The input is expected as gzipped FASTQ files (.fq.gz / .fastq.gz) and might be organised in sub-folders.</p>",
   "steps": [
     {
       "id": "qc_initial",

@@ -198,9 +198,7 @@ impl Configuration {
     ) -> PathBuf {
         let mut path: PathBuf = self.experiment_steps_path(experiment_id);
         // Hashing the ID prevents invalid characters in file paths.
-        let mut hasher = XxHash64::with_seed(154);
-        step_id.as_ref().hash(&mut hasher);
-        path.push(hasher.finish().to_string());
+        path.push(Self::hash_string(step_id));
         path
     }
 
@@ -228,6 +226,18 @@ impl Configuration {
     /// Returns the full server address including port information.
     pub fn server_address_and_port(&self) -> String {
         format!("{}:{}", self.server_address(), self.server_port())
+    }
+
+    /// Hashes the specified string and returns the resulting number as a string.
+    /// The hash is constant for the same string on repeated uses.
+    ///
+    /// # Parameters
+    ///
+    /// * `value` - the string to hash
+    pub fn hash_string<T: AsRef<str>>(value: T) -> String {
+        let mut hasher = XxHash64::with_seed(154);
+        value.as_ref().hash(&mut hasher);
+        hasher.finish().to_string()
     }
 }
 
@@ -288,7 +298,21 @@ mod tests {
     fn test_experiment_step_path() {
         let config = Configuration::new("", "", "", "", "./application/context", "");
         // Hash of step_id.
-        let path: PathBuf = "./application/context/experiments/experiment_id/steps/4363919453614495606".into();
+        let path: PathBuf =
+            "./application/context/experiments/experiment_id/steps/4363919453614495606".into();
         assert_eq!(config.experiment_step_path("experiment_id", "step_id"), path);
+    }
+
+    #[test]
+    fn test_hash_string() {
+        let random_string = "39012rtuj132-0t1jp41-9/n\n\t@#$%^&*()|}{\"?>¡ªº£€˚„";
+        let hash = Configuration::hash_string(random_string);
+        let allowed_characters = vec!['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        assert!(hash.len() > 0);
+        // u64 max
+        assert!(hash.len() <= 20);
+        for character in hash.chars() {
+            assert!(allowed_characters.contains(&character));
+        }
     }
 }

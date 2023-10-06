@@ -1,13 +1,15 @@
 #!/usr/bin/python
 """This module runs the trimming process."""
 
+import json
 import os
 import sys
 
 BASE_COMMAND = "java -jar /Trimmomatic-0.39/trimmomatic-0.39.jar PE"
 STEP_OPTIONS = ("ILLUMINACLIP:/Trimmomatic-0.39/adapters/NexteraPE-PE.fa:2:30:10:2:True "
 "LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36")
-INPUT_FOLDER = "/input/samples/"
+MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
+INPUT_FOLDER = MOUNT_PATHS["input"] + "/"
 
 # If a specific environment variable is set, appends the respective option.
 options = ""
@@ -19,12 +21,6 @@ if phred is not None:
         options += " -phred64"
     else:
         print(f"Unknown PHRED score option: {phred}", file=sys.stderr)
-
-if os.environ.get("PHRED33") is not None:
-    options += " --phred33"
-
-if os.environ.get("PHRED64") is not None:
-    options += " --phred64"
 
 if not options:
     print("Running with default options.")
@@ -49,7 +45,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
 
             if input_files:
                 file_base_output_path = os.path.join(
-                    "/output",
+                    MOUNT_PATHS["output"],
                     file_base_input_path.removeprefix(INPUT_FOLDER)
                 )
                 full_command = (f"{BASE_COMMAND}{options} {input_files} "

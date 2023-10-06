@@ -1,15 +1,14 @@
 use std::{
+    collections::HashMap,
     ffi::OsString,
-    hash::{Hash, Hasher},
     io::{BufWriter, Write},
     path::Path,
-    process::{Child, Command, Output, Stdio}, collections::HashMap,
+    process::{Child, Command, Output, Stdio},
 };
 
 use actix_web::web;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
-use twox_hash::XxHash64;
 
 use crate::{
     application::{
@@ -27,6 +26,9 @@ use crate::{
 };
 
 use super::pipeline_service::LoadedPipelines;
+
+/// The container environment variable specifying all mounts.
+const CONTAINER_ENV_MOUNT: &str = "MOUNT_PATHS";
 
 /// Builds the specifc pipeline step container at the specified context.
 ///
@@ -91,34 +93,55 @@ pub fn run_pipeline_step<T: AsRef<str>>(
         format_container_name(&pipeline_id, step.id()).into(),
         "--rm".into(),
     ];
+
     arguments.extend(pipeline_step_mount(output_path, "/output", false));
     // Set initial sample input mount.
     arguments.extend(pipeline_step_mount(
         app_config.experiment_input_path(&experiment_id),
-        "/input/samples",
+        "/input/base",
         true,
     ));
     // Set input mounts / dependencies.
+    let mut mount_map_dependencies = serde_json::Map::new();
     for dependency_id in step.dependencies() {
+        let target = format!("/input/steps/{}", Configuration::hash_string(dependency_id));
+        mount_map_dependencies
+            .insert(dependency_id.to_string(), serde_json::Value::String(target.clone()));
         arguments.extend(pipeline_step_mount(
             app_config.experiment_step_path(&experiment_id, dependency_id),
-            format!("/input/steps/{}", dependency_id),
+            target,
             true,
         ));
     }
     // Set global mounts.
+    let mut mount_map_globals = serde_json::Map::new();
     step.variables()
         .iter()
         .filter(|var_instance| var_instance.is_global_data_reference())
         // Filter out variables without values.
         .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), value)))
         .for_each(|(global_var_id, global_var_value)| {
+            let target = format!("/input/globals/{}", Configuration::hash_string(global_var_id));
+            mount_map_globals.insert(
+                global_var_id.to_string(),
+                serde_json::Value::String(target.clone()),
+            );
             arguments.extend(pipeline_step_mount(
                 app_config.global_data_path(global_var_value),
-                format!("/input/globals/{}", global_var_id),
+                target,
                 true,
             ));
         });
+
+    // Set mount envrionment variable.
+    let mut mount_map_top = serde_json::Map::new();
+    mount_map_top.insert("input".to_string(), serde_json::Value::String("/input/base".to_string()));
+    mount_map_top.insert("output".to_string(), serde_json::Value::String("/output".to_string()));
+    mount_map_top.insert("dependencies".to_string(), serde_json::Value::Object(mount_map_dependencies));
+    mount_map_top.insert("globals".to_string(), serde_json::Value::Object(mount_map_globals));
+    let mount_paths = serde_json::Value::Object(mount_map_top);
+    arguments.push("--env".into());
+    arguments.push(format!("{}={}", CONTAINER_ENV_MOUNT, mount_paths.to_string()).into());
 
     // Set other variables.
     step.variables()
@@ -127,8 +150,12 @@ pub fn run_pipeline_step<T: AsRef<str>>(
         // Filter out variables without values.
         .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), value)))
         .for_each(|(other_var_id, other_var_value)| {
-            arguments.push("--env".into());
-            arguments.push(format!("{}={}", other_var_id, other_var_value).into());
+            if other_var_id != CONTAINER_ENV_MOUNT {
+                arguments.push("--env".into());
+                arguments.push(format!("{}={}", other_var_id, other_var_value).into());
+            } else {
+                log::warn!("Pipeline {} step {} tried to overwrite the reserved environment variable {} with value {}.", pipeline_id.as_ref(), step.id(), other_var_id, other_var_value);
+            }
         });
 
     // Set container to run.
@@ -176,9 +203,7 @@ fn format_container_name<T: AsRef<str>, R: AsRef<str>>(
     pipeline_step_id: R,
 ) -> String {
     let name = format!("{}{}", pipeline_id.as_ref(), pipeline_step_id.as_ref());
-    let mut hasher = XxHash64::with_seed(154);
-    name.hash(&mut hasher);
-    hasher.finish().to_string()
+    Configuration::hash_string(name)
 }
 
 pub struct ContainerHandler {
@@ -330,10 +355,10 @@ impl ContainerHandler {
 
     /// Aborts the the pipeline step belonging to the specified experiment
     /// if currently executed.
-    /// 
+    ///
     /// # Parameters
-    /// 
-    /// * `experiment_id` - the ID of the experiment to abort 
+    ///
+    /// * `experiment_id` - the ID of the experiment to abort
     pub fn abort(&mut self, experiment_id: i32) -> Result<(), SeqError> {
         if let Some(step) = &self.executed_step {
             if experiment_id == step.experiment_id {
@@ -550,7 +575,11 @@ impl ContainerHandler {
             let mut connection = self.database_manager.database_connection()?;
             let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
             // The stati of the pipeline steps should be None at this point so an empty map is supplied instead of loading them from the database.
-            let pipeline = ExperimentPipelineBlueprint::from_internal(pipeline.pipeline(), values, HashMap::new());
+            let pipeline = ExperimentPipelineBlueprint::from_internal(
+                pipeline.pipeline(),
+                values,
+                HashMap::new(),
+            );
             if let Some(step_blueprint) = pipeline
                 .steps()
                 .iter()

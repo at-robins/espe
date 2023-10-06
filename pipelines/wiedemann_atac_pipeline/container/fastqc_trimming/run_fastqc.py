@@ -1,18 +1,22 @@
 #!/usr/bin/python
 """This module runs the after trimming QC process."""
 
+import json
 import os
 import sys
+from contextlib import suppress
 
 BASE_COMMAND = "perl -- /FastQC/fastqc"
-INPUT_FOLDER = "/input/steps/trimming/"
+MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
+INPUT_FOLDER = MOUNT_PATHS["dependencies"]["trimming"] + "/"
 
+print(MOUNT_PATHS)
 # If a specific environment variable is set, appends the respective option.
 options = ""
 
-adapters = os.environ.get("ADAPTERS")
-if adapters is not None:
-    options += f" --adapters /input/globals/{adapters}/adapters.txt"
+with suppress(Exception):
+    adapters = MOUNT_PATHS["globals"]["ADAPTERS"]
+    options += f" --adapters {adapters}/adapters.txt"
 
 kmers = os.environ.get("KMERS")
 if kmers is not None:
@@ -34,7 +38,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
             if file.casefold().endswith(".fq.gz") or file.casefold().endswith(".fastq.gz"):
                 file_input_path = os.path.join(root, file)
                 folder_output_path = os.path.join(
-                    "/output",
+                    MOUNT_PATHS["output"],
                     root.removeprefix(INPUT_FOLDER)
                 )
                 full_command = (f"{BASE_COMMAND}{options} "
