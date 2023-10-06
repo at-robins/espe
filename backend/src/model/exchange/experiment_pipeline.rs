@@ -33,15 +33,23 @@ impl ExperimentPipelineBlueprint {
     /// * `pipeline` - the pipeline to convert
     /// * `values` - a map of variable values, where the keys are a concatenation of the
     /// pipeline step ID and variable ID
-    pub fn from_internal<T: Borrow<PipelineBlueprint>, S: Borrow<HashMap<String, String>>>(
-        pipeline: T,
-        values: S,
+    /// * `stati` - a map of stati, where the keys are the pipeline step ID
+    pub fn from_internal<
+        PipelineType: Borrow<PipelineBlueprint>,
+        ValueMapType: Borrow<HashMap<String, String>>,
+        StatusMapType: Borrow<HashMap<String, String>>,
+    >(
+        pipeline: PipelineType,
+        values: ValueMapType,
+        stati: StatusMapType,
     ) -> Self {
         let steps = pipeline
             .borrow()
             .steps()
             .iter()
-            .map(|s| ExperimentPipelineStepBlueprint::from_internal(s, values.borrow()))
+            .map(|s| {
+                ExperimentPipelineStepBlueprint::from_internal(s, values.borrow(), stati.borrow())
+            })
             .collect();
         Self {
             id: pipeline.borrow().id().clone(),
@@ -73,6 +81,9 @@ pub struct ExperimentPipelineStepBlueprint {
     /// The variables that can be specified for the pipeline step.
     #[getset(get = "pub")]
     variables: Vec<ExperimentPipelineStepVariable>,
+    /// The execution status of the pipeline step.
+    #[getset(get = "pub")]
+    status: Option<String>,
 }
 
 impl ExperimentPipelineStepBlueprint {
@@ -84,9 +95,15 @@ impl ExperimentPipelineStepBlueprint {
     /// * `pipeline_step` - the step to convert
     /// * `values` - a map of variable values, where the keys are a concatenation of the
     /// pipeline step ID and variable ID
-    pub fn from_internal<T: Borrow<PipelineStepBlueprint>, S: Borrow<HashMap<String, String>>>(
-        pipeline_step: T,
-        values: S,
+    /// * `stati` - a map of stati, where the keys are the pipeline step ID
+    pub fn from_internal<
+        StepType: Borrow<PipelineStepBlueprint>,
+        ValueMapType: Borrow<HashMap<String, String>>,
+        StatusMapType: Borrow<HashMap<String, String>>,
+    >(
+        pipeline_step: StepType,
+        values: ValueMapType,
+        stati: StatusMapType,
     ) -> Self {
         let variables = pipeline_step
             .borrow()
@@ -102,6 +119,10 @@ impl ExperimentPipelineStepBlueprint {
                 )
             })
             .collect();
+        let status: Option<String> = stati
+            .borrow()
+            .get(pipeline_step.borrow().id())
+            .map(|s| s.clone());
         Self {
             id: pipeline_step.borrow().id().clone(),
             name: pipeline_step.borrow().name().clone(),
@@ -109,6 +130,7 @@ impl ExperimentPipelineStepBlueprint {
             container: pipeline_step.borrow().container().clone(),
             dependencies: pipeline_step.borrow().dependencies().clone(),
             variables,
+            status,
         }
     }
 }
@@ -167,6 +189,8 @@ impl ExperimentPipelineStepVariable {
 
 #[cfg(test)]
 mod tests {
+
+    use crate::model::internal::step::PipelineStepStatus;
 
     use super::*;
 
@@ -299,14 +323,18 @@ mod tests {
         values.insert("fastqcglobal".to_string(), value_global.clone());
         values.insert("fastqcbool".to_string(), value_bool.clone());
 
+        let mut stati = HashMap::new();
+        stati.insert("fastqc".to_string(), PipelineStepStatus::Pending.to_string());
+
         let experiment_step =
-            ExperimentPipelineStepBlueprint::from_internal(&pipeline_step, values);
+            ExperimentPipelineStepBlueprint::from_internal(&pipeline_step, values, stati);
         assert_eq!(experiment_step.id(), pipeline_step.id());
         assert_eq!(experiment_step.name(), pipeline_step.name());
         assert_eq!(experiment_step.description(), pipeline_step.description());
         assert_eq!(experiment_step.container(), pipeline_step.container());
         assert_eq!(experiment_step.dependencies(), pipeline_step.dependencies());
         assert_eq!(experiment_step.variables().len(), pipeline_step.variables().len());
+        assert_eq!(experiment_step.status(), &Some(PipelineStepStatus::Pending.to_string()));
 
         let experiment_vars = experiment_step.variables();
         let pipeline_vars = pipeline_step.variables();
@@ -399,7 +427,11 @@ mod tests {
         values.insert("fastqc2bool".to_string(), "10".to_string());
         values.insert("fastqc2global".to_string(), "11".to_string());
 
-        let experiment_pipeline = ExperimentPipelineBlueprint::from_internal(&pipeline, values);
+        let mut stati = HashMap::new();
+        stati.insert("fastqc2".to_string(), PipelineStepStatus::Failed.to_string());
+
+        let experiment_pipeline =
+            ExperimentPipelineBlueprint::from_internal(&pipeline, values, stati);
         assert_eq!(experiment_pipeline.id(), pipeline.id());
         assert_eq!(experiment_pipeline.name(), pipeline.name());
         assert_eq!(experiment_pipeline.description(), pipeline.description());
@@ -414,6 +446,16 @@ mod tests {
             assert_eq!(experiment_steps[i].container(), pipeline_steps[i].container());
             assert_eq!(experiment_steps[i].dependencies(), pipeline_steps[i].dependencies());
             assert_eq!(experiment_steps[i].variables().len(), pipeline_steps[i].variables().len());
+
+            if experiment_steps[i].id() == "fastqc2" {
+                assert_eq!(
+                    experiment_steps[i].status(),
+                    &Some(PipelineStepStatus::Failed.to_string())
+                );
+            } else {
+                assert_eq!(experiment_steps[i].status(), &None);
+            }
+
             let experiment_vars = experiment_steps[i].variables();
             let pipeline_vars = pipeline_steps[i].variables();
             for j in 0..experiment_vars.len() {

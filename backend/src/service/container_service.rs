@@ -3,7 +3,7 @@ use std::{
     hash::{Hash, Hasher},
     io::{BufWriter, Write},
     path::Path,
-    process::{Child, Command, Output, Stdio},
+    process::{Child, Command, Output, Stdio}, collections::HashMap,
 };
 
 use actix_web::web;
@@ -549,7 +549,8 @@ impl ContainerHandler {
         if let Some(pipeline) = self.loaded_pipelines.get(&step.pipeline_id) {
             let mut connection = self.database_manager.database_connection()?;
             let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
-            let pipeline = ExperimentPipelineBlueprint::from_internal(pipeline.pipeline(), values);
+            // The stati of the pipeline steps should be None at this point so an empty map is supplied instead of loading them from the database.
+            let pipeline = ExperimentPipelineBlueprint::from_internal(pipeline.pipeline(), values, HashMap::new());
             if let Some(step_blueprint) = pipeline
                 .steps()
                 .iter()

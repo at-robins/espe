@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     application::{
         config::Configuration,
@@ -221,13 +223,60 @@ pub async fn get_experiment_pipelines(
 ) -> Result<web::Json<Vec<ExperimentPipelineBlueprint>>, SeqError> {
     let experiment_id: i32 = id.into_inner();
     let mut connection = database_manager.database_connection()?;
+    let all_experiment_stati =
+        ExperimentExecution::get_by_experiment(experiment_id, &mut connection)?;
     let mut experiment_pipelines = Vec::new();
     for pipeline in pipelines.pipelines() {
         let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
-        experiment_pipelines
-            .push(ExperimentPipelineBlueprint::from_internal(pipeline.pipeline(), values));
+        let stati: HashMap<String, String> = all_experiment_stati
+            .iter()
+            .filter(|execution| &execution.pipeline_id == pipeline.pipeline().id())
+            .map(|execution| {
+                (execution.pipeline_step_id.clone(), execution.execution_status.clone())
+            })
+            .collect();
+        experiment_pipelines.push(ExperimentPipelineBlueprint::from_internal(
+            pipeline.pipeline(),
+            values,
+            stati,
+        ));
     }
     Ok(web::Json(experiment_pipelines))
+}
+
+pub async fn get_experiment_pipeline_run(
+    database_manager: web::Data<DatabaseManager>,
+    pipelines: web::Data<LoadedPipelines>,
+    id: web::Path<i32>,
+) -> Result<web::Json<Option<ExperimentPipelineBlueprint>>, SeqError> {
+    let experiment_id: i32 = id.into_inner();
+    let mut connection = database_manager.database_connection()?;
+    Experiment::exists_err(experiment_id, &mut connection)?;
+    let experiment = Experiment::get(experiment_id, &mut connection)?;
+    let experiment_pipeline = if let Some(pipeline_id) = experiment.pipeline_id {
+        if let Some(pipeline) = pipelines.get(&pipeline_id) {
+            let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
+            let stati: HashMap<String, String> =
+                ExperimentExecution::get_by_experiment(experiment_id, &mut connection)?
+                    .into_iter()
+                    .filter(|execution| &execution.pipeline_id == &pipeline_id)
+                    .map(|execution| {
+                        (execution.pipeline_step_id, execution.execution_status)
+                    })
+                    .collect();
+            Some(ExperimentPipelineBlueprint::from_internal(pipeline.pipeline(), values, stati))
+        } else {
+            return Err(SeqError::new(
+                "Not Found",
+                SeqErrorType::NotFoundError,
+                format!("No pipeline with ID {} is currently loaded.", pipeline_id),
+                "The pipeline ID is invalid.",
+            ));
+        }
+    } else {
+        None
+    };
+    Ok(web::Json(experiment_pipeline))
 }
 
 pub async fn post_experiment_pipeline_variable(
