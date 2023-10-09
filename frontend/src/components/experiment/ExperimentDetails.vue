@@ -17,7 +17,7 @@
             />
           </q-card-section>
           <q-card-section>
-            <experiment-status-indicator :status="status" />
+            <experiment-status-indicator :id="props.id" :status="status" />
           </q-card-section>
           <q-card-section>
             <entity-comment
@@ -145,7 +145,7 @@ import {
   matRestartAlt,
   matStopCircle,
 } from "@quasar/extras/material-icons";
-import { useRouter } from "vue-router";
+import { onBeforeRouteLeave, useRouter } from "vue-router";
 
 // The intervall in which status updates are requested from the server.
 const POLLING_INTERVALL_MILLISECONDS = 10000;
@@ -166,9 +166,16 @@ const isPolling = ref(false);
 const pollingError: Ref<ErrorResponse | null> = ref(null);
 const router = useRouter();
 const this_route = router.currentRoute.value.fullPath;
+const pollingTimer: Ref<number | null> = ref(null);
 
 const props = defineProps({
   id: { type: String, required: true },
+});
+
+onBeforeRouteLeave(() => {
+  if (pollingTimer.value !== null) {
+    clearTimeout(pollingTimer.value);
+  }
 });
 
 function updateTitle(title: string) {
@@ -426,7 +433,10 @@ function pollStatusChanges() {
       .get("/api/experiments/" + props.id + "/status")
       .then((response) => {
         status.value = response.data;
-        setTimeout(pollStatusChanges, POLLING_INTERVALL_MILLISECONDS);
+        pollingTimer.value = window.setTimeout(
+          pollStatusChanges,
+          POLLING_INTERVALL_MILLISECONDS
+        );
       })
       .catch((error) => {
         pollingError.value = error.response.data;
