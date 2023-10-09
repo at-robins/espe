@@ -2,6 +2,8 @@
 """This module runs the trimming process."""
 
 import json
+import math
+import multiprocessing
 import os
 import sys
 
@@ -13,6 +15,11 @@ INPUT_FOLDER = MOUNT_PATHS["input"] + "/"
 
 # If a specific environment variable is set, appends the respective option.
 options = ""
+
+threads = math.floor(multiprocessing.cpu_count() * 0.8)
+if threads > 0:
+    options += f" -threads {threads}"
+
 phred = os.environ.get("PHRED")
 if phred is not None:
     if phred == "PHRED33":

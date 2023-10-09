@@ -15,7 +15,7 @@ options = ""
 
 with suppress(Exception):
     adapters = MOUNT_PATHS["globals"]["ADAPTERS"]
-    options += f" --adapters {adapters}/adapters.txt"
+    options += f" --adapters {adapters}/qc_adapters.txt"
 
 kmers = os.environ.get("KMERS")
 if kmers is not None:
