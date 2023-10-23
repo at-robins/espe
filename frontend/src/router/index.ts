@@ -4,7 +4,7 @@ import GlobalDataView from "@/views/GlobalDataView.vue";
 import GlobalDataDetailsView from "@/views/GlobalDataDetailsView.vue";
 import ExperimentView from "@/views/ExperimentView.vue";
 import ExperimentDetailsView from "@/views/ExperimentDetailsView.vue";
-import ExperimentRunDetails from "@/components/experiment/ExperimentRunDetails.vue";
+import ExperimentRunDetailsView from "@/views/ExperimentRunDetailsView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -43,7 +43,7 @@ const router = createRouter({
     {
       path: "/ui/experiments/:id/run",
       name: "experiments_run_detail",
-      component: ExperimentRunDetails,
+      component: ExperimentRunDetailsView,
       props: true,
     },
   ],

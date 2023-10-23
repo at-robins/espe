@@ -2,7 +2,7 @@
   <div class="q-pa-md q-gutter-md">
     <q-card>
       <q-card-section>
-        <div class="text-h6">Experiment {{ id }}</div>
+        <div class="text-h6">Experiment: {{ experiment_name }}</div>
       </q-card-section>
       <div class="q-pa-md gutter-md no-wrap row" v-if="!loadingError">
         <div
@@ -77,9 +77,31 @@
         </div>
         <div v-else class="text-h6">{{ selectedStep.name }}</div>
       </q-card-section>
-      <div v-if="selectedStep !== null" class="q-gutter-md q-pa-md col">
+      <q-card-section>
+        <div v-if="selectedStep" class="q-pl-md">
+          <div v-html="selectedStep.description" />
+        </div>
+      </q-card-section>
+      <div v-if="selectedStep" class="q-gutter-md q-pa-md col">
         <q-btn label="Display logs" class="row" />
         <q-btn label="Download output" class="row" />
+
+        <q-btn
+          v-if="canBeStarted(selectedStep)"
+          class="row"
+          :icon="matRestartAlt"
+          label="Restart step"
+          :color="restartingError ? 'negative' : 'positive'"
+          :loading="isRestarting"
+          @click="restartStep(selectedStep)"
+        >
+          <q-tooltip>
+            <div v-if="restartingError">
+              <error-popup :error-response="restartingError" />
+            </div>
+            <div>Restarts the experiment execution step.</div>
+          </q-tooltip>
+        </q-btn>
       </div>
     </q-card>
     <q-dialog v-model="showPollingError" v-if="pollingError">
@@ -89,9 +111,9 @@
 </template>
 
 <script setup lang="ts">
-import { type ErrorResponse } from "@/scripts/types";
+import { type ErrorResponse, type ExperimentDetails } from "@/scripts/types";
 import axios from "axios";
-import { ref, onMounted, type Ref } from "vue";
+import { ref, onMounted, type Ref, computed } from "vue";
 import ErrorPopup from "@/components/ErrorPopup.vue";
 import { onBeforeRouteLeave, useRouter } from "vue-router";
 import {
@@ -105,16 +127,20 @@ import {
   symOutlinedNotStarted,
   symOutlinedStopCircle,
 } from "@quasar/extras/material-symbols-outlined";
+import { matRestartAlt } from "@quasar/extras/material-icons";
 
 // The intervall in which pipeline updates are requested from the server.
 const POLLING_INTERVALL_MILLISECONDS = 10000;
 
+const experiment: Ref<ExperimentDetails | null> = ref(null);
 const pipeline: Ref<PipelineBlueprint | null> = ref(null);
 const sortedSteps: Ref<PipelineStepBlueprint[][]> = ref([]);
 const isLoadingPipelineDetails = ref(false);
+const isRestarting = ref(false);
 const loadingError: Ref<ErrorResponse | null> = ref(null);
 const isPollingPipelineDetails = ref(false);
 const pollingError: Ref<ErrorResponse | null> = ref(null);
+const restartingError: Ref<ErrorResponse | null> = ref(null);
 const selectedStep: Ref<PipelineStepBlueprint | null> = ref(null);
 const showPollingError = ref(false);
 const router = useRouter();
@@ -123,6 +149,10 @@ const pollingTimer: Ref<number | null> = ref(null);
 
 const props = defineProps({
   id: { type: String, required: true },
+});
+
+const experiment_name = computed(() => {
+  return experiment.value ? experiment.value.name : props.id;
 });
 
 onMounted(() => {
@@ -142,7 +172,11 @@ function loadPipelineDetails() {
   isLoadingPipelineDetails.value = true;
   loadingError.value = null;
   axios
-    .get("/api/experiments/" + props.id + "/run")
+    .get("/api/experiments/" + props.id)
+    .then((response) => {
+      experiment.value = response.data;
+      return axios.get("/api/experiments/" + props.id + "/run");
+    })
     .then((response) => {
       setPipelineDetails(response.data);
       pollingTimer.value = window.setTimeout(
@@ -261,6 +295,61 @@ function selectStep(step: PipelineStepBlueprint) {
     selectedStep.value = null;
   } else {
     selectedStep.value = step;
+  }
+}
+
+/**
+ * Returns ```true``` if the specified step can be (re-)started.
+ *
+ * @param step the step to check
+ */
+function canBeStarted(step: PipelineStepBlueprint | null): boolean {
+  if (!pipeline.value) {
+    return false;
+  }
+  if (!step) {
+    return false;
+  }
+  const satisfied_dependencies = pipeline.value.steps
+    .filter((s) => s.status === PipelineStepStatus.Finished)
+    .map((s) => s.id);
+  const isDependecySatisfied = step.dependencies.every((dependency) =>
+    satisfied_dependencies.includes(dependency)
+  );
+  return (
+    step.status !== PipelineStepStatus.Running &&
+    step.status !== PipelineStepStatus.Waiting &&
+    isDependecySatisfied
+  );
+}
+
+/**
+ * Tries to restart the specified step.
+ * 
+ * @param step the step to restart
+ */
+function restartStep(step: PipelineStepBlueprint | null) {
+  if (step && !isRestarting.value) {
+    isRestarting.value = true;
+    restartingError.value = null;
+    const config = {
+      headers: {
+        "content-type": "application/json",
+      },
+    };
+    axios
+      .post(
+        "/api/experiments/" + props.id + "/rerun",
+        JSON.stringify(step.id),
+        config
+      )
+      .then(() => (step.status = PipelineStepStatus.Waiting))
+      .catch((error) => {
+        restartingError.value = error.response.data;
+      })
+      .finally(() => {
+        isRestarting.value = false;
+      });
   }
 }
 </script>
