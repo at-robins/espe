@@ -214,6 +214,30 @@ impl Configuration {
         path
     }
 
+    /// The context path where a specific pipeline log file is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    /// * `pipeline_id` - the ID of the pipeline
+    /// * `step_id` - the ID of the pipeline step
+    /// * `process_type` - the type of process to log
+    pub fn experiment_log_path<P: AsRef<str>, Q: AsRef<str>, R: AsRef<str>, S: AsRef<str>>(
+        &self,
+        experiment_id: P,
+        pipeline_id: Q,
+        step_id: R,
+        process_type: S,
+    ) -> PathBuf {
+        let mut path: PathBuf = self.experiment_logs_path(experiment_id);
+        path.push(format!(
+            "{}_{}.log",
+            Self::hash_string(format!("{}{}", pipeline_id.as_ref(), step_id.as_ref())),
+            process_type.as_ref()
+        ));
+        path
+    }
+
     /// Generates a V1 UUID.
     pub fn generate_uuid() -> Uuid {
         let now = SystemTime::now()
@@ -301,6 +325,25 @@ mod tests {
         let path: PathBuf =
             "./application/context/experiments/experiment_id/steps/4363919453614495606".into();
         assert_eq!(config.experiment_step_path("experiment_id", "step_id"), path);
+    }
+
+    #[test]
+    fn test_experiment_logs_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        // Hash of step_id.
+        let path: PathBuf =
+            "./application/context/experiments/experiment_id/logs".into();
+        assert_eq!(config.experiment_logs_path("experiment_id"), path);
+    }
+
+
+    #[test]
+    fn test_experiment_log_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        // Hash of step_id.
+        let path: PathBuf =
+            "./application/context/experiments/experiment_id/logs/13269802908832430007_type.log".into();
+        assert_eq!(config.experiment_log_path("experiment_id", "pipeline_id", "step_id", "type"), path);
     }
 
     #[test]

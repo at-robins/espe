@@ -137,7 +137,8 @@ pub fn run_pipeline_step<T: AsRef<str>>(
     let mut mount_map_top = serde_json::Map::new();
     mount_map_top.insert("input".to_string(), serde_json::Value::String("/input/base".to_string()));
     mount_map_top.insert("output".to_string(), serde_json::Value::String("/output".to_string()));
-    mount_map_top.insert("dependencies".to_string(), serde_json::Value::Object(mount_map_dependencies));
+    mount_map_top
+        .insert("dependencies".to_string(), serde_json::Value::Object(mount_map_dependencies));
     mount_map_top.insert("globals".to_string(), serde_json::Value::Object(mount_map_globals));
     let mount_paths = serde_json::Value::Object(mount_map_top);
     arguments.push("--env".into());
@@ -405,16 +406,17 @@ impl ContainerHandler {
     /// * `build` - ```true``` if the build output is parsed, ```false``` if the run output is parsed
     fn parse_output(&self, output: Output, build: bool) -> Result<(), SeqError> {
         if let Some(step) = &self.executed_step {
-            let mut log_path = self
+            let logs_path = self
                 .config
                 .experiment_logs_path(step.experiment_id.to_string());
             let process_type = if build { "build" } else { "run" };
-            std::fs::create_dir_all(&log_path)?;
-            log_path.push(format!(
-                "{}_{}.log",
-                format_container_name(&step.pipeline_id, &step.pipeline_step_id),
-                &process_type
-            ));
+            std::fs::create_dir_all(&logs_path)?;
+            let log_path = self.config.experiment_log_path(
+                step.experiment_id.to_string(),
+                &step.pipeline_id,
+                &step.pipeline_step_id,
+                &process_type,
+            );
             let log_file = std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)

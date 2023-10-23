@@ -8,7 +8,7 @@ use super::{
     experiment_controller::{
         create_experiment, delete_experiment, get_experiment, get_experiment_pipelines,
         list_experiment, patch_experiment_comment, patch_experiment_mail, patch_experiment_name,
-        patch_experiment_pipeline, post_experiment_pipeline_variable, post_execute_experiment, get_experiment_execution_status, post_experiment_execution_abort, post_experiment_execution_reset, get_experiment_pipeline_run,
+        patch_experiment_pipeline, post_experiment_pipeline_variable, post_execute_experiment, get_experiment_execution_status, post_experiment_execution_abort, post_experiment_execution_reset, get_experiment_pipeline_run, post_execute_experiment_step,
     },
     file_controller::{delete_files_by_path, get_files, post_add_file, post_add_folder},
     global_data_controller::{
@@ -55,6 +55,7 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/experiments/{id}/name", web::patch().to(patch_experiment_name))
     .route("/api/experiments/{id}/pipeline", web::patch().to(patch_experiment_pipeline))
     .route("/api/experiments/{id}/pipelines", web::get().to(get_experiment_pipelines))
+    .route("/api/experiments/{id}/rerun", web::post().to(post_execute_experiment_step))
     .route("/api/experiments/{id}/reset", web::post().to(post_experiment_execution_reset))
     .route("/api/experiments/{id}/run", web::get().to(get_experiment_pipeline_run))
     .route("/api/experiments/{id}/status", web::get().to(get_experiment_execution_status))
