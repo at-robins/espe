@@ -55,3 +55,14 @@ export enum ExperimentExecutionStatus {
   Waiting = "Waiting",
   None = "None",
 }
+
+export type ExperimentStepLog = {
+  stdout: string | null | undefined;
+  stderr: string | null | undefined;
+  exitCode: string | null | undefined;
+};
+
+export type ExperimentStepLogs = {
+  build: ExperimentStepLog;
+  run: ExperimentStepLog;
+};

@@ -19,7 +19,7 @@ pub const PATH_FILES_EXPERIMENTS_LOGS: &str = "logs";
 /// The folder where global data is stored.
 pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
 
-use std::{hash::Hash, hash::Hasher, path::PathBuf, time::SystemTime};
+use std::{fmt::Display, hash::Hash, hash::Hasher, path::PathBuf, time::SystemTime};
 
 use getset::Getters;
 use serde::{Deserialize, Serialize};
@@ -222,20 +222,55 @@ impl Configuration {
     /// * `pipeline_id` - the ID of the pipeline
     /// * `step_id` - the ID of the pipeline step
     /// * `process_type` - the type of process to log
-    pub fn experiment_log_path<P: AsRef<str>, Q: AsRef<str>, R: AsRef<str>, S: AsRef<str>>(
+    /// * `output_type` - the output type of the process to log
+    pub fn experiment_log_path<P: AsRef<str>, Q: AsRef<str>, R: AsRef<str>>(
         &self,
         experiment_id: P,
         pipeline_id: Q,
         step_id: R,
-        process_type: S,
+        process_type: LogProcessType,
+        output_type: LogOutputType,
     ) -> PathBuf {
         let mut path: PathBuf = self.experiment_logs_path(experiment_id);
         path.push(format!(
-            "{}_{}.log",
+            "{}_{}_{}.log",
             Self::hash_string(format!("{}{}", pipeline_id.as_ref(), step_id.as_ref())),
-            process_type.as_ref()
+            process_type,
+            output_type,
         ));
         path
+    }
+
+    /// All potential context paths of pipeline log files.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    /// * `pipeline_id` - the ID of the pipeline
+    /// * `step_id` - the ID of the pipeline step
+    pub fn experiment_log_paths_all<P: AsRef<str>, Q: AsRef<str>, R: AsRef<str>>(
+        &self,
+        experiment_id: P,
+        pipeline_id: Q,
+        step_id: R,
+    ) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        for process_type in &[LogProcessType::Build, LogProcessType::Run] {
+            for output_type in &[
+                LogOutputType::StdOut,
+                LogOutputType::StdErr,
+                LogOutputType::ExitCode,
+            ] {
+                paths.push(self.experiment_log_path(
+                    experiment_id.as_ref(),
+                    pipeline_id.as_ref(),
+                    step_id.as_ref(),
+                    *process_type,
+                    *output_type,
+                ));
+            }
+        }
+        paths
     }
 
     /// Generates a V1 UUID.
@@ -262,6 +297,53 @@ impl Configuration {
         let mut hasher = XxHash64::with_seed(154);
         value.as_ref().hash(&mut hasher);
         hasher.finish().to_string()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+/// The process types of log files.
+pub enum LogProcessType {
+    /// The build process.
+    Build,
+    // The run process.
+    Run,
+}
+
+impl Display for LogProcessType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                LogProcessType::Build => "build",
+                LogProcessType::Run => "run",
+            }
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+/// The output types of log files.
+pub enum LogOutputType {
+    /// Standard output stream.
+    StdOut,
+    /// Standard error stream.
+    StdErr,
+    /// The exit code.
+    ExitCode,
+}
+
+impl Display for LogOutputType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                LogOutputType::StdOut => "stdout",
+                LogOutputType::StdErr => "stderr",
+                LogOutputType::ExitCode => "exitcode",
+            }
+        )
     }
 }
 
@@ -331,19 +413,27 @@ mod tests {
     fn test_experiment_logs_path() {
         let config = Configuration::new("", "", "", "", "./application/context", "");
         // Hash of step_id.
-        let path: PathBuf =
-            "./application/context/experiments/experiment_id/logs".into();
+        let path: PathBuf = "./application/context/experiments/experiment_id/logs".into();
         assert_eq!(config.experiment_logs_path("experiment_id"), path);
     }
-
 
     #[test]
     fn test_experiment_log_path() {
         let config = Configuration::new("", "", "", "", "./application/context", "");
         // Hash of step_id.
         let path: PathBuf =
-            "./application/context/experiments/experiment_id/logs/13269802908832430007_type.log".into();
-        assert_eq!(config.experiment_log_path("experiment_id", "pipeline_id", "step_id", "type"), path);
+            "./application/context/experiments/experiment_id/logs/13269802908832430007_build_stderr.log"
+                .into();
+        assert_eq!(
+            config.experiment_log_path(
+                "experiment_id",
+                "pipeline_id",
+                "step_id",
+                LogProcessType::Build,
+                LogOutputType::StdErr
+            ),
+            path
+        );
     }
 
     #[test]

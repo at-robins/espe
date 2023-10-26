@@ -82,8 +82,27 @@
           <div v-html="selectedStep.description" />
         </div>
       </q-card-section>
+      <q-card-section v-if="selectedStep && pipeline">
+        <q-expansion-item
+          expand-separator
+          :icon="symOutlinedTerminal"
+          label="Display pipeline step logs"
+          class="shadow-1 overflow-hidden"
+          header-class="bg-secondary text-white"
+          style="border-radius: 3px"
+        >
+          <q-card>
+            <q-card-section>
+              <experiment-step-logs
+                :experiment-id="id"
+                :pipeline-id="pipeline.id"
+                :step-id="selectedStep.id"
+              />
+            </q-card-section>
+          </q-card>
+        </q-expansion-item>
+      </q-card-section>
       <div v-if="selectedStep" class="q-gutter-md q-pa-md col">
-        <q-btn label="Display logs" class="row" />
         <q-btn label="Download output" class="row" />
 
         <q-btn
@@ -126,8 +145,10 @@ import {
   symOutlinedError,
   symOutlinedNotStarted,
   symOutlinedStopCircle,
+  symOutlinedTerminal,
 } from "@quasar/extras/material-symbols-outlined";
 import { matRestartAlt } from "@quasar/extras/material-icons";
+import ExperimentStepLogs from "./ExperimentStepLogs.vue";
 
 // The intervall in which pipeline updates are requested from the server.
 const POLLING_INTERVALL_MILLISECONDS = 10000;
@@ -325,7 +346,7 @@ function canBeStarted(step: PipelineStepBlueprint | null): boolean {
 
 /**
  * Tries to restart the specified step.
- * 
+ *
  * @param step the step to restart
  */
 function restartStep(step: PipelineStepBlueprint | null) {

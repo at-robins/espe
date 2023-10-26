@@ -6,15 +6,19 @@ use crate::application::error::SeqError;
 
 use super::{
     experiment_controller::{
-        create_experiment, delete_experiment, get_experiment, get_experiment_pipelines,
-        list_experiment, patch_experiment_comment, patch_experiment_mail, patch_experiment_name,
-        patch_experiment_pipeline, post_experiment_pipeline_variable, post_execute_experiment, get_experiment_execution_status, post_experiment_execution_abort, post_experiment_execution_reset, get_experiment_pipeline_run, post_execute_experiment_step,
+        create_experiment, delete_experiment, get_experiment, get_experiment_execution_status,
+        get_experiment_pipeline_run, get_experiment_pipelines, list_experiment,
+        patch_experiment_comment, patch_experiment_mail, patch_experiment_name,
+        patch_experiment_pipeline, post_execute_experiment, post_execute_experiment_step,
+        post_experiment_execution_abort, post_experiment_execution_reset,
+        post_experiment_pipeline_variable,
     },
     file_controller::{delete_files_by_path, get_files, post_add_file, post_add_folder},
     global_data_controller::{
         create_global_data, delete_global_data, get_global_data, list_global_data,
         patch_global_data_comment, patch_global_data_name,
     },
+    log_controller::get_experiment_step_logs,
     pipeline_controller::{
         get_pipeline_blueprint, get_pipeline_blueprints, get_pipeline_instance,
         patch_pipeline_blueprints,
@@ -51,6 +55,8 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/experiments/{id}", web::post().to(post_execute_experiment))
     .route("/api/experiments/{id}/abort", web::post().to(post_experiment_execution_abort))
     .route("/api/experiments/{id}/comment", web::patch().to(patch_experiment_comment))
+        // This method is only POST to support the JSON message body.
+    .route("/api/experiments/{id}/logs", web::post().to(get_experiment_step_logs))
     .route("/api/experiments/{id}/mail", web::patch().to(patch_experiment_mail))
     .route("/api/experiments/{id}/name", web::patch().to(patch_experiment_name))
     .route("/api/experiments/{id}/pipeline", web::patch().to(patch_experiment_pipeline))

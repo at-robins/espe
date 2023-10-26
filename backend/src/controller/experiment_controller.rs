@@ -97,6 +97,11 @@ pub async fn get_experiment_execution_status(
         "None".to_string()
     } else if execution_steps
         .iter()
+        .any(|execution| execution.execution_status == ExecutionStatus::Running.to_string())
+    {
+        ExecutionStatus::Running.to_string()
+    } else if execution_steps
+        .iter()
         .any(|execution| execution.execution_status == ExecutionStatus::Failed.to_string())
     {
         ExecutionStatus::Failed.to_string()
@@ -105,11 +110,6 @@ pub async fn get_experiment_execution_status(
         .any(|execution| execution.execution_status == ExecutionStatus::Aborted.to_string())
     {
         ExecutionStatus::Aborted.to_string()
-    } else if execution_steps
-        .iter()
-        .any(|execution| execution.execution_status == ExecutionStatus::Running.to_string())
-    {
-        ExecutionStatus::Running.to_string()
     } else if execution_steps
         .iter()
         .all(|execution| execution.execution_status == ExecutionStatus::Finished.to_string())
@@ -507,29 +507,20 @@ pub async fn post_execute_experiment_step(
                             "The requested run parameters are invalid.",
                         ));
                     }
-                    // Remove resources realted to the pipeline step.
+                    // Remove resources related to the pipeline step.
                     let step_path =
                         app_config.experiment_step_path(experiment_id.to_string(), &step_id);
                     if step_path.exists() {
                         std::fs::remove_dir_all(step_path)?;
                     }
-                    let log_path_build = app_config.experiment_log_path(
+                    for log_path in app_config.experiment_log_paths_all(
                         experiment_id.to_string(),
                         &pipeline_id,
                         &step_id,
-                        "build",
-                    );
-                    if log_path_build.exists() {
-                        std::fs::remove_file(log_path_build)?;
-                    }
-                    let log_path_run = app_config.experiment_log_path(
-                        experiment_id.to_string(),
-                        &pipeline_id,
-                        &step_id,
-                        "run",
-                    );
-                    if log_path_run.exists() {
-                        std::fs::remove_file(log_path_run)?;
+                    ) {
+                        if log_path.exists() {
+                            std::fs::remove_file(log_path)?;
+                        }
                     }
                     connection.immediate_transaction(|connection| {
                         let clear_time: Option<NaiveDateTime> = None;
