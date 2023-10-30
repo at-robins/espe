@@ -6,10 +6,9 @@ import math
 import multiprocessing
 import os
 import sys
+from contextlib import suppress
 
 BASE_COMMAND = "java -jar /Trimmomatic-0.39/trimmomatic-0.39.jar PE"
-STEP_OPTIONS = ("ILLUMINACLIP:/Trimmomatic-0.39/adapters/NexteraPE-PE.fa:2:30:10:2:True "
-"LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36")
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["input"] + "/"
 
@@ -33,6 +32,30 @@ if not options:
     print("Running with default options.")
 else:
     print("Specified options:" + options)
+
+# Define the step options.
+step_options = ""
+adapters = ""
+
+with suppress(Exception):
+    adapters = f"{MOUNT_PATHS['globals']['ADAPTERS_CUSTOM']}/trimming_adapters.fa"
+
+adapters_fixed = os.environ.get("ADAPTERS_FIXED")
+if not adapters and adapters_fixed is not None:
+    adapters = f"/Trimmomatic-0.39/adapters/{adapters_fixed}"
+else:
+    # Defaults to Nextera adapters as those are standard for ATAC sequencing.
+    adapters = "/Trimmomatic-0.39/adapters/NexteraPE-PE.fa"
+
+if adapters:
+    step_options += f" ILLUMINACLIP:{adapters}:2:30:10:2:True"
+
+step_options += " LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36"
+
+if not options:
+    print("Running with default step options.")
+else:
+    print("Specified step options:" + options)
 
 # Iterates over all sample directories and processes them conserving the directory structure.
 for root, dirs, files in os.walk(INPUT_FOLDER):
@@ -59,8 +82,8 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 f"{file_base_output_path}_1_paired.fq.gz "
                 f"{file_base_output_path}_1_unpaired.fq.gz "
                 f"{file_base_output_path}_2_paired.fq.gz "
-                f"{file_base_output_path}_2_unpaired.fq.gz "
-                f"{STEP_OPTIONS}")
+                f"{file_base_output_path}_2_unpaired.fq.gz"
+                f"{step_options}")
                 os.makedirs(os.path.dirname(file_base_output_path), exist_ok = True)
                 exit_code = os.waitstatus_to_exitcode(os.system(full_command))
                 if exit_code != 0:
