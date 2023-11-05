@@ -13,7 +13,10 @@ use super::{
         post_experiment_execution_abort, post_experiment_execution_reset,
         post_experiment_pipeline_variable,
     },
-    file_controller::{delete_files_by_path, get_files, post_add_file, post_add_folder},
+    file_controller::{
+        delete_files_by_path, get_experiment_download_step_results, get_files, post_add_file,
+        post_add_folder, post_experiment_archive_step_results,
+    },
     global_data_controller::{
         create_global_data, delete_global_data, get_global_data, list_global_data,
         patch_global_data_comment, patch_global_data_name,
@@ -54,7 +57,9 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/experiments/{id}", web::get().to(get_experiment))
     .route("/api/experiments/{id}", web::post().to(post_execute_experiment))
     .route("/api/experiments/{id}/abort", web::post().to(post_experiment_execution_abort))
+    .route("/api/experiments/{id}/archive", web::post().to(post_experiment_archive_step_results))
     .route("/api/experiments/{id}/comment", web::patch().to(patch_experiment_comment))
+    .route("/api/experiments/{id}/download/{archive}", web::get().to(get_experiment_download_step_results))
         // This method is only POST to support the JSON message body.
     .route("/api/experiments/{id}/logs", web::post().to(get_experiment_step_logs))
     .route("/api/experiments/{id}/mail", web::patch().to(patch_experiment_mail))

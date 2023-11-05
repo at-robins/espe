@@ -12,15 +12,18 @@ use crate::{
     model::{
         db::{experiment::Experiment, global_data::GlobalData},
         exchange::file_path::{FileDetails, FilePath},
+        internal::archive::ArchiveMetadata,
     },
     service::multipart_service::{
         create_temporary_file, delete_temporary_file, parse_multipart_file,
     },
 };
+use actix_files::NamedFile;
 use actix_multipart::Multipart;
 use actix_web::{web, HttpResponse};
 use diesel::SqliteConnection;
 use serde::{Deserialize, Serialize};
+use zip_extensions::zip_create_from_directory;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -267,6 +270,84 @@ async fn persist_multipart<P: AsRef<Path>>(
     temp_file_to_data_file(full_path, temp_file_path)?;
 
     Ok(())
+}
+
+pub async fn post_experiment_archive_step_results(
+    database_manager: web::Data<DatabaseManager>,
+    app_config: web::Data<Configuration>,
+    experiment_id: web::Path<i32>,
+    step_id: web::Json<String>,
+) -> Result<String, SeqError> {
+    let experiment_id: i32 = experiment_id.into_inner();
+    let mut connection = database_manager.database_connection()?;
+    Experiment::exists_err(experiment_id, &mut connection)?;
+
+    // Sets up the required information.
+    let step_id: String = step_id.into_inner();
+    let archive_id = Configuration::generate_uuid();
+    let archive_meta = ArchiveMetadata::new(format!("{}.zip", &step_id));
+
+    // Defines source and target paths.
+    let source = app_config.experiment_step_path(experiment_id.to_string(), &step_id);
+    let target = app_config.temporary_download_file_path(archive_id);
+    let target_meta = ArchiveMetadata::metadata_path(&target);
+
+    // Creates the parent directory if necessary.
+    if let Some(target_parent) = target.parent() {
+        std::fs::create_dir_all(target_parent)?;
+    }
+    // Creates the archive.
+    zip_create_from_directory(&target, &source).map_err(|err| {
+        SeqError::new(
+            "Archiving error",
+            SeqErrorType::InternalServerError,
+            format!("Creation of a downloadable archive for experiment {} ({}) from {} to {} failed with error: {}", experiment_id, step_id, source.display(), target.display(), err),
+            "Downloadable archive could not be created.",
+        )
+    })?;
+    // Creates the archive metadata.
+    serde_json::to_writer(std::fs::File::create(target_meta)?, &archive_meta)?;
+
+    //Return the archive ID.
+    Ok(archive_id.to_string())
+}
+
+pub async fn get_experiment_download_step_results(
+    database_manager: web::Data<DatabaseManager>,
+    app_config: web::Data<Configuration>,
+    experiment_id: web::Path<(i32, String)>,
+) -> Result<NamedFile, SeqError> {
+    let (experiment_id, archive_id) = experiment_id.into_inner();
+    let mut connection = database_manager.database_connection()?;
+    Experiment::exists_err(experiment_id, &mut connection)?;
+
+    let archive_path = app_config.temporary_download_file_path(archive_id);
+    if !archive_path.exists() {
+        return Err(SeqError::new(
+            "Not found",
+            SeqErrorType::NotFoundError,
+            format!("Archive file at path {} does not exist.", archive_path.display()),
+            "File not found.",
+        ));
+    }
+
+    let archive_meta_path = ArchiveMetadata::metadata_path(&archive_path);
+    if !archive_meta_path.exists() {
+        return Err(SeqError::new(
+            "Not found",
+            SeqErrorType::NotFoundError,
+            format!(
+                "Archive metadata file at path {} does not exist.",
+                archive_meta_path.display()
+            ),
+            "File not found.",
+        ));
+    }
+
+    let archive_meta: ArchiveMetadata =
+        serde_json::from_reader(std::fs::File::open(&archive_meta_path)?)?;
+
+    Ok(NamedFile::from_file(std::fs::File::open(&archive_path)?, archive_meta.file_name())?)
 }
 
 fn temp_file_to_data_file<P: AsRef<Path>, Q: AsRef<Path>>(

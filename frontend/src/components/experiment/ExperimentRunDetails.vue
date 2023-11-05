@@ -103,24 +103,47 @@
         </q-expansion-item>
       </q-card-section>
       <div v-if="selectedStep" class="q-gutter-md q-pa-md col">
-        <q-btn label="Download output" class="row" />
+        <div class="row">
+          <q-btn
+            label="Download output"
+            outline
+            :icon="matDownload"
+            :color="downloadError ? 'negative' : 'primary'"
+            :loading="isArchiving"
+            :disable="selectedStep.status !== PipelineStepStatus.Finished"
+            @click="downloadStepResults(selectedStep)"
+          >
+            <template v-slot:loading>
+              <span class="block">
+                <q-spinner class="on-left" />
+                Generating archive
+              </span>
+            </template>
+            <q-tooltip>
+              <div v-if="downloadError">
+                <error-popup :error-response="downloadError" />
+              </div>
+              <div>Downloads the output of the execution step.</div>
+            </q-tooltip>
+          </q-btn>
 
-        <q-btn
-          v-if="canBeStarted(selectedStep)"
-          class="row"
-          :icon="matRestartAlt"
-          label="Restart step"
-          :color="restartingError ? 'negative' : 'positive'"
-          :loading="isRestarting"
-          @click="restartStep(selectedStep)"
-        >
-          <q-tooltip>
-            <div v-if="restartingError">
-              <error-popup :error-response="restartingError" />
-            </div>
-            <div>Restarts the experiment execution step.</div>
-          </q-tooltip>
-        </q-btn>
+          <q-btn
+            v-if="canBeStarted(selectedStep)"
+            :icon="matRestartAlt"
+            label="Restart step"
+            class="q-ml-md"
+            :color="restartingError ? 'negative' : 'positive'"
+            :loading="isRestarting"
+            @click="restartStep(selectedStep)"
+          >
+            <q-tooltip>
+              <div v-if="restartingError">
+                <error-popup :error-response="restartingError" />
+              </div>
+              <div>Restarts the experiment execution step.</div>
+            </q-tooltip>
+          </q-btn>
+        </div>
       </div>
     </q-card>
     <q-dialog v-model="showPollingError" v-if="pollingError">
@@ -147,7 +170,7 @@ import {
   symOutlinedStopCircle,
   symOutlinedTerminal,
 } from "@quasar/extras/material-symbols-outlined";
-import { matRestartAlt } from "@quasar/extras/material-icons";
+import { matDownload, matRestartAlt } from "@quasar/extras/material-icons";
 import ExperimentStepLogs from "./ExperimentStepLogs.vue";
 
 // The intervall in which pipeline updates are requested from the server.
@@ -167,6 +190,8 @@ const showPollingError = ref(false);
 const router = useRouter();
 const this_route = router.currentRoute.value.fullPath;
 const pollingTimer: Ref<number | null> = ref(null);
+const isArchiving = ref(false);
+const downloadError: Ref<ErrorResponse | null> = ref(null);
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -370,6 +395,39 @@ function restartStep(step: PipelineStepBlueprint | null) {
       })
       .finally(() => {
         isRestarting.value = false;
+      });
+  }
+}
+
+/**
+ * Tries to download the specified step.
+ *
+ * @param step the step to download
+ */
+function downloadStepResults(step: PipelineStepBlueprint | null) {
+  if (step && step.status == PipelineStepStatus.Finished) {
+    isArchiving.value = true;
+    downloadError.value = null;
+    const config = {
+      headers: {
+        "content-type": "application/json",
+      },
+    };
+    axios
+      .post(
+        "/api/experiments/" + props.id + "/archive",
+        JSON.stringify(step.id),
+        config
+      )
+      .then((response) => {
+        window.location.href =
+          "/api/experiments/" + props.id + "/download/" + response.data;
+      })
+      .catch((error) => {
+        downloadError.value = error.response.data;
+      })
+      .finally(() => {
+        isArchiving.value = false;
       });
   }
 }
