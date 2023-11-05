@@ -29,52 +29,52 @@ impl TemporaryFileManager {
     pub fn update(&self) -> Result<(), SeqError> {
         log::info!("Managing temporary files...");
         let temp_download_path = self.config.temporary_download_path();
+        if temp_download_path.exists() {
+            // Checks all temporary download files / folders and collects errors.
+            let errors: Vec<std::io::Error> = std::fs::read_dir(temp_download_path)?
+                // Log errors and return processable files / folders.
+                // Continues despite errors to at least clean up all the data that can be cleaned up. 
+                .filter_map(Self::filter_log)
+                // Filters old temporary data.
+                .filter_map(|entry| {
+                    Self::filter_log(Self::dir_entry_created(&entry))
+                        .and_then(|created| Self::filter_log(created.elapsed()))
+                        .filter(|lifetime| lifetime.as_secs() > MAX_AGE_TEMPORARY_DOWNLOAD)
+                        .map(|_| entry.path())
+                })
+                // Tries to delete old data and collects errors.
+                .filter_map(|entry| {
+                    match if entry.is_dir() {
+                        log::info!("Deleting temporary download directory {}.", entry.display());
+                        std::fs::remove_dir_all(entry)
+                    } else {
+                        log::info!("Deleting temporary download file {}.", entry.display());
+                        std::fs::remove_file(entry)
+                    } {
+                        Ok(_) => None,
+                        Err(err) => Some(err),
+                    }
+                })
+                .collect();
 
-        // Checks all temporary download files / folders and collects errors.
-        let errors: Vec<std::io::Error> = std::fs::read_dir(temp_download_path)?
-            // Log errors and return processable files / folders.
-            // Continues despite errors to at least clean up all the data that can be cleaned up. 
-            .filter_map(Self::filter_log)
-            // Filters old temporary data.
-            .filter_map(|entry| {
-                Self::filter_log(Self::dir_entry_created(&entry))
-                    .and_then(|created| Self::filter_log(created.elapsed()))
-                    .filter(|lifetime| lifetime.as_secs() > MAX_AGE_TEMPORARY_DOWNLOAD)
-                    .map(|_| entry.path())
-            })
-            // Tries to delete old data and collects errors.
-            .filter_map(|entry| {
-                match if entry.is_dir() {
-                    log::info!("Deleting temporary download directory {}.", entry.display());
-                    std::fs::remove_dir_all(entry)
-                } else {
-                    log::info!("Deleting temporary download file {}.", entry.display());
-                    std::fs::remove_file(entry)
-                } {
-                    Ok(_) => None,
-                    Err(err) => Some(err),
-                }
-            })
-            .collect();
-
-        if !errors.is_empty() {
-            // Returns errors if present.
-            let combined_error = errors.into_iter().fold(String::new(), |mut acc, error| {
-                acc.push_str(&error.to_string());
-                acc.push('\n');
-                acc
-            });
-            Err(SeqError::new(
-                    "std::io::Error",
-                    SeqErrorType::InternalServerError,
-                    combined_error,
-                    "An unforseen error occured during temporary file management. Please consult the logs.",
-                ))
-        } else {
-            // Returns if successful.
-            log::info!("Done managing temporary files.");
-            Ok(())
+            if !errors.is_empty() {
+                // Returns errors if present.
+                let combined_error = errors.into_iter().fold(String::new(), |mut acc, error| {
+                    acc.push_str(&error.to_string());
+                    acc.push('\n');
+                    acc
+                });
+                return Err(SeqError::new(
+                        "std::io::Error",
+                        SeqErrorType::InternalServerError,
+                        combined_error,
+                        "An unforseen error occured during temporary file management. Please consult the logs.",
+                    ))
+            }
         }
+        // Returns if successful.
+        log::info!("Done managing temporary files.");
+        Ok(())
     }
 
     /// Gets the metadata of the directory entry.

@@ -67,13 +67,13 @@ async fn main() -> Result<(), SeqError> {
     std::thread::spawn(move || {
         let temp_file_manager = TemporaryFileManager::new(temp_file_manager_config);
         loop {
+            if let Err(err) = temp_file_manager.update() {
+                log::error!("Managing temporary data failed with error: {:?}", err);
+            }
             std::thread::sleep(std::time::Duration::new(
                 TEMPORARY_DATA_MANAGEMENT_UPDATE_INTERVALL,
                 0,
             ));
-            if let Err(err) = temp_file_manager.update() {
-                log::error!("Managing temporary data failed with error: {:?}", err);
-            }
         }
     });
     // Setup the application.

@@ -315,9 +315,9 @@ pub async fn post_experiment_archive_step_results(
 pub async fn get_experiment_download_step_results(
     database_manager: web::Data<DatabaseManager>,
     app_config: web::Data<Configuration>,
-    experiment_id: web::Path<(i32, String)>,
+    info: web::Path<(i32, String)>,
 ) -> Result<NamedFile, SeqError> {
-    let (experiment_id, archive_id) = experiment_id.into_inner();
+    let (experiment_id, archive_id) = info.into_inner();
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection)?;
 
