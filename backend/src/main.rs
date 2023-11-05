@@ -13,10 +13,13 @@ use parking_lot::Mutex;
 use service::{
     execution_service::ExecutionScheduler,
     pipeline_service::{load_pipelines, LoadedPipelines},
+    temp_file_service::TemporaryFileManager,
 };
 
 /// The intervall in seconds in which the pipeline execution process is updated.
 const PIPELINE_EXECUTION_UPDATE_INTERVALL: u64 = 10;
+/// The intervall in seconds in which temporary data is inspected.
+const TEMPORARY_DATA_MANAGEMENT_UPDATE_INTERVALL: u64 = 300;
 
 #[actix_web::main]
 async fn main() -> Result<(), SeqError> {
@@ -57,6 +60,20 @@ async fn main() -> Result<(), SeqError> {
         std::thread::sleep(std::time::Duration::new(PIPELINE_EXECUTION_UPDATE_INTERVALL, 0));
         if let Err(err) = execution_scheduler.lock().update_pipeline_execution() {
             log::error!("Updating the pipeline execution failed with error: {:?}", err);
+        }
+    });
+    // Setup temporary file management.
+    let temp_file_manager_config = web::Data::clone(&app_config);
+    std::thread::spawn(move || {
+        let temp_file_manager = TemporaryFileManager::new(temp_file_manager_config);
+        loop {
+            std::thread::sleep(std::time::Duration::new(
+                TEMPORARY_DATA_MANAGEMENT_UPDATE_INTERVALL,
+                0,
+            ));
+            if let Err(err) = temp_file_manager.update() {
+                log::error!("Managing temporary data failed with error: {:?}", err);
+            }
         }
     });
     // Setup the application.

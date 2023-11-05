@@ -214,3 +214,14 @@ impl From<diesel::result::Error> for SeqError {
         )
     }
 }
+
+impl From<std::time::SystemTimeError> for SeqError {
+    fn from(error: std::time::SystemTimeError) -> Self {
+        Self::new(
+            "std::time::SystemTimeError",
+            SeqErrorType::InternalServerError,
+            error,
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        )
+    }
+}
