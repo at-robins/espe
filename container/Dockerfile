@@ -2,7 +2,7 @@ FROM rust:1.73.0-bookworm
 
 # Update and install dependencies.
 RUN apt-get update && apt-get upgrade -y
-RUN apt-get install -y git ca-certificates curl gnupg libssl-dev sqlite3 libsqlite3-dev
+RUN apt-get install -y git ca-certificates curl gnupg libssl-dev
 
 # Install NodeJS.
 RUN mkdir -p /etc/apt/keyrings
@@ -10,9 +10,6 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg -
 ENV NODE_MAJOR=20
 RUN echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
 RUN apt-get update && apt-get install -y nodejs
-
-# Install Diesel.
-RUN cargo install diesel_cli --no-default-features --features sqlite
 
 # Install Docker.
 RUN install -m 0755 -d /etc/apt/keyrings
@@ -33,13 +30,11 @@ WORKDIR /repo/espe/backend
 RUN cargo build --release
 
 # Setup application.
-RUN mkdir -p /srv/espe/application/database
+RUN mkdir -p /srv/espe/application/
 WORKDIR /srv/espe
 RUN cp /repo/espe/backend/target/release/backend /srv/espe/
 RUN cp /repo/espe/backend/.env /srv/espe/
-RUN cp -r /repo/espe/backend/migrations /srv/espe/
 RUN cp -r /repo/espe/backend/static_dist /srv/espe/
 RUN cp -r /repo/espe/pipelines /srv/espe/application/
-RUN diesel migration run
 
 ENTRYPOINT [ "/srv/espe/backend" ]

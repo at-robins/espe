@@ -149,7 +149,23 @@ Docker was selected as tool for running and managing containers due to its ease 
 
 ## Usage
 
-TODO: Create and add link to full user guide.
+The easiest way to execute the application is by running it inside a Docker container.
+
+```bash
+# Navigate to the Dockerfile.
+cd container
+# Build the container.
+sudo docker build -t espe .
+# Run the container.
+sudo docker run \
+   -e SERVER_ADDRESS=0.0.0.0 \
+   --mount type=bind,source=/path/to/local/context,target=/srv/espe/application/context \
+   --mount type=bind,source=/path/to/local/database,target=/srv/espe/application/database \
+   --mount type=bind,source=/path/to/local/pipelines,target=/srv/espe/application/pipelines \
+   -v /var/run/docker.sock:/var/run/docker.sock \
+   -p 80:8080 \
+   espe
+```
 
 ## Enviroment variables
 
