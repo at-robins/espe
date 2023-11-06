@@ -11,7 +11,9 @@ use application::{
     error::{SeqError, SeqErrorType, DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE},
 };
 use controller::routing::routing_config;
-use diesel_migrations::MigrationHarness;
+use diesel_migrations::{
+    embed_migrations, EmbeddedMigrations, HarnessWithOutput, MigrationHarness,
+};
 use dotenv::dotenv;
 use parking_lot::Mutex;
 use service::{
@@ -24,6 +26,8 @@ use service::{
 const PIPELINE_EXECUTION_UPDATE_INTERVALL: u64 = 10;
 /// The intervall in seconds in which temporary data is inspected.
 const TEMPORARY_DATA_MANAGEMENT_UPDATE_INTERVALL: u64 = 300;
+/// The compiled database migrations.
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
 #[actix_web::main]
 async fn main() -> Result<(), SeqError> {
@@ -43,15 +47,19 @@ async fn main() -> Result<(), SeqError> {
         std::fs::create_dir_all(database_path)?;
     }
     let database_manager = web::Data::new(DatabaseManager::new(web::Data::clone(&app_config))?);
-    database_manager.database_connection()?.run_pending_migrations(
-        diesel_migrations::FileBasedMigrations::find_migrations_directory()?,
-    )
-    .map_err(|error| SeqError::new(
-        "diesel_migrations::MigrationError",
-        SeqErrorType::InternalServerError,
-        error,
-        DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
-    ))?;
+    {
+        let mut connection = database_manager.database_connection()?;
+        HarnessWithOutput::write_to_stdout(&mut connection)
+            .run_pending_migrations(MIGRATIONS)
+            .map_err(|error| {
+                SeqError::new(
+                    "diesel_migrations::MigrationError",
+                    SeqErrorType::InternalServerError,
+                    error,
+                    DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+                )
+            })?;
+    }
     // Load all pipelines into memory.
     let pipelines = load_pipelines(Arc::clone(&app_config))?;
     let mut pipeline_map = HashMap::new();
