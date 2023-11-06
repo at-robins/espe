@@ -12,6 +12,7 @@ export type PipelineStepBlueprint = {
   container: string;
   dependencies: string[];
   variables: PipelineStepBlueprintVariable[];
+  status: PipelineStepStatus | null | undefined;
 };
 
 export type PipelineStepBlueprintVariable = {
@@ -39,6 +40,14 @@ export type PipelineStepVariableUpload = {
   variableId: string;
   variableValue: string | null | undefined;
 };
+
+export enum PipelineStepStatus {
+  Aborted = "Aborted",
+  Failed = "Failed",
+  Finished = "Finished",
+  Running = "Running",
+  Waiting = "Waiting",
+}
 
 /**
  * Returns ```true``` if the variable is a boolean checkbox.

@@ -1,0 +1,40 @@
+{
+  "id": "wiedemann_genome_preprocess",
+  "name": "Wiedemann reference genome preprocessing pipeline",
+  "description": "<p>This pipeline preprocesses a reference genome for usage as a data repository for other pipelines.</p><p><b>Input specifications</b><br />The input is expected to be a gzipped FASTA file (<var>.fa.gz</var>) located at the root.</p>",
+  "steps": [
+    {
+      "id": "unpack",
+      "name": "Unpacking",
+      "description": "<p>Unpacks and renames the genome file.</p>",
+      "container": "unpack",
+      "dependencies": [],
+      "variables": []
+    },
+    {
+      "id": "samtools_index",
+      "name": "Samtools indexing",
+      "description": "<p>Uses Samtools to index the genome and generate a chromosome size file.</p><p><b>References</b><br />HTSlib: C library for reading/writing high-throughput sequencing data. James K Bonfield, John Marshall, Petr Danecek, Heng Li, Valeriu Ohan, Andrew Whitwham, Thomas Keane, Robert M Davies. GigaScience, Volume 10, Issue 2, February 2021, giab007, <a href=\"https://doi.org/10.1093/gigascience/giab007\">https://doi.org/10.1093/gigascience/giab007</a><br />Twelve years of SAMtools and BCFtools. Petr Danecek, James K Bonfield, Jennifer Liddle, John Marshall, Valeriu Ohan, Martin O Pollard, Andrew Whitwham, Thomas Keane, Shane A McCarthy, Robert M Davies, Heng Li. GigaScience, Volume 10, Issue 2, February 2021, giab008, <a href=\"https://doi.org/10.1093/gigascience/giab008\">https://doi.org/10.1093/gigascience/giab008</a></p>",
+      "container": "samtools",
+      "dependencies": ["unpack"],
+      "variables": []
+    },
+    {
+      "id": "bowtie2_index",
+      "name": "Bowtie2 indexing",
+      "description": "<p>Uses Bowtie2 to index the genome.</p><p><b>References</b><br />Langmead B, Salzberg S. Fast gapped-read alignment with Bowtie 2. Nature Methods. 2012, 9:357-359.</p>",
+      "container": "bowtie",
+      "dependencies": ["unpack"],
+      "variables": []
+    }
+    ,
+    {
+      "id": "seqoutbias_preprocessing",
+      "name": "SeqOutBias preprocessing",
+      "description": "<p>Uses SeqOutBias to generate tallymer files for .</p><p><b>References</b><br />Langmead B, Salzberg S. Fast gapped-read alignment with Bowtie 2. Nature Methods. 2012, 9:357-359.</p>",
+      "container": "seqoutbias",
+      "dependencies": ["unpack"],
+      "variables": []
+    }
+  ]
+}

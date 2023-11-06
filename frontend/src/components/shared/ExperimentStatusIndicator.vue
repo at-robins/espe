@@ -1,8 +1,8 @@
 <template>
   <div class="row no-wrap">
     <div class="q-ma-md">
-      <q-btn round
-        ><div v-if="status == ExperimentExecutionStatus.None">
+      <q-btn round @click="navigateToRunDetails">
+        <div v-if="status == ExperimentExecutionStatus.None">
           <q-icon :name="matNotStarted" color="primary" />
         </div>
         <div v-else-if="status == ExperimentExecutionStatus.Aborted">
@@ -20,7 +20,10 @@
         <div v-else-if="status == ExperimentExecutionStatus.Waiting">
           <q-spinner-hourglass color="primary" />
         </div>
-        <q-tooltip>The current execution status of the experiment.</q-tooltip>
+        <q-tooltip
+          >The current execution status of the experiment. Click to display
+          further information.</q-tooltip
+        >
       </q-btn>
     </div>
     <q-separator vertical class="q-ml-md q-mr-md" />
@@ -44,6 +47,10 @@
       <div v-else-if="status == ExperimentExecutionStatus.Waiting">
         The next pipeline step is ready and waiting for execution.
       </div>
+      <div>
+        To display further details on the current experiment execution status
+        click on the status icon.
+      </div>
     </div>
   </div>
 </template>
@@ -57,12 +64,23 @@ import {
   matStop,
 } from "@quasar/extras/material-icons";
 import { ExperimentExecutionStatus } from "@/scripts/types";
+import { useRouter } from "vue-router";
 
-defineProps({
+const router = useRouter();
+
+const props = defineProps({
+  id: { type: String, required: true },
   status: {
     type: Object as PropType<ExperimentExecutionStatus>,
     required: true,
   },
 });
+
+function navigateToRunDetails() {
+  router.push({
+    name: "experiments_run_detail",
+    params: { id: props.id },
+  });
+}
 </script>
 <style scoped lang="scss"></style>

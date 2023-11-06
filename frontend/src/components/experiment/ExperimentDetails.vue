@@ -17,7 +17,7 @@
             />
           </q-card-section>
           <q-card-section>
-            <experiment-status-indicator :status="status" />
+            <experiment-status-indicator :id="props.id" :status="status" />
           </q-card-section>
           <q-card-section>
             <entity-comment
@@ -84,6 +84,8 @@
                   :icon="matStopCircle"
                   label="Abort"
                   color="negative"
+                  :loading="isAborting"
+                  @click="abortExperiment"
                 >
                   <q-tooltip>
                     Abort the current experiment execution.
@@ -91,12 +93,15 @@
                 </q-btn>
                 <q-btn
                   v-if="
+                    status == ExperimentExecutionStatus.Aborted ||
                     status == ExperimentExecutionStatus.Failed ||
                     status == ExperimentExecutionStatus.Finished
                   "
                   :icon="matRestartAlt"
                   label="Restart"
                   color="positive"
+                  :loading="isRestarting"
+                  @click="restartExperiment"
                 >
                   <q-tooltip> Restart the experiment execution. </q-tooltip>
                 </q-btn>
@@ -140,7 +145,7 @@ import {
   matRestartAlt,
   matStopCircle,
 } from "@quasar/extras/material-icons";
-import { useRouter } from "vue-router";
+import { onBeforeRouteLeave, useRouter } from "vue-router";
 
 // The intervall in which status updates are requested from the server.
 const POLLING_INTERVALL_MILLISECONDS = 10000;
@@ -153,15 +158,24 @@ const loadingError: Ref<ErrorResponse | null> = ref(null);
 const serverError: Ref<ErrorResponse | null> = ref(null);
 const showServerError = ref(false);
 const selectedPipeline: Ref<PipelineBlueprint | null> = ref(null);
+const isAborting = ref(false);
+const isRestarting = ref(false);
 const isSubmitting = ref(false);
 const status = ref(ExperimentExecutionStatus.None);
 const isPolling = ref(false);
 const pollingError: Ref<ErrorResponse | null> = ref(null);
 const router = useRouter();
 const this_route = router.currentRoute.value.fullPath;
+const pollingTimer: Ref<number | null> = ref(null);
 
 const props = defineProps({
   id: { type: String, required: true },
+});
+
+onBeforeRouteLeave(() => {
+  if (pollingTimer.value !== null) {
+    clearTimeout(pollingTimer.value);
+  }
 });
 
 function updateTitle(title: string) {
@@ -364,6 +378,45 @@ function submitExperiment() {
   }
 }
 
+function abortExperiment() {
+  if (!isAborting.value) {
+    isAborting.value = true;
+    axios
+      .post("/api/experiments/" + props.id + "/abort")
+      .then(() => {
+        status.value = ExperimentExecutionStatus.Aborted;
+      })
+      .catch((error) => {
+        serverError.value = error.response.data;
+        showServerError.value = true;
+      })
+      .finally(() => {
+        isAborting.value = false;
+      });
+  }
+}
+
+function restartExperiment() {
+  if (!isRestarting.value) {
+    isRestarting.value = true;
+    axios
+      .post("/api/experiments/" + props.id + "/reset")
+      .then(() => {
+        return axios.post("/api/experiments/" + props.id);
+      })
+      .then(() => {
+        status.value = ExperimentExecutionStatus.Waiting;
+      })
+      .catch((error) => {
+        serverError.value = error.response.data;
+        showServerError.value = true;
+      })
+      .finally(() => {
+        isRestarting.value = false;
+      });
+  }
+}
+
 /**
  * Conitinuesly polls changes from the server.
  */
@@ -380,7 +433,10 @@ function pollStatusChanges() {
       .get("/api/experiments/" + props.id + "/status")
       .then((response) => {
         status.value = response.data;
-        setTimeout(pollStatusChanges, POLLING_INTERVALL_MILLISECONDS);
+        pollingTimer.value = window.setTimeout(
+          pollStatusChanges,
+          POLLING_INTERVALL_MILLISECONDS
+        );
       })
       .catch((error) => {
         pollingError.value = error.response.data;

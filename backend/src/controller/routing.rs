@@ -6,15 +6,22 @@ use crate::application::error::SeqError;
 
 use super::{
     experiment_controller::{
-        create_experiment, delete_experiment, get_experiment, get_experiment_pipelines,
-        list_experiment, patch_experiment_comment, patch_experiment_mail, patch_experiment_name,
-        patch_experiment_pipeline, post_experiment_pipeline_variable, post_execute_experiment, get_experiment_execution_status,
+        create_experiment, delete_experiment, get_experiment, get_experiment_execution_status,
+        get_experiment_pipeline_run, get_experiment_pipelines, list_experiment,
+        patch_experiment_comment, patch_experiment_mail, patch_experiment_name,
+        patch_experiment_pipeline, post_execute_experiment, post_execute_experiment_step,
+        post_experiment_execution_abort, post_experiment_execution_reset,
+        post_experiment_pipeline_variable,
     },
-    file_controller::{delete_files_by_path, get_files, post_add_file, post_add_folder},
+    file_controller::{
+        delete_files_by_path, get_experiment_download_step_results, get_files, post_add_file,
+        post_add_folder, post_experiment_archive_step_results,
+    },
     global_data_controller::{
         create_global_data, delete_global_data, get_global_data, list_global_data,
         patch_global_data_comment, patch_global_data_name,
     },
+    log_controller::get_experiment_step_logs,
     pipeline_controller::{
         get_pipeline_blueprint, get_pipeline_blueprints, get_pipeline_instance,
         patch_pipeline_blueprints,
@@ -49,11 +56,19 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/experiments/{id}", web::delete().to(delete_experiment))
     .route("/api/experiments/{id}", web::get().to(get_experiment))
     .route("/api/experiments/{id}", web::post().to(post_execute_experiment))
+    .route("/api/experiments/{id}/abort", web::post().to(post_experiment_execution_abort))
+    .route("/api/experiments/{id}/archive", web::post().to(post_experiment_archive_step_results))
     .route("/api/experiments/{id}/comment", web::patch().to(patch_experiment_comment))
+    .route("/api/experiments/{id}/download/{archive}", web::get().to(get_experiment_download_step_results))
+        // This method is only POST to support the JSON message body.
+    .route("/api/experiments/{id}/logs", web::post().to(get_experiment_step_logs))
     .route("/api/experiments/{id}/mail", web::patch().to(patch_experiment_mail))
     .route("/api/experiments/{id}/name", web::patch().to(patch_experiment_name))
     .route("/api/experiments/{id}/pipeline", web::patch().to(patch_experiment_pipeline))
     .route("/api/experiments/{id}/pipelines", web::get().to(get_experiment_pipelines))
+    .route("/api/experiments/{id}/rerun", web::post().to(post_execute_experiment_step))
+    .route("/api/experiments/{id}/reset", web::post().to(post_experiment_execution_reset))
+    .route("/api/experiments/{id}/run", web::get().to(get_experiment_pipeline_run))
     .route("/api/experiments/{id}/status", web::get().to(get_experiment_execution_status))
     .route("/api/experiments/{id}/variable", web::post().to(post_experiment_pipeline_variable))
     // Global data repositories

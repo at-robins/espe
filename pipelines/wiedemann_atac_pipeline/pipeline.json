@@ -1,19 +1,19 @@
 {
   "id": "wiedemann_atac_paired_end",
   "name": "Wiedemann ATAC paired end pipeline",
-  "description": "<p>This pipeline processes paired end ATAC data.</p>",
+  "description": "<p>This pipeline processes paired end ATAC data.</p><p><b>Input specifications</b><br />The input is expected as gzipped FASTQ files (<var>.fq.gz</var> / <var>.fastq.gz</var>) and might be organised in sub-folders. Paired reads must always reside in the same folder and end with <var>_1</var> or <var>_2</var> respectively.</p><p><b>System requirements</b><br />64 GB of RAM are recommended for pipeline execution.</p>",
   "steps": [
     {
-      "id": "fastqc_initial",
-      "name": "FastQC",
-      "description": "Performs an initial quality control of sequenced reads.",
-      "container": "fastqc",
+      "id": "qc_initial",
+      "name": "Initial QC",
+      "description": "<p>Performs an initial quality control of sequenced reads.</p><p><b>References</b><ol><li>Andrews S. (2010). FastQC: a quality control tool for high throughput sequence data. Available online at: <a href=\"http://www.bioinformatics.babraham.ac.uk/projects/fastqc\">Babraham Bioinformatics</a></li></ol></p>",
+      "container": "fastqc_initial",
       "dependencies": [],
       "variables": [
         {
           "id": "ADAPTERS",
           "name": "Adapter sequences",
-          "description": "A custom list of sequencing adapters. The global data repository must contain a file called <var>adapters.txt</var> at its root.",
+          "description": "A custom list of sequencing adapters. The global data repository must contain a file called <var>qc_adapters.txt</var> at its root.",
           "category": {
             "tag": "Global"
           }
@@ -35,6 +35,161 @@
           }
         }
       ]
+    },
+    {
+      "id": "trimming",
+      "name": "Trimming",
+      "description": "<p>Performs trimming of adapters and low quality bases.</p><p><b>References</b><ol><li>Bolger, A. M., Lohse, M., & Usadel, B. (2014). Trimmomatic: A flexible trimmer for Illumina Sequence Data. Bioinformatics, btu170.</li></ol></p>",
+      "container": "trimmomatic",
+      "dependencies": [],
+      "variables": [
+        {
+          "id": "ADAPTERS_CUSTOM",
+          "name": "Custom adapter sequences",
+          "description": "A custom list of sequencing adapters. The global data repository must contain a file called <var>trimming_adapters.fa</var> at its root. This will overwrite any of the predefined adapter sequences.",
+          "category": {
+            "tag": "Global"
+          }
+        },
+        {
+          "id": "ADAPTERS_FIXED",
+          "name": "Predefined adapter sequences",
+          "description": "Specify which of the predefined adapter sequences to use for trimming.",
+          "required": false,
+          "category": {
+            "tag": "Option",
+            "content": [
+              {
+                "name": "Nextera-PE",
+                "value": "NexteraPE-PE.fa"
+              },
+              {
+                "name": "TrueSeq2-PE",
+                "value": "TrueSeq2-PE.fa"
+              },
+              {
+                "name": "TrueSeq3-PE",
+                "value": "TrueSeq3-PE.fa"
+              },
+              {
+                "name": "TrueSeq3-PE-2",
+                "value": "TrueSeq3-PE-2.fa"
+              }
+            ]
+          }
+        },
+        {
+          "id": "PHRED",
+          "name": "PHRED score",
+          "description": "Specify which PHRED score encoding to use.",
+          "required": false,
+          "category": {
+            "tag": "Option",
+            "content": [
+              {
+                "name": "PHRED33",
+                "value": "PHRED33"
+              },
+              {
+                "name": "PHRED64",
+                "value": "PHRED64"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "qc_trimming",
+      "name": "Trimming QC",
+      "description": "<p>Performs a quality control of the trimmed reads.</p><p><b>References</b><ol><li>Andrews S. (2010). FastQC: a quality control tool for high throughput sequence data. Available online at: <a href=\"http://www.bioinformatics.babraham.ac.uk/projects/fastqc\">Babraham Bioinformatics</a></li></ol></p>",
+      "container": "fastqc_trimming",
+      "dependencies": ["trimming"],
+      "variables": [
+        {
+          "id": "ADAPTERS",
+          "name": "Adapter sequences",
+          "description": "A custom list of sequencing adapters. The global data repository must contain a file called <var>qc_adapters.txt</var> at its root.",
+          "category": {
+            "tag": "Global"
+          }
+        },
+        {
+          "id": "KMERS",
+          "name": "Kmer length",
+          "description": "An integer that specifies the Kmer length to be used for Kmer content detection. Must be between 2 and 10.",
+          "category": {
+            "tag": "Number"
+          }
+        },
+        {
+          "id": "SVG",
+          "name": "SVG images",
+          "description": "Saves all images as vector files instead of bitmaps.",
+          "category": {
+            "tag": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "id": "alignment",
+      "name": "Alignment",
+      "description": "<p>Aligns trimmed reads against a reference genome and sorts the output.</p><p><b>References</b><ol><li>Langmead B, Salzberg S. Fast gapped-read alignment with Bowtie 2. Nature Methods. 2012, 9:357-359.</li><li>HTSlib: C library for reading/writing high-throughput sequencing data. James K Bonfield, John Marshall, Petr Danecek, Heng Li, Valeriu Ohan, Andrew Whitwham, Thomas Keane, Robert M Davies. GigaScience, Volume 10, Issue 2, February 2021, giab007, <a href=\"https://doi.org/10.1093/gigascience/giab007\">https://doi.org/10.1093/gigascience/giab007</a></li><li>Twelve years of SAMtools and BCFtools. Petr Danecek, James K Bonfield, Jennifer Liddle, John Marshall, Valeriu Ohan, Martin O Pollard, Andrew Whitwham, Thomas Keane, Shane A McCarthy, Robert M Davies, Heng Li. GigaScience, Volume 10, Issue 2, February 2021, giab008, <a href=\"https://doi.org/10.1093/gigascience/giab008\">https://doi.org/10.1093/gigascience/giab008</a></li></ol></p>",
+      "container": "bowtie",
+      "dependencies": ["trimming"],
+      "variables": [
+        {
+          "id": "GENOME",
+          "name": "Reference genome",
+          "description": "The reference genome to align the reads against. The global data repository must contain a file called <var>genome.fa</var> and the according indices at its root. Indices can be generated by the reference genome preprocessing pipeline.",
+          "category": {
+            "tag": "Global"
+          },
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "alignment_filtering",
+      "name": "Post alignment filtering",
+      "description": "<p>Filters low quality and misaligned reads.</p><p><b>References</b><ol><li>HTSlib: C library for reading/writing high-throughput sequencing data. James K Bonfield, John Marshall, Petr Danecek, Heng Li, Valeriu Ohan, Andrew Whitwham, Thomas Keane, Robert M Davies. GigaScience, Volume 10, Issue 2, February 2021, giab007, <a href=\"https://doi.org/10.1093/gigascience/giab007\">https://doi.org/10.1093/gigascience/giab007</a></li><li>Twelve years of SAMtools and BCFtools. Petr Danecek, James K Bonfield, Jennifer Liddle, John Marshall, Valeriu Ohan, Martin O Pollard, Andrew Whitwham, Thomas Keane, Shane A McCarthy, Robert M Davies, Heng Li. GigaScience, Volume 10, Issue 2, February 2021, giab008, <a href=\"https://doi.org/10.1093/gigascience/giab008\">https://doi.org/10.1093/gigascience/giab008</a></li></ol></p>",
+      "container": "alignment_filtering",
+      "dependencies": ["alignment"],
+      "variables": [
+        {
+          "id": "REMOVE_M",
+          "name": "Remove mitochondrial reads",
+          "description": "Remove all reads mapping to the mitochondiral genome.",
+          "category": {
+            "tag": "Boolean"
+          }
+        },
+        {
+          "id": "REMOVE_INVALID",
+          "name": "Removes misaligned reads",
+          "description": "Remove all read pairs that are not properly aligned.",
+          "category": {
+            "tag": "Boolean"
+          }
+        },
+        {
+          "id": "QUALITY_FILTER",
+          "name": "Quality filtering",
+          "description": "Filters all alignments with a PHRED quality score lower than the defined value.",
+          "category": {
+            "tag": "Number"
+          }
+        }
+      ]
+    },
+    {
+      "id": "splitting",
+      "name": "Splitting",
+      "description": "<p>Splits the alignment into nucleosome specific chuncks.</p><p><b>References</b><ol><li>Buenrostro JD, Giresi PG, Zaba LC, Chang HY, Greenleaf WJ. Transposition of native chromatin for fast and sensitive epigenomic profiling of open chromatin, DNA-binding proteins and nucleosome position. Nat Methods. 2013 Dec;10(12):1213-8. doi: 10.1038/nmeth.2688. Epub 2013 Oct 6. PMID: 24097267; PMCID: PMC3959825.</li><li>HTSlib: C library for reading/writing high-throughput sequencing data. James K Bonfield, John Marshall, Petr Danecek, Heng Li, Valeriu Ohan, Andrew Whitwham, Thomas Keane, Robert M Davies. GigaScience, Volume 10, Issue 2, February 2021, giab007, <a href=\"https://doi.org/10.1093/gigascience/giab007\">https://doi.org/10.1093/gigascience/giab007</a></li><li>Twelve years of SAMtools and BCFtools. Petr Danecek, James K Bonfield, Jennifer Liddle, John Marshall, Valeriu Ohan, Martin O Pollard, Andrew Whitwham, Thomas Keane, Shane A McCarthy, Robert M Davies, Heng Li. GigaScience, Volume 10, Issue 2, February 2021, giab008, <a href=\"https://doi.org/10.1093/gigascience/giab008\">https://doi.org/10.1093/gigascience/giab008</a></li></ol></p>",
+      "container": "splitting",
+      "dependencies": ["alignment_filtering"],
+      "variables": []
     }
   ]
 }

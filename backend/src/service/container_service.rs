@@ -1,20 +1,20 @@
 use std::{
+    collections::HashMap,
     ffi::OsString,
-    hash::{Hash, Hasher},
     io::{BufWriter, Write},
     path::Path,
-    process::{Child, Command, Output, Stdio},
+    process::{Child, Command, Output},
 };
 
 use actix_web::web;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
-use twox_hash::XxHash64;
 
 use crate::{
     application::{
-        config::Configuration,
-        error::{SeqError, SeqErrorType}, database::DatabaseManager,
+        config::{Configuration, LogOutputType, LogProcessType},
+        database::DatabaseManager,
+        error::{SeqError, SeqErrorType},
     },
     model::{
         db::experiment_execution::{ExecutionStatus, ExperimentExecution},
@@ -27,32 +27,73 @@ use crate::{
 
 use super::pipeline_service::LoadedPipelines;
 
+/// The container environment variable specifying all mounts.
+const CONTAINER_ENV_MOUNT: &str = "MOUNT_PATHS";
+
 /// Builds the specifc pipeline step container at the specified context.
 ///
 /// # Parameters
 ///
 /// * `step` - the [`PipelineStepBlueprint`] to build the container for
+/// * `pipeline_id` - the ID of the containing [`PipelineBlueprint`]
 /// * `context` - the context directory contianing the pipeline
+/// * `experiment_id` - the ID of the experiment
+/// * `app_cofig` - the app [`Configuration`]
 pub fn build_pipeline_step<P: AsRef<Path>, T: AsRef<str>>(
     step: &PipelineStepBlueprint,
     pipeline_id: T,
     context: P,
+    experiment_id: i32,
+    app_config: web::Data<Configuration>,
 ) -> Result<Child, SeqError> {
     let mut pipeline_step_path = context.as_ref().to_path_buf();
     pipeline_step_path.push("container");
     pipeline_step_path.push(step.container());
     let build_arg: OsString = "build".into();
     let name_spec: OsString = "-t".into();
-    let name_arg: OsString = format_container_name(pipeline_id, step.id()).into();
+    let name_arg: OsString = format_container_name(&pipeline_id, step.id()).into();
+    let progress_arg: OsString = "--progress=plain".into();
+
+    // Create log directory.
+    let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
+    std::fs::create_dir_all(&logs_path)?;
+    // Open stdout log file.
+    let log_path_stdout = app_config.experiment_log_path(
+        experiment_id.to_string(),
+        &pipeline_id,
+        step.id(),
+        LogProcessType::Build,
+        LogOutputType::StdOut,
+    );
+    let log_file_stdout = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(false)
+        .truncate(true)
+        .open(log_path_stdout)?;
+    // Open stderr log file.
+    let log_path_stderr = app_config.experiment_log_path(
+        experiment_id.to_string(),
+        &pipeline_id,
+        step.id(),
+        LogProcessType::Build,
+        LogOutputType::StdErr,
+    );
+    let log_file_stderr = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(false)
+        .truncate(true)
+        .open(log_path_stderr)?;
 
     let child = Command::new("docker")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(log_file_stdout)
+        .stderr(log_file_stderr)
         .args([
             build_arg.as_os_str(),
             name_spec.as_os_str(),
             name_arg.as_os_str(),
+            progress_arg.as_os_str(),
             pipeline_step_path.as_os_str(),
         ])
         .spawn()?;
@@ -90,34 +131,56 @@ pub fn run_pipeline_step<T: AsRef<str>>(
         format_container_name(&pipeline_id, step.id()).into(),
         "--rm".into(),
     ];
+
     arguments.extend(pipeline_step_mount(output_path, "/output", false));
     // Set initial sample input mount.
     arguments.extend(pipeline_step_mount(
-        app_config.experiment_samples_path(&experiment_id),
-        "/input/samples",
+        app_config.experiment_input_path(&experiment_id),
+        "/input/base",
         true,
     ));
     // Set input mounts / dependencies.
+    let mut mount_map_dependencies = serde_json::Map::new();
     for dependency_id in step.dependencies() {
+        let target = format!("/input/steps/{}", Configuration::hash_string(dependency_id));
+        mount_map_dependencies
+            .insert(dependency_id.to_string(), serde_json::Value::String(target.clone()));
         arguments.extend(pipeline_step_mount(
             app_config.experiment_step_path(&experiment_id, dependency_id),
-            format!("/input/steps/{}", dependency_id),
+            target,
             true,
         ));
     }
     // Set global mounts.
+    let mut mount_map_globals = serde_json::Map::new();
     step.variables()
         .iter()
         .filter(|var_instance| var_instance.is_global_data_reference())
         // Filter out variables without values.
         .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), value)))
         .for_each(|(global_var_id, global_var_value)| {
+            let target = format!("/input/globals/{}", Configuration::hash_string(global_var_id));
+            mount_map_globals.insert(
+                global_var_id.to_string(),
+                serde_json::Value::String(target.clone()),
+            );
             arguments.extend(pipeline_step_mount(
                 app_config.global_data_path(global_var_value),
-                format!("/input/globals/{}", global_var_id),
+                target,
                 true,
             ));
         });
+
+    // Set mount envrionment variable.
+    let mut mount_map_top = serde_json::Map::new();
+    mount_map_top.insert("input".to_string(), serde_json::Value::String("/input/base".to_string()));
+    mount_map_top.insert("output".to_string(), serde_json::Value::String("/output".to_string()));
+    mount_map_top
+        .insert("dependencies".to_string(), serde_json::Value::Object(mount_map_dependencies));
+    mount_map_top.insert("globals".to_string(), serde_json::Value::Object(mount_map_globals));
+    let mount_paths = serde_json::Value::Object(mount_map_top);
+    arguments.push("--env".into());
+    arguments.push(format!("{}={}", CONTAINER_ENV_MOUNT, mount_paths.to_string()).into());
 
     // Set other variables.
     step.variables()
@@ -126,17 +189,52 @@ pub fn run_pipeline_step<T: AsRef<str>>(
         // Filter out variables without values.
         .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), value)))
         .for_each(|(other_var_id, other_var_value)| {
-            arguments.push("--env".into());
-            arguments.push(format!("{}={}", other_var_id, other_var_value).into());
+            if other_var_id != CONTAINER_ENV_MOUNT {
+                arguments.push("--env".into());
+                arguments.push(format!("{}={}", other_var_id, other_var_value).into());
+            } else {
+                log::warn!("Pipeline {} step {} tried to overwrite the reserved environment variable {} with value {}.", pipeline_id.as_ref(), step.id(), other_var_id, other_var_value);
+            }
         });
 
     // Set container to run.
-    arguments.push(format_container_name(pipeline_id, step.id()).into());
+    arguments.push(format_container_name(&pipeline_id, step.id()).into());
+
+    // Create log directory.
+    let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
+    std::fs::create_dir_all(&logs_path)?;
+    // Open stdout log file.
+    let log_path_stdout = app_config.experiment_log_path(
+        experiment_id.to_string(),
+        &pipeline_id,
+        step.id(),
+        LogProcessType::Run,
+        LogOutputType::StdOut,
+    );
+    let log_file_stdout = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(false)
+        .truncate(true)
+        .open(log_path_stdout)?;
+    // Open stderr log file.
+    let log_path_stderr = app_config.experiment_log_path(
+        experiment_id.to_string(),
+        &pipeline_id,
+        step.id(),
+        LogProcessType::Run,
+        LogOutputType::StdErr,
+    );
+    let log_file_stderr = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(false)
+        .truncate(true)
+        .open(log_path_stderr)?;
 
     let output = Command::new("docker")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(log_file_stdout)
+        .stderr(log_file_stderr)
         .args(arguments)
         .spawn()?;
     Ok(output)
@@ -175,9 +273,7 @@ fn format_container_name<T: AsRef<str>, R: AsRef<str>>(
     pipeline_step_id: R,
 ) -> String {
     let name = format!("{}{}", pipeline_id.as_ref(), pipeline_step_id.as_ref());
-    let mut hasher = XxHash64::with_seed(154);
-    name.hash(&mut hasher);
-    hasher.finish().to_string()
+    Configuration::hash_string(name)
 }
 
 pub struct ContainerHandler {
@@ -327,35 +423,17 @@ impl ContainerHandler {
         Ok(())
     }
 
-    /// Aborts the current pipeline step and all other pipeline steps belonging to the experiment.
-    /// Returns an error if no step is currently running.
-    pub fn abort(&mut self) -> Result<(), SeqError> {
-        if !self.is_running() {
-            return Err(SeqError::new(
-                "No process running",
-                SeqErrorType::InternalServerError,
-                "No process is running and can thus not be aborted.",
-                "No process is currently running.",
-            ));
-        }
+    /// Aborts the the pipeline step belonging to the specified experiment
+    /// if currently executed.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment to abort
+    pub fn abort(&mut self, experiment_id: i32) -> Result<(), SeqError> {
         if let Some(step) = &self.executed_step {
-            let mut connection = self.database_manager.database_connection()?;
-            let experiment_id = step.experiment_id;
-            self.kill()?;
-            connection.immediate_transaction(|connection| {
-                ExperimentExecution::update_scheduled_status_by_experiment(
-                    experiment_id,
-                    ExecutionStatus::Aborted,
-                    connection,
-                )
-            })?;
-        } else {
-            return Err(SeqError::new(
-                "No process running",
-                SeqErrorType::InternalServerError,
-                "No process is specified and can thus not be aborted.",
-                "No process is currently running.",
-            ));
+            if experiment_id == step.experiment_id {
+                self.kill()?;
+            }
         }
         Ok(())
     }
@@ -395,18 +473,19 @@ impl ContainerHandler {
     ///
     /// * `output` - the output to parse and log
     /// * `build` - ```true``` if the build output is parsed, ```false``` if the run output is parsed
-    fn parse_output(&self, output: Output, build: bool) -> Result<(), SeqError> {
+    fn parse_output(&self, output: Output, process_type: LogProcessType) -> Result<(), SeqError> {
         if let Some(step) = &self.executed_step {
-            let mut log_path = self
+            let logs_path = self
                 .config
                 .experiment_logs_path(step.experiment_id.to_string());
-            let process_type = if build { "build" } else { "run" };
-            std::fs::create_dir_all(&log_path)?;
-            log_path.push(format!(
-                "{}_{}.log",
-                format_container_name(&step.pipeline_id, &step.pipeline_step_id),
-                &process_type
-            ));
+            std::fs::create_dir_all(&logs_path)?;
+            let log_path = self.config.experiment_log_path(
+                step.experiment_id.to_string(),
+                &step.pipeline_id,
+                &step.pipeline_step_id,
+                process_type,
+                LogOutputType::ExitCode,
+            );
             let log_file = std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -414,12 +493,12 @@ impl ContainerHandler {
                 .truncate(true)
                 .open(log_path)?;
             let mut buffered_writer = BufWriter::new(log_file);
-            buffered_writer.write_all("[[ STDOUT ]]\n".as_bytes())?;
-            buffered_writer.write_all(&output.stdout)?;
-            buffered_writer.write_all("\n\n[[ STDERR ]]\n".as_bytes())?;
-            buffered_writer.write_all(&output.stderr)?;
-            buffered_writer.write_all("\n\n[[ EXIT STATUS ]]\n".as_bytes())?;
-            buffered_writer.write_all(output.status.to_string().as_bytes())?;
+            let exit_code = output
+                .status
+                .code()
+                .map(|code| code.to_string())
+                .unwrap_or("Terminated by signal".to_string());
+            buffered_writer.write_all(exit_code.as_bytes())?;
             if output.status.success() {
                 Ok(())
             } else {
@@ -466,7 +545,7 @@ impl ContainerHandler {
             ProcessStatus::Finished => {
                 if let Some(run) = self.run_process.take() {
                     // Handle output.
-                    self.parse_output(run.wait_with_output()?, false)?;
+                    self.parse_output(run.wait_with_output()?, LogProcessType::Run)?;
                     // Sets the status to finished.
                     let mut connection = self.database_manager.database_connection()?;
                     connection.immediate_transaction(|connection| {
@@ -498,7 +577,7 @@ impl ContainerHandler {
                 ProcessStatus::Finished => {
                     if let Some(build) = self.build_process.take() {
                         // Handle output.
-                        self.parse_output(build.wait_with_output()?, true)?;
+                        self.parse_output(build.wait_with_output()?, LogProcessType::Build)?;
                         // Start the subsequent run process.
                         self.start_run_process()?;
                         Ok(false)
@@ -537,6 +616,8 @@ impl ContainerHandler {
                     step_blueprint,
                     &step.pipeline_id,
                     pipeline.context(),
+                    step.experiment_id,
+                    web::Data::clone(&self.config),
                 )?);
                 Ok(())
             } else {
@@ -566,7 +647,12 @@ impl ContainerHandler {
         if let Some(pipeline) = self.loaded_pipelines.get(&step.pipeline_id) {
             let mut connection = self.database_manager.database_connection()?;
             let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
-            let pipeline = ExperimentPipelineBlueprint::from_internal(pipeline.pipeline(), values);
+            // The stati of the pipeline steps should be None at this point so an empty map is supplied instead of loading them from the database.
+            let pipeline = ExperimentPipelineBlueprint::from_internal(
+                pipeline.pipeline(),
+                values,
+                HashMap::new(),
+            );
             if let Some(step_blueprint) = pipeline
                 .steps()
                 .iter()

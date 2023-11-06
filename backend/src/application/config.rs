@@ -4,8 +4,12 @@
 const UUID_CONTEXT: Context = Context::new(0);
 /// The node ID for UUID generation.
 const UUID_NODE_ID: &[u8; 6] = &[12, 221, 33, 14, 35, 16];
-/// The context path where temporary files are stored.
-const PATH_FILES_TEMPORARY: &str = "tmp/files";
+/// The context path where temporary data are stored.
+const PATH_TEMPORARY: &str = "tmp";
+/// The context path where temporary upload files are stored.
+const PATH_TEMPORARY_UPLOAD: &str = "upload";
+/// The context path where temporary download files are stored.
+const PATH_TEMPORARY_DOWNLOAD: &str = "download";
 /// The context path where data related to specific experiments or samples is stored.
 const PATH_FILES_EXPERIMENTS: &str = "experiments";
 /// The file inside each pipeline folder defining the pipeline.
@@ -14,17 +18,16 @@ pub const PIPELINE_DEFINITION_FILE: &str = "pipeline.json";
 pub const PATH_FILES_EXPERIMENTS_STEPS: &str = "steps";
 /// The sub-folder where experiment input is stored.
 pub const PATH_FILES_EXPERIMENTS_INPUT: &str = "input";
-/// The sub-folder where initial pipeline input samples are stored.
-pub const PATH_FILES_EXPERIMENTS_SAMPLES: &str = "samples";
 /// The sub-folder where all logs are stored.
 pub const PATH_FILES_EXPERIMENTS_LOGS: &str = "logs";
 /// The folder where global data is stored.
 pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
 
-use std::{path::PathBuf, time::SystemTime};
+use std::{fmt::Display, hash::Hash, hash::Hasher, path::PathBuf, time::SystemTime};
 
 use getset::Getters;
 use serde::{Deserialize, Serialize};
+use twox_hash::XxHash64;
 use uuid::{
     v1::{Context, Timestamp},
     Uuid,
@@ -118,10 +121,33 @@ impl Configuration {
             .map_err(|error| SeqError::from_var_error(error, environment_variable))
     }
 
-    /// The context path where temporary files are stored.
-    pub fn temporary_file_path(&self) -> PathBuf {
-        let mut path: PathBuf = self.context_folder().clone();
-        path.push(PATH_FILES_TEMPORARY);
+    /// The context path where temporary data are stored.
+    pub fn temporary_path(&self) -> PathBuf {
+        self.context_folder().join(PATH_TEMPORARY)
+    }
+
+    /// The context path where temporary upload files are stored.
+    pub fn temporary_upload_path(&self) -> PathBuf {
+        let mut path: PathBuf = self.temporary_path();
+        path.push(PATH_TEMPORARY_UPLOAD);
+        path
+    }
+
+    /// The context path where temporary download files are stored.
+    pub fn temporary_download_path(&self) -> PathBuf {
+        let mut path: PathBuf = self.temporary_path();
+        path.push(PATH_TEMPORARY_DOWNLOAD);
+        path
+    }
+
+    /// The context path where a specific temporary download file is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `file_id` - the ID of the temporary file
+    pub fn temporary_download_file_path<T: Into<String>>(&self, file_id: T) -> PathBuf {
+        let mut path: PathBuf = self.temporary_download_path();
+        path.push(file_id.into());
         path
     }
 
@@ -198,19 +224,8 @@ impl Configuration {
         step_id: Q,
     ) -> PathBuf {
         let mut path: PathBuf = self.experiment_steps_path(experiment_id);
-        path.push(step_id.as_ref());
-        path
-    }
-
-    /// The context path where data related to the initial pipeline input samples
-    /// of a specified experiment is stored.
-    ///
-    /// # Parameters
-    ///
-    /// * `experiment_id` - the ID of the experiment
-    pub fn experiment_samples_path<P: AsRef<str>>(&self, experiment_id: P) -> PathBuf {
-        let mut path: PathBuf = self.experiment_input_path(experiment_id);
-        path.push(PATH_FILES_EXPERIMENTS_SAMPLES);
+        // Hashing the ID prevents invalid characters in file paths.
+        path.push(Self::hash_string(step_id));
         path
     }
 
@@ -226,6 +241,65 @@ impl Configuration {
         path
     }
 
+    /// The context path where a specific pipeline log file is stored.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    /// * `pipeline_id` - the ID of the pipeline
+    /// * `step_id` - the ID of the pipeline step
+    /// * `process_type` - the type of process to log
+    /// * `output_type` - the output type of the process to log
+    pub fn experiment_log_path<P: AsRef<str>, Q: AsRef<str>, R: AsRef<str>>(
+        &self,
+        experiment_id: P,
+        pipeline_id: Q,
+        step_id: R,
+        process_type: LogProcessType,
+        output_type: LogOutputType,
+    ) -> PathBuf {
+        let mut path: PathBuf = self.experiment_logs_path(experiment_id);
+        path.push(format!(
+            "{}_{}_{}.log",
+            Self::hash_string(format!("{}{}", pipeline_id.as_ref(), step_id.as_ref())),
+            process_type,
+            output_type,
+        ));
+        path
+    }
+
+    /// All potential context paths of pipeline log files.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the experiment
+    /// * `pipeline_id` - the ID of the pipeline
+    /// * `step_id` - the ID of the pipeline step
+    pub fn experiment_log_paths_all<P: AsRef<str>, Q: AsRef<str>, R: AsRef<str>>(
+        &self,
+        experiment_id: P,
+        pipeline_id: Q,
+        step_id: R,
+    ) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        for process_type in &[LogProcessType::Build, LogProcessType::Run] {
+            for output_type in &[
+                LogOutputType::StdOut,
+                LogOutputType::StdErr,
+                LogOutputType::ExitCode,
+            ] {
+                paths.push(self.experiment_log_path(
+                    experiment_id.as_ref(),
+                    pipeline_id.as_ref(),
+                    step_id.as_ref(),
+                    *process_type,
+                    *output_type,
+                ));
+            }
+        }
+        paths
+    }
+
     /// Generates a V1 UUID.
     pub fn generate_uuid() -> Uuid {
         let now = SystemTime::now()
@@ -238,6 +312,65 @@ impl Configuration {
     /// Returns the full server address including port information.
     pub fn server_address_and_port(&self) -> String {
         format!("{}:{}", self.server_address(), self.server_port())
+    }
+
+    /// Hashes the specified string and returns the resulting number as a string.
+    /// The hash is constant for the same string on repeated uses.
+    ///
+    /// # Parameters
+    ///
+    /// * `value` - the string to hash
+    pub fn hash_string<T: AsRef<str>>(value: T) -> String {
+        let mut hasher = XxHash64::with_seed(154);
+        value.as_ref().hash(&mut hasher);
+        hasher.finish().to_string()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+/// The process types of log files.
+pub enum LogProcessType {
+    /// The build process.
+    Build,
+    // The run process.
+    Run,
+}
+
+impl Display for LogProcessType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                LogProcessType::Build => "build",
+                LogProcessType::Run => "run",
+            }
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+/// The output types of log files.
+pub enum LogOutputType {
+    /// Standard output stream.
+    StdOut,
+    /// Standard error stream.
+    StdErr,
+    /// The exit code.
+    ExitCode,
+}
+
+impl Display for LogOutputType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                LogOutputType::StdOut => "stdout",
+                LogOutputType::StdErr => "stderr",
+                LogOutputType::ExitCode => "exitcode",
+            }
+        )
     }
 }
 
@@ -253,10 +386,32 @@ mod tests {
     }
 
     #[test]
-    fn test_temporary_file_path() {
+    fn test_temporary_path() {
         let config = Configuration::new("", "", "", "", "./application/context", "");
-        let path: PathBuf = "./application/context/tmp/files".into();
-        assert_eq!(config.temporary_file_path(), path);
+        let path: PathBuf = "./application/context/tmp".into();
+        assert_eq!(config.temporary_path(), path);
+    }
+
+    #[test]
+    fn test_temporary_upload_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/tmp/upload".into();
+        assert_eq!(config.temporary_upload_path(), path);
+    }
+
+    #[test]
+    fn test_temporary_download_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let path: PathBuf = "./application/context/tmp/download".into();
+        assert_eq!(config.temporary_download_path(), path);
+    }
+
+    #[test]
+    fn test_temporary_download_file_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let id = "01234567-89ab-cdef-0123-456789abcdef";
+        let path: PathBuf = format!("./application/context/tmp/download/{}", id).into();
+        assert_eq!(config.temporary_download_file_path(id), path);
     }
 
     #[test]
@@ -297,14 +452,49 @@ mod tests {
     #[test]
     fn test_experiment_step_path() {
         let config = Configuration::new("", "", "", "", "./application/context", "");
-        let path: PathBuf = "./application/context/experiments/experiment_id/steps/step_id".into();
+        // Hash of step_id.
+        let path: PathBuf =
+            "./application/context/experiments/experiment_id/steps/4363919453614495606".into();
         assert_eq!(config.experiment_step_path("experiment_id", "step_id"), path);
     }
 
     #[test]
-    fn test_experiment_samples_path() {
+    fn test_experiment_logs_path() {
         let config = Configuration::new("", "", "", "", "./application/context", "");
-        let path: PathBuf = "./application/context/experiments/test_id/input/samples".into();
-        assert_eq!(config.experiment_samples_path("test_id"), path);
+        // Hash of step_id.
+        let path: PathBuf = "./application/context/experiments/experiment_id/logs".into();
+        assert_eq!(config.experiment_logs_path("experiment_id"), path);
+    }
+
+    #[test]
+    fn test_experiment_log_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "");
+        // Hash of step_id.
+        let path: PathBuf =
+            "./application/context/experiments/experiment_id/logs/13269802908832430007_build_stderr.log"
+                .into();
+        assert_eq!(
+            config.experiment_log_path(
+                "experiment_id",
+                "pipeline_id",
+                "step_id",
+                LogProcessType::Build,
+                LogOutputType::StdErr
+            ),
+            path
+        );
+    }
+
+    #[test]
+    fn test_hash_string() {
+        let random_string = "39012rtuj132-0t1jp41-9/n\n\t@#$%^&*()|}{\"?>¡ªº£€˚„";
+        let hash = Configuration::hash_string(random_string);
+        let allowed_characters = vec!['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        assert!(hash.len() > 0);
+        // u64 max
+        assert!(hash.len() <= 20);
+        for character in hash.chars() {
+            assert!(allowed_characters.contains(&character));
+        }
     }
 }
