@@ -215,6 +215,17 @@ impl From<diesel::result::Error> for SeqError {
     }
 }
 
+impl From<diesel_migrations::MigrationError> for SeqError {
+    fn from(error: diesel_migrations::MigrationError) -> Self {
+        Self::new(
+            "diesel_migrations::MigrationError",
+            SeqErrorType::InternalServerError,
+            error,
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        )
+    }
+}
+
 impl From<std::time::SystemTimeError> for SeqError {
     fn from(error: std::time::SystemTimeError) -> Self {
         Self::new(
