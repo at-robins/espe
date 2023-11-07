@@ -36,5 +36,6 @@ RUN cp /repo/espe/backend/target/release/backend /srv/espe/
 RUN cp /repo/espe/backend/.env /srv/espe/
 RUN cp -r /repo/espe/backend/static_dist /srv/espe/
 RUN cp -r /repo/espe/pipelines /srv/espe/application/
+RUN rm -r -f /repo
 
 ENTRYPOINT [ "/srv/espe/backend" ]
