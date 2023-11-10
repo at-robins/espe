@@ -6,9 +6,17 @@
     {
       "id": "preprocessing",
       "name": "Preprocessing",
-      "description": "<p>Performs an initial quality control of sequenced reads.</p><p><b>References</b><ol><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</li></ol></p>",
+      "description": "<p>Performs an initial quality control of sequenced reads and removes low quality reads.</p><p><b>References</b><ol><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
       "container": "preprocessing",
       "dependencies": [],
+      "variables": []
+    },
+    {
+      "id": "ambient_rna_removal",
+      "name": "Ambient RNA removal",
+      "description": "<p>Detects and removes ambient RNA.</p><p><b>References</b><ol><li>Young, M.D., Behjati, S. (2020). SoupX removes ambient RNA contamination from droplet-based single-cell RNA sequencing data, GigaScience, Volume 9, Issue 12, December 2020, giaa151bioRxiv, 303727, <a href=\"https://doi.org/10.1093/gigascience/giaa151\">https://doi.org/10.1093/gigascience/giaa151</a></li></ol></p>",
+      "container": "ambient_rna",
+      "dependencies": ["preprocessing"],
       "variables": []
     }
   ]

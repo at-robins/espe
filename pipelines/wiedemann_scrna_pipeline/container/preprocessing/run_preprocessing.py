@@ -42,6 +42,11 @@ def is_outlier(data, metric: str, n_mad: int):
 def process_data(file_path, output_folder_path, metrics_writer):
     """
     Processes datasets and removes low qulaity reads.
+
+    Keyword arguments:
+    file_path -- the input path of the dataset hd5 file
+    output_folder_path -- the corresponding output path
+    metrics_writer -- the CSV writer to persist calculated metrics
     """
     print(f"Processing file {file_path}")
     print("\tReading data...")
