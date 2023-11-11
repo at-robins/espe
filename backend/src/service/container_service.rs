@@ -3,7 +3,7 @@ use std::{
     ffi::OsString,
     io::{BufWriter, Write},
     path::Path,
-    process::{Child, Command, Output},
+    process::{Child, Command, Output, Stdio},
 };
 
 use actix_web::web;
@@ -283,6 +283,7 @@ pub struct ContainerHandler {
     executed_step: Option<ExperimentExecution>,
     build_process: Option<Child>,
     run_process: Option<Child>,
+    stop_processes: Vec<Child>,
 }
 
 impl ContainerHandler {
@@ -304,6 +305,7 @@ impl ContainerHandler {
             executed_step: None,
             build_process: None,
             run_process: None,
+            stop_processes: Vec::new(),
         }
     }
 
@@ -317,6 +319,7 @@ impl ContainerHandler {
         if self.is_running() {
             Self::kill_process(&self.executed_step, &mut self.build_process)?;
             Self::kill_process(&self.executed_step, &mut self.run_process)?;
+            self.stop_container()?;
         }
         self.reset();
         Ok(())
@@ -346,6 +349,31 @@ impl ContainerHandler {
                     "Process cannot be terminated.",
                 ));
             }
+        }
+        Ok(())
+    }
+
+    /// Tries to stop the container associated with the current execution step.
+    fn stop_container(&mut self) -> Result<(), SeqError> {
+        log::info!("Trying to stop container {:?}.", &self.executed_step);
+        if self.run_process.is_some() {
+            if let Some(step) = &self.executed_step {
+                let stop_arg: OsString = "stop".into();
+                let name_arg: OsString =
+                    format_container_name(&(step.pipeline_id), &(step.pipeline_step_id)).into();
+                self.stop_processes.push(
+                    Command::new("docker")
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::piped())
+                        .args([stop_arg.as_os_str(), name_arg.as_os_str()])
+                        .spawn()?,
+                );
+            }
+        } else {
+            log::warn!(
+                "Cannot stop container {:?} as there is no according run process.",
+                &self.executed_step
+            );
         }
         Ok(())
     }
@@ -533,8 +561,52 @@ impl ContainerHandler {
         }
     }
 
+    /// Updates and logs process that should stop containers.
+    fn update_stop_processes(&mut self) {
+        let mut i = 0;
+        while i < self.stop_processes.len() {
+            if self.stop_processes[i].try_wait().is_ok() {
+                match self.stop_processes.remove(i).wait_with_output() {
+                    Ok(output) => {
+                        if output.status.success() {
+                            log::info!("Container successfully stopped.");
+                        } else {
+                            log::error!(
+                                "Stopping a container failed with exit code {}",
+                                output.status
+                            );
+                        }
+                        log::info!(
+                            "Stopped container StdOut: {}",
+                            String::from_utf8_lossy(&output.stdout)
+                        );
+                        log::info!(
+                            "Stopped container StdErr: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                    },
+                    Err(err) => {
+                        // Just log the error as we cannot
+                        // do anything about it.
+                        log::error!(
+                            "Getting the output of a container stop process failed with error: {}",
+                            err
+                        );
+                    },
+                }
+            } else {
+                i += 1;
+            }
+            if !self.stop_processes.is_empty() {
+                log::info!("{} containers are currently being stopped.", self.stop_processes.len());
+            }
+        }
+    }
+
     /// Updates the handler and returns ```true``` if ready for processing another step.
     fn update_inner(&mut self) -> Result<bool, SeqError> {
+        // First handle active stop processes.
+        self.update_stop_processes();
         // Ready to handle new containers if none is actively running.
         if !self.is_running() {
             return Ok(true);
