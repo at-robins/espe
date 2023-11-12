@@ -116,6 +116,8 @@ pub fn run_pipeline_step<T: AsRef<str>>(
     app_config: web::Data<Configuration>,
 ) -> Result<Child, SeqError> {
     let experiment_id = experiment_id.to_string();
+    // Create input directory in case an empty pipeline is run.
+    std::fs::create_dir_all(app_config.experiment_input_path(experiment_id.to_string()))?;
     // Create the output directory.
     let output_path = app_config.experiment_step_path(&experiment_id, step.id());
     // Clear the output folder if the step has been run before.
