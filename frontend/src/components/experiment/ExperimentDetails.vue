@@ -34,7 +34,12 @@
               @update:selected-pipeline="selectedPipeline = $event"
             />
           </q-card-section>
-          <q-card-section v-if="selectedPipeline">
+          <q-card-section
+            v-if="
+              selectedPipeline &&
+              selectedPipeline.steps.some((step) => step.variables.length > 0)
+            "
+          >
             <entity-pipeline-variables
               :pipeline="selectedPipeline"
               :entity-id="experiment.id"
