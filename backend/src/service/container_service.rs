@@ -155,23 +155,24 @@ pub fn run_pipeline_step<T: AsRef<str>>(
     }
     // Set global mounts.
     let mut mount_map_globals = serde_json::Map::new();
-    step.variables()
+    for (global_var_id, global_var_value) in step.variables()
         .iter()
         .filter(|var_instance| var_instance.is_global_data_reference())
         // Filter out variables without values.
         .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), value)))
-        .for_each(|(global_var_id, global_var_value)| {
-            let target = format!("/input/globals/{}", Configuration::hash_string(global_var_id));
-            mount_map_globals.insert(
-                global_var_id.to_string(),
-                serde_json::Value::String(target.clone()),
-            );
-            arguments.extend(pipeline_step_mount(
-                app_config.global_data_path(global_var_value),
-                target,
-                true,
-            ));
-        });
+    {
+        let target = format!("/input/globals/{}", Configuration::hash_string(global_var_id));
+        mount_map_globals
+            .insert(global_var_id.to_string(), serde_json::Value::String(target.clone()));
+        let global_data_path = app_config.global_data_path(global_var_value);
+        arguments.extend(pipeline_step_mount(
+            &global_data_path,
+            target,
+            true,
+        ));
+        // Create global data directory in case the reposiory is empty.
+        std::fs::create_dir_all(&global_data_path)?;
+    }
 
     // Set mount envrionment variable.
     let mut mount_map_top = serde_json::Map::new();
