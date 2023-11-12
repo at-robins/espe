@@ -6,7 +6,7 @@
       node-key="id"
       no-nodes-label="No files present."
       text-color="primary"
-      :default-expand-all="true"
+      :default-expand-all="false"
       :selected-color="showContextMenu ? 'accent' : 'primary'"
       v-model:selected="selectedNode"
     >

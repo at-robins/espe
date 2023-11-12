@@ -78,7 +78,26 @@ impl LogFileReader {
         Ok(if !path.exists() {
             None
         } else {
-            Some(std::fs::read_to_string(path)?)
+            let file_content = std::fs::read(&path)?;
+            match String::from_utf8(file_content) {
+                Ok(value) => Some(value),
+                Err(err) => {
+                    // Log the error but still return the log file since most of the
+                    // content is probably still readable.
+                    log::error!(
+                        "The log file {} contains invalid UTF-8: {}\n{}",
+                        path.display(),
+                        err,
+                        err.utf8_error()
+                    );
+                    let log_content_with_error: String = format!(
+                        "[ ERROR: The log file containes invalid UTF-8. \
+                        Please check the server logs for further details. ]\n\n{}",
+                        String::from_utf8_lossy(err.as_bytes())
+                    );
+                    Some(log_content_with_error)
+                },
+            }
         })
     }
 }

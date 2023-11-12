@@ -12,7 +12,7 @@
         :key="pipelineStep.id"
         class="row"
       >
-        <div class="col">
+        <div v-if="pipelineStep.variables.length > 0" class="col">
           <q-expansion-item expand-separator>
             <template v-slot:header>
               <q-item-section avatar>
@@ -26,7 +26,7 @@
                     hasRequiredVariable(pipelineStep) ? 'warning' : 'primary'
                   "
                 />
-                <q-tooltip>
+                <q-tooltip v-if="hasRequiredVariable(pipelineStep)">
                   This step contains variables that must be specified for the
                   pipeline to work.
                 </q-tooltip>
