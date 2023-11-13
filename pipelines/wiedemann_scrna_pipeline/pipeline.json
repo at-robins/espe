@@ -14,9 +14,26 @@
     {
       "id": "ambient_rna_removal",
       "name": "Ambient RNA removal",
-      "description": "<p>Detects and removes ambient RNA.</p><p><b>References</b><ol><li>Young, M.D., Behjati, S. (2020). SoupX removes ambient RNA contamination from droplet-based single-cell RNA sequencing data, GigaScience, Volume 9, Issue 12, December 2020, giaa151bioRxiv, 303727, <a href=\"https://doi.org/10.1093/gigascience/giaa151\">https://doi.org/10.1093/gigascience/giaa151</a></li></ol></p>",
+      "description": "<p>Detects and removes ambient RNA and removes non-informative genes.</p><p><b>References</b><ol><li>Young, M.D., Behjati, S. (2020). SoupX removes ambient RNA contamination from droplet-based single-cell RNA sequencing data, GigaScience, Volume 9, Issue 12, December 2020, giaa151bioRxiv, 303727, <a href=\"https://doi.org/10.1093/gigascience/giaa151\">https://doi.org/10.1093/gigascience/giaa151</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
       "container": "ambient_rna",
       "dependencies": ["preprocessing"],
+      "variables": [
+        {
+          "id": "SKIP",
+          "name": "Skip ambient RNA removal",
+          "description": "Skip adjusting the feature counts for ambient RNA / background. This might be desirable for pre-filtered samples or fixed scRNA-Seq data, where the low ambient RNA content leads to bad inference of the contamination fraction. Non-informative genes are still filtered out.",
+          "category": {
+            "tag": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doublet_detection",
+      "name": "Doublet detection",
+      "description": "<p>Detects and marks cell doublets.</p><p><b>References</b><ol><li>Germain P, Lun A, Garcia Meixide C, Macnair W, Robinson M (2022). \"Doublet identification in single-cell sequencing data using scDblFinder.\" f1000research. <a href=\"https://doi.org/10.12688/f1000research.73600.2\">doi:10.12688/f1000research.73600.2</a>.</li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "container": "doublet_detection",
+      "dependencies": ["ambient_rna_removal"],
       "variables": []
     }
   ]
