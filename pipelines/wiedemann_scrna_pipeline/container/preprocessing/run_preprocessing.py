@@ -139,7 +139,9 @@ def process_data(file_path, output_folder_path, metrics_writer):
     )
 
 
-with open(f"{MOUNT_PATHS['output']}/metrics.csv", mode="w", newline="") as csvfile:
+with open(
+    f"{MOUNT_PATHS['output']}/metrics.csv", mode="w", newline="", encoding="utf-8"
+) as csvfile:
     metrics_writer = csv.writer(
         csvfile, dialect="unix", delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
     )
