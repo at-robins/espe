@@ -116,7 +116,13 @@ def process_data(file_path, output_folder_path, metrics_writer):
 
     print("\tWriting metrics to file...")
     metrics_writer.writerow(
-        [file_path, n_cells_raw, n_cells_filtered, n_outliers, n_outliers_mt]
+        [
+            file_path.removeprefix(INPUT_FOLDER),
+            n_cells_raw,
+            n_cells_filtered,
+            n_outliers,
+            n_outliers_mt,
+        ]
     )
 
     print("\tWriting filtered data to file...")

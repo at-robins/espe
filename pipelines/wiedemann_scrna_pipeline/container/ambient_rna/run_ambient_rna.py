@@ -55,7 +55,9 @@ def get_raw_file(raw_file_folder):
     return None
 
 
-def process_data(file_path_filtered, file_path_raw, output_folder_path, skip_soupx, metrics_writer):
+def process_data(
+    file_path_filtered, file_path_raw, output_folder_path, skip_soupx, metrics_writer
+):
     """
     Removes ambient RNA.
     """
@@ -160,10 +162,15 @@ def process_data(file_path_filtered, file_path_raw, output_folder_path, skip_sou
     print(f"Number of features after filtering: {n_cells_after_filter}")
     print("\tWriting metrics to file...")
     metrics_writer.writerow(
-        [file_path_filtered, n_cells_before_filter, n_cells_after_filter]
+        [
+            file_path_filtered.removeprefix(INPUT_FOLDER),
+            n_cells_before_filter,
+            n_cells_after_filter,
+        ]
     )
     print("\tWriting filtered data to file...")
     adata_filtered.write(f"{output_folder_path}/corrected.h5ad", compression="gzip")
+
 
 with open(
     f"{MOUNT_PATHS['output']}/metrics.csv", mode="w", newline="", encoding="utf-8"
@@ -198,5 +205,5 @@ with open(
                     get_raw_file(folder_path_raw),
                     output_folder_path,
                     skip,
-                    metrics_writer
+                    metrics_writer,
                 )

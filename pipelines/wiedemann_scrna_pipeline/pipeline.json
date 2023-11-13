@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_scrna_pipeline",
   "name": "Wiedemann single cell RNA-Seq pipeline",
-  "description": "<p>This pipeline processes single cell RNA-Seq data.</p><p><b>Input specifications</b><br />TODO</p><p><b>System requirements</b><br />64 GB of RAM are recommended for pipeline execution.</p>",
+  "description": "<p>This pipeline processes single cell RNA-Seq data. For data obtained with fixed cell protocols it is recommended to skip the ambient RNA removal step by using the according step variable below.</p><p><b>Input specifications</b><br />TODO</p><p><b>System requirements</b><br />64 GB of RAM are recommended for pipeline execution.</p>",
   "steps": [
     {
       "id": "preprocessing",

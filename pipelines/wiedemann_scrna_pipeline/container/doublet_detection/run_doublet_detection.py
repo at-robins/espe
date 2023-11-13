@@ -63,31 +63,34 @@ def process_data(file_path_filtered, output_folder_path, metrics_writer):
             )
             doublet_score = sce$scDblFinder.score
             doublet_class = sce$scDblFinder.class
-            print(sce)
-            print(doublet_score)
-            print(doublet_class)
             return(sce)
         }
         """
     )
+    print("\tUpdating data with doublet information...")
     doublet_detect_output = doublet_detect_function(
         adata_filtered.X.T,
     )
-    print(doublet_detect_output)
-    #     adata_filtered.layers["counts"] = adata_filtered.X
-    #     adata_filtered.layers["soupX_counts"] = soupx_output.T
-    #     adata_filtered.X = adata_filtered.layers["soupX_counts"]
-    # n_cells_before_filter = adata_filtered.n_vars
-    # print(f"Total number of features before filtering: {n_cells_before_filter}")
-    # sc.pp.filter_genes(adata_filtered, min_cells=20)
-    # n_cells_after_filter = adata_filtered.n_vars
-    # print(f"Number of features after filtering: {n_cells_after_filter}")
-    # print("\tWriting metrics to file...")
-    # metrics_writer.writerow(
-    #     [file_path_filtered, n_cells_before_filter, n_cells_after_filter]
-    # )
-    # print("\tWriting filtered data to file...")
-    # adata_filtered.write(f"{output_folder_path}/corrected.h5ad", compression="gzip")
+    doublet_classes = doublet_detect_output.obs["scDblFinder.class"].to_numpy()
+    adata_filtered.obs["doublet_score"] = doublet_detect_output.obs[
+        "scDblFinder.score"
+    ].to_numpy()
+    adata_filtered.obs["doublet_class"] = doublet_classes
+
+    print("\tWriting metrics to file...")
+    metrics_writer.writerow(
+        [
+            file_path_filtered.removeprefix(INPUT_FOLDER),
+            adata_filtered.n_obs,
+            np.count_nonzero(doublet_classes == "singlet"),
+            np.count_nonzero(doublet_classes == "doublet"),
+        ]
+    )
+    print("\tWriting filtered data to file...")
+    adata_filtered.write(
+        f"{output_folder_path}/doublets_marked.h5ad", compression="gzip"
+    )
+
 
 with open(
     f"{MOUNT_PATHS['output']}/metrics.csv", mode="w", newline="", encoding="utf-8"
@@ -98,8 +101,9 @@ with open(
     metrics_writer.writerow(
         [
             "Sample",
-            "Number of features before filtering",
-            "Number of features after filtering",
+            "Total number of cells",
+            "Number of singlets",
+            "Number of doublets",
         ]
     )
     # Iterates over all sample directories and processes them conserving the directory structure.
@@ -111,8 +115,4 @@ with open(
                     MOUNT_PATHS["output"], root.removeprefix(INPUT_FOLDER)
                 )
                 os.makedirs(output_folder_path, exist_ok=True)
-                process_data(
-                    file_path_filtered,
-                    output_folder_path,
-                    metrics_writer
-                )
+                process_data(file_path_filtered, output_folder_path, metrics_writer)
