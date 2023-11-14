@@ -93,13 +93,13 @@ def process_data(file_path_input, output_folder_path):
     fig.savefig(f"{output_folder_path}/scatter_dispersion.svg")
 
     print("\tWriting filtered data to file...")
-    adata.write(f"{output_folder_path}/feature_selection.h5ad", compression="gzip")
+    adata.write(f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip")
 
 
 # Iterates over all sample directories and processes them conserving the directory structure.
 for root, dirs, files in os.walk(INPUT_FOLDER):
     for file in files:
-        if file.casefold().endswith("normalised.h5ad"):
+        if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
             file_path_input = os.path.join(root, file)
             output_folder_path = os.path.join(
                 MOUNT_PATHS["output"], root.removeprefix(INPUT_FOLDER)

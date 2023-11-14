@@ -126,7 +126,7 @@ def process_data(file_path, output_folder_path, metrics_writer):
     )
 
     print("\tWriting filtered data to file...")
-    adata.write(f"{output_folder_path}/preprocessed.h5ad", compression="gzip")
+    adata.write(f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip")
 
     print("\tPlotting filtered data...")
     n_genes_plot_filtered = sc.pl.scatter(

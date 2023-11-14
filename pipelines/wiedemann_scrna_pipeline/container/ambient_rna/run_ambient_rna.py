@@ -169,7 +169,7 @@ def process_data(
         ]
     )
     print("\tWriting filtered data to file...")
-    adata_filtered.write(f"{output_folder_path}/corrected.h5ad", compression="gzip")
+    adata_filtered.write(f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip")
 
 
 with open(
@@ -191,7 +191,7 @@ with open(
 
     for root, dirs, files in os.walk(INPUT_FOLDER):
         for file in files:
-            if file.casefold().endswith("preprocessed.h5ad"):
+            if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
                 file_path_filtered = os.path.join(root, file)
                 folder_path_raw = os.path.join(
                     MOUNT_PATHS["input"], root.removeprefix(INPUT_FOLDER)

@@ -167,13 +167,13 @@ def process_data(file_path_filtered, output_folder_path):
     scran(adata_filtered, output_folder_path)
     plot_normalised_data(adata_filtered, output_folder_path)
     print("\tWriting filtered data to file...")
-    adata_filtered.write(f"{output_folder_path}/normalised.h5ad", compression="gzip")
+    adata_filtered.write(f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip")
 
 
 # Iterates over all sample directories and processes them conserving the directory structure.
 for root, dirs, files in os.walk(INPUT_FOLDER):
     for file in files:
-        if file.casefold().endswith("doublets_marked.h5ad"):
+        if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
             file_path_filtered = os.path.join(root, file)
             output_folder_path = os.path.join(
                 MOUNT_PATHS["output"], root.removeprefix(INPUT_FOLDER)
