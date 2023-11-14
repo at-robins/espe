@@ -112,7 +112,7 @@ def scran(data, output_folder_path):
     print("\tUpdating data with scran information...")
     data.obs["size_factors"] = size_factors
     scran = data.X / data.obs["size_factors"].values[:, None]
-    data.layers["scran_normalization"] = csr_matrix(sc.pp.log1p(scran))
+    data.layers["scran_normalisation"] = csr_matrix(sc.pp.log1p(scran))
 
 
 def plot_normalised_data(data, output_folder_path):
@@ -143,7 +143,7 @@ def plot_normalised_data(data, output_folder_path):
 
     axes_4.set_title("Scran")
     sns.histplot(
-        data.layers["scran_normalization"].sum(1),
+        data.layers["scran_normalisation"].sum(1),
         bins=100,
         kde=False,
         ax=axes_4,
