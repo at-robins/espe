@@ -24,7 +24,6 @@ RUN Rscript -e "library(scater)"
 RUN Rscript -e "BiocManager::install(\"scDblFinder\", version = \"3.16\")"
 RUN Rscript -e "library(scDblFinder)"
 RUN Rscript -e "remotes::install_version(\"Seurat\", version = \"5.0.0\", repos = $R_REPO)"
-RUN Rscript -e "install.packages(\"Seurat\", repos = $R_REPO)"
 RUN Rscript -e "library(Seurat)"
 
 COPY run_doublet_detection.py /run.py

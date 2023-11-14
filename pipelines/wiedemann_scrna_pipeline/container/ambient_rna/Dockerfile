@@ -9,9 +9,14 @@ RUN yes | pip install seaborn==0.12.2 --exists-action i
 RUN yes | pip install rpy2[all]==3.5.14 --exists-action i
 RUN yes | pip install anndata2ri==1.3.1 --exists-action i
 
+# Install R dependencies.
+# The library calls verify that the installation worked.
 WORKDIR /
-COPY install.r /install.r
-RUN Rscript /install.r
+ENV R_REPO="\"https://cloud.r-project.org/\""
+RUN Rscript -e "install.packages(\"remotes\", repos = $R_REPO)"
+RUN Rscript -e "library(remotes)"
+RUN Rscript -e "remotes::install_version(\"SoupX\", version = \"1.6.2\", repos = $R_REPO)"
+RUN Rscript -e "library(SoupX)"
 
 COPY run_ambient_rna.py /run.py
 ENTRYPOINT ["python", "run.py"]
