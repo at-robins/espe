@@ -50,16 +50,6 @@ def shifted_logarithm(data, output_folder_path):
     print("\tApplying shifted logarithm normalisation...")
     scales_counts = sc.pp.normalize_total(data, target_sum=None, inplace=False)
     data.layers["log1p_norm"] = sc.pp.log1p(scales_counts["X"], copy=True)
-    print("\tPlotting normalised data...")
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    sns.histplot(data.obs["total_counts"], bins=100, kde=False, ax=axes[0])
-    axes[0].set_title("Before normalisation")
-    sns.histplot(data.layers["log1p_norm"].sum(1), bins=100, kde=False, ax=axes[1])
-    axes[1].set_title("Shifted logarithm")
-    axes[0].set(xlabel="Total counts per cell", ylabel="Number of cells")
-    axes[1].set(xlabel="Total normalised counts per cell", ylabel="Number of cells")
-    axes[1].get_legend().remove()
-    fig.savefig(f"{output_folder_path}/shifted_logarithm.svg")
 
 
 def analytic_pearson_residuals(data, output_folder_path):
@@ -72,21 +62,6 @@ def analytic_pearson_residuals(data, output_folder_path):
         data, inplace=False
     )
     data.layers["analytic_pearson_residuals"] = csr_matrix(analytic_pearson["X"])
-    print("\tPlotting normalised data...")
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    sns.histplot(data.obs["total_counts"], bins=100, kde=False, ax=axes[0])
-    axes[0].set_title("Before normalisation")
-    sns.histplot(
-        data.layers["analytic_pearson_residuals"].sum(1),
-        bins=100,
-        kde=False,
-        ax=axes[1],
-    )
-    axes[1].set_title("Analytic Pearson residuals")
-    axes[0].set(xlabel="Total counts per cell", ylabel="Number of cells")
-    axes[1].set(xlabel="Total normalised counts per cell", ylabel="Number of cells")
-    axes[1].get_legend().remove()
-    fig.savefig(f"{output_folder_path}/analytic_pearson_residuals.svg")
 
 
 def scran(data, output_folder_path):
@@ -139,22 +114,6 @@ def scran(data, output_folder_path):
     scran = data.X / data.obs["size_factors"].values[:, None]
     data.layers["scran_normalization"] = csr_matrix(sc.pp.log1p(scran))
 
-    print("\tPlotting normalised data...")
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    sns.histplot(data.obs["total_counts"], bins=100, kde=False, ax=axes[0])
-    axes[0].set_title("Before normalisation")
-    sns.histplot(
-        data.layers["scran_normalization"].sum(1),
-        bins=100,
-        kde=False,
-        ax=axes[1],
-    )
-    axes[1].set_title("Scran")
-    axes[0].set(xlabel="Total counts per cell", ylabel="Number of cells")
-    axes[1].set(xlabel="Total normalised counts per cell", ylabel="Number of cells")
-    axes[1].get_legend().remove()
-    fig.savefig(f"{output_folder_path}/scran.svg")
-
 
 def plot_normalised_data(data, output_folder_path):
     """
@@ -166,12 +125,12 @@ def plot_normalised_data(data, output_folder_path):
     axes_1.set_title("Before normalisation")
     sns.histplot(data.obs["total_counts"], bins=100, kde=False, ax=axes_1)
     axes_1.set(xlabel="Total counts per cell", ylabel="Number of cells")
-    
+
     axes_2.set_title("Shifted logarithm")
     sns.histplot(data.layers["log1p_norm"].sum(1), bins=100, kde=False, ax=axes_2)
     axes_2.set(xlabel="Total normalised counts per cell", ylabel="Number of cells")
     axes_2.get_legend().remove()
-    
+
     axes_3.set_title("Analytic Pearson residuals")
     sns.histplot(
         data.layers["analytic_pearson_residuals"].sum(1),
@@ -192,6 +151,7 @@ def plot_normalised_data(data, output_folder_path):
     axes_4.set(xlabel="Total normalised counts per cell", ylabel="Number of cells")
     axes_4.get_legend().remove()
 
+    fig.tight_layout()
     fig.savefig(f"{output_folder_path}/histo_normalised_total_counts.svg")
 
 
