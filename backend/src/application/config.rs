@@ -22,6 +22,8 @@ pub const PATH_FILES_EXPERIMENTS_INPUT: &str = "input";
 pub const PATH_FILES_EXPERIMENTS_LOGS: &str = "logs";
 /// The folder where global data is stored.
 pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
+/// The folder where pipeline attachments are stored.
+pub const PATH_PIPELINE_ATTACHMENTS: &str = "attachments";
 
 use std::{fmt::Display, hash::Hash, hash::Hasher, path::PathBuf, time::SystemTime};
 
@@ -155,6 +157,28 @@ impl Configuration {
     pub fn globals_path(&self) -> PathBuf {
         let mut path: PathBuf = self.context_folder().clone();
         path.push(PATH_FILES_GLOBAL_DATA);
+        path
+    }
+
+    /// The context path where a specific pipeline is located.
+    /// 
+    /// # Parameters
+    /// 
+    /// * `pipeline_directory` - the directory the pipeline is located at
+    pub fn pipeline_path<T: Into<String>>(&self, pipeline_directory: T) -> PathBuf {
+        self.pipeline_folder.join(pipeline_directory.into())
+    }
+
+    /// The context path where a specific attachment of the specified pipeline is stored.
+    /// 
+    /// # Parameters
+    /// 
+    /// * `pipeline_directory` - the directory the pipeline is located at
+    /// * `attachment_name` - the file name of the attachment
+    pub fn pipeline_attachment_path<S: Into<String>, T: Into<String>>(&self, pipeline_directory: T, attachment_name: S) -> PathBuf {
+        let mut path = self.pipeline_path(pipeline_directory);
+        path.push(PATH_PIPELINE_ATTACHMENTS);
+        path.push(attachment_name.into());
         path
     }
 
@@ -419,6 +443,20 @@ mod tests {
         let config = Configuration::new("", "", "", "", "./application/context", "");
         let path: PathBuf = "./application/context/globals".into();
         assert_eq!(config.globals_path(), path);
+    }
+
+    #[test]
+    fn test_pipeline_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "./application/pipelines");
+        let path: PathBuf = "./application/pipelines/test".into();
+        assert_eq!(config.pipeline_path("test"), path);
+    }
+
+    #[test]
+    fn test_pipeline_attachment_path() {
+        let config = Configuration::new("", "", "", "", "./application/context", "./application/pipelines");
+        let path: PathBuf = "./application/pipelines/test/attachments/test.txt".into();
+        assert_eq!(config.pipeline_attachment_path("test", "test.txt"), path);
     }
 
     #[test]

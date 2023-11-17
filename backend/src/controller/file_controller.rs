@@ -345,7 +345,7 @@ pub async fn get_experiment_download_step_results(
     // If the archive ID contains a path seperator return an error
     // as it is not a valid ID and allows attacks by using relative
     // components.
-    if archive_id.contains(std::path::MAIN_SEPARATOR) {
+    if PathBuf::from(&archive_id).iter().count() != 1 {
         return Err(SeqError::new(
             "Bad request",
             SeqErrorType::BadRequestError,
@@ -387,6 +387,51 @@ pub async fn get_experiment_download_step_results(
         serde_json::from_reader(std::fs::File::open(&archive_meta_path)?)?;
 
     Ok(NamedFile::from_file(std::fs::File::open(&archive_path)?, archive_meta.file_name())?)
+}
+
+pub async fn get_pipeline_attachment(
+    app_config: web::Data<Configuration>,
+    info: web::Path<(String, String)>,
+) -> Result<NamedFile, SeqError> {
+    let (pipeline_directory, attachment_name) = info.into_inner();
+
+    // If the attachment name or pipeline folder contain a path seperator 
+    // return an error as this allows attacks by using relative components.
+    if PathBuf::from(&pipeline_directory).iter().count() != 1 {
+        return Err(SeqError::new(
+            "Bad request",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The pipeline directory {} is invalid and is probalbly supposed to compromise the system.",
+                pipeline_directory
+            ),
+            "Invalid pipeline ID.",
+        ));
+    }
+    if PathBuf::from(&attachment_name).iter().count() != 1 {
+        return Err(SeqError::new(
+            "Bad request",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The attachment name {} is invalid and is probalbly supposed to compromise the system.",
+                attachment_name
+            ),
+            "Invalid attachment name.",
+        ));
+    }
+
+    let path = app_config.pipeline_attachment_path(pipeline_directory, attachment_name);
+
+    if !path.exists() {
+        return Err(SeqError::new(
+            "Not found",
+            SeqErrorType::NotFoundError,
+            format!("Attachment at path {} does not exist.", path.display()),
+            "File not found.",
+        ));
+    }
+
+    Ok(NamedFile::open(&path)?)
 }
 
 fn temp_file_to_data_file<P: AsRef<Path>, Q: AsRef<Path>>(

@@ -14,8 +14,9 @@ use super::{
         post_experiment_pipeline_variable,
     },
     file_controller::{
-        delete_files_by_path, get_experiment_download_step_results, get_files, post_add_file,
-        post_add_folder, post_experiment_archive_step_results,
+        delete_files_by_path, get_experiment_download_step_results, get_files,
+        get_pipeline_attachment, post_add_file, post_add_folder,
+        post_experiment_archive_step_results,
     },
     global_data_controller::{
         create_global_data, delete_global_data, get_global_data, list_global_data,
@@ -46,6 +47,7 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/ui", web::get().to(index))
     .route("/ui/{rest:.*}", web::get().to(index))
     // Pipelines
+    .route("/api/pipelines/attachments/{pipeline}/{attachment}", web::get().to(get_pipeline_attachment))
     .route("/api/pipelines/instances/{id}", web::get().to(get_pipeline_instance))
     .route("/api/pipelines/blueprint", web::get().to(get_pipeline_blueprint))
     .route("/api/pipelines/blueprints", web::get().to(get_pipeline_blueprints))

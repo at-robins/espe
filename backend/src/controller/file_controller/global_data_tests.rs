@@ -224,11 +224,11 @@ async fn test_delete_global_data_files_by_path_super() {
         .unwrap();
     let global_data_path = app_config.global_data_path(id.to_string());
     std::fs::create_dir_all(&global_data_path).unwrap();
-    std::fs::create_dir_all(&global_data_path.join("1")).unwrap();
+    std::fs::create_dir_all(&global_data_path.join("../1")).unwrap();
     std::fs::write(global_data_path.join("../test_file_1.txt"), "test_content").unwrap();
     // Assert that all files and folder exist.
     assert!(global_data_path.join("../test_file_1.txt").exists());
-    assert!(global_data_path.join("1").exists());
+    assert!(global_data_path.join("../1").exists());
     // Delete a folder without content.
     let terminal_folder_path = FilePath {
         path_components: vec!["..".to_string(), "1".to_string()],
