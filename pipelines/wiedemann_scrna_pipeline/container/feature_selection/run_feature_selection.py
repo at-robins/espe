@@ -22,6 +22,7 @@ from scipy.sparse import issparse
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["normalisation"] + "/"
 TOP_FEATURES = 4000
+DEFAULT_BATCH_KEY = "batch"
 
 # Setup of rpy2.
 rcb.logger.setLevel(logging.INFO)
@@ -75,7 +76,13 @@ def process_data(file_path_input, output_folder_path):
     mask[idx] = True
     adata.var["highly_deviant"] = mask
     adata.var["binomial_deviance"] = binomial_deviance
-    sc.pp.highly_variable_genes(adata, layer="scran_normalisation")
+    if DEFAULT_BATCH_KEY in adata.var_keys():
+        batch_key = DEFAULT_BATCH_KEY
+        print("\tFound batch infromation.")
+    else:
+        batch_key = None
+        print("\tNo batch information found. Proceeding without...")
+    sc.pp.highly_variable_genes(adata, layer="scran_normalisation", batch_key = batch_key)
 
     print("\tPlotting data...")
     fig, ax = plt.subplots()

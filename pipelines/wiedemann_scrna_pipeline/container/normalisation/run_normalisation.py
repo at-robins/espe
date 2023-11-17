@@ -20,7 +20,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse import issparse
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = MOUNT_PATHS["dependencies"]["doublet_detection"] + "/"
+INPUT_FOLDER = MOUNT_PATHS["dependencies"]["integration"] + "/"
 
 # Setup of rpy2.
 rcb.logger.setLevel(logging.INFO)

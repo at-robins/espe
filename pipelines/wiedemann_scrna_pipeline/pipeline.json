@@ -37,11 +37,19 @@
       "variables": []
     },
     {
+      "id": "integration",
+      "name": "Integration and batch correction",
+      "description": "<p>Integrates different samples of the same type with each other and accounts for batch effects.</p><p><b>References</b><ol><li>Germain P, Lun A, Garcia Meixide C, Macnair W, Robinson M (2022). Doublet identification in single-cell sequencing data using scDblFinder. f1000research. <a href=\"https://doi.org/10.12688/f1000research.73600.2\">doi:10.12688/f1000research.73600.2</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "container": "integration",
+      "dependencies": ["doublet_detection"],
+      "variables": []
+    },
+    {
       "id": "normalisation",
       "name": "Normalisation",
       "description": "<p>Normalises the data using different methods for downstream analysis.</p><p><b>References</b><ol><li>RA Dorfman. A note on the !d-method for finding variance formulae. Biometric Bulletin, 1938.</li><li>Germain, PL., Sonrel, A. & Robinson, M.D. pipeComp, a general framework for the evaluation of computational pipelines, reveals performant single cell RNA-seq preprocessing tools. Genome Biol 21, 227 (2020). <a href=\"https://doi.org/10.1186/s13059-020-02136-7\">https://doi.org/10.1186/s13059-020-02136-7</a></li><li>Lun ATL, McCarthy DJ, Marioni JC (2016). A step-by-step workflow for low-level analysis of single-cell RNA-seq data with Bioconductor. F1000Res., 5, 2122. <a href=\"doi:10.12688/f1000research.9501.2\">doi:10.12688/f1000research.9501.2</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
       "container": "normalisation",
-      "dependencies": ["doublet_detection"],
+      "dependencies": ["integration"],
       "variables": []
     },
     {
