@@ -32,9 +32,7 @@ impl FilePath {
 
     fn validate_file_path(&self) -> Result<(), String> {
         let file_path = self.file_path().into_os_string();
-        if file_path.is_empty() {
-            Err("A file path must be set.".to_string())
-        } else if file_path.len() > MAX_LENGTH_FILE_PATH {
+        if file_path.len() > MAX_LENGTH_FILE_PATH {
             Err(format!("The file path may only contain {} letters.", MAX_LENGTH_FILE_PATH))
         } else {
             Ok(())

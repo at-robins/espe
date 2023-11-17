@@ -15,7 +15,7 @@ use crate::{
         internal::archive::ArchiveMetadata,
     },
     service::multipart_service::{
-        create_temporary_file, delete_temporary_file, parse_multipart_file,
+        create_temporary_file, delete_temporary_file, parse_multipart_file, UploadForm,
     },
 };
 use actix_files::NamedFile;
@@ -126,6 +126,17 @@ pub async fn delete_files_by_path(
     let delete_path = delete_info.file_path();
     let mut connection = database_manager.database_connection()?;
     category.entity_exists(id, &mut connection)?;
+    if let Err(validation_error) = delete_info.validate() {
+        return Err(SeqError::new(
+            "Invalid request",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The file path {:?} is invalid and deletion faild with error: {}.",
+                delete_info, validation_error
+            ),
+            "The requested path is invalid.",
+        ));
+    }
 
     let data_path = category.base_path(app_config, id);
     let full_path: PathBuf = data_path.join(&delete_path);
@@ -193,6 +204,18 @@ pub async fn post_add_folder(
             SeqErrorType::BadRequestError,
             "The specified path is empty.",
             "The specified path is invalid.",
+        ));
+    }
+    // Error if path is invalid.
+    if let Err(validation_error) = upload_info.validate() {
+        return Err(SeqError::new(
+            "Invalid request",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The file path {:?} is invalid and upload faild with error: {}.",
+                upload_info, validation_error
+            ),
+            "The requested path is invalid.",
         ));
     }
 
@@ -318,6 +341,22 @@ pub async fn get_experiment_download_step_results(
     info: web::Path<(i32, String)>,
 ) -> Result<NamedFile, SeqError> {
     let (experiment_id, archive_id) = info.into_inner();
+
+    // If the archive ID contains a path seperator return an error
+    // as it is not a valid ID and allows attacks by using relative
+    // components.
+    if archive_id.contains(std::path::MAIN_SEPARATOR) {
+        return Err(SeqError::new(
+            "Bad request",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The archive id {} is invalid and is probalbly supposed to compromise the system.",
+                archive_id
+            ),
+            "Invalid archive ID.",
+        ));
+    }
+
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection)?;
 

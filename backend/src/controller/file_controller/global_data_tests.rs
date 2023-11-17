@@ -206,6 +206,56 @@ async fn test_delete_global_data_files_by_path() {
 }
 
 #[actix_web::test]
+async fn test_delete_global_data_files_by_path_super() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let id = 42;
+    let new_record = GlobalData {
+        id,
+        global_data_name: "Dummy record".to_string(),
+        comment: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::global_data::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let global_data_path = app_config.global_data_path(id.to_string());
+    std::fs::create_dir_all(&global_data_path).unwrap();
+    std::fs::create_dir_all(&global_data_path.join("1")).unwrap();
+    std::fs::write(global_data_path.join("../test_file_1.txt"), "test_content").unwrap();
+    // Assert that all files and folder exist.
+    assert!(global_data_path.join("../test_file_1.txt").exists());
+    assert!(global_data_path.join("1").exists());
+    // Delete a folder without content.
+    let terminal_folder_path = FilePath {
+        path_components: vec!["..".to_string(), "1".to_string()],
+    };
+    let req = test::TestRequest::delete()
+        .uri(&format!("/api/files/globals/{}", id))
+        .set_json(terminal_folder_path)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert!(global_data_path.join("../test_file_1.txt").exists());
+    assert!(global_data_path.join("../1").exists());
+    // Delete a single file.
+    let terminal_file_path = FilePath {
+        path_components: vec!["..".to_string(), "test_file_1.txt".to_string()],
+    };
+    let req = test::TestRequest::delete()
+        .uri(&format!("/api/files/globals/{}", id))
+        .set_json(terminal_file_path)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert!(global_data_path.join("../test_file_1.txt").exists());
+    assert!(global_data_path.join("../1").exists());
+}
+
+#[actix_web::test]
 async fn test_delete_global_data_files_by_path_all() {
     let context = TestContext::new();
     let mut connection = context.get_connection();
@@ -290,8 +340,7 @@ async fn test_post_global_data_add_file_sub_folder() {
         .execute(&mut connection)
         .unwrap();
     let global_data_path = app_config.global_data_path(id.to_string());
-    let payload_file =
-        "../testing_resources/requests/file_upload/multipart_file_subfolders";
+    let payload_file = "../testing_resources/requests/file_upload/multipart_file_subfolders";
     let payload = std::fs::read(payload_file).unwrap();
     let content_type: mime::Mime =
         "multipart/form-data; boundary=---------------------------5851692324164894962235391524"
@@ -352,6 +401,41 @@ async fn test_post_global_data_add_file_root_folder() {
         std::fs::read_to_string(global_data_path.join("test_file.txt")).unwrap(),
         "test content".to_string()
     );
+}
+
+#[actix_web::test]
+async fn test_post_global_data_add_file_super() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let id = 42;
+    let new_record = GlobalData {
+        id,
+        global_data_name: "Dummy record".to_string(),
+        comment: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::global_data::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let global_data_path = app_config.global_data_path(id.to_string());
+    let payload_file = "../testing_resources/requests/file_upload/multipart_file_super";
+    let payload = std::fs::read(payload_file).unwrap();
+    let content_type: mime::Mime =
+        "multipart/form-data; boundary=---------------------------5851692324164894962235391524"
+            .parse()
+            .unwrap();
+    assert!(!global_data_path.join("../test_file.txt").exists());
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/files/globals/{}", id))
+        .insert_header(ContentType(content_type))
+        .set_payload(payload)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert!(!global_data_path.join("../test_file.txt").exists());
 }
 
 #[actix_web::test]
@@ -436,8 +520,7 @@ async fn test_post_global_data_add_file_empty_path() {
         .values(&new_record)
         .execute(&mut connection)
         .unwrap();
-    let payload_file =
-        "../testing_resources/requests/file_upload/multipart_file_empty_path";
+    let payload_file = "../testing_resources/requests/file_upload/multipart_file_empty_path";
     let payload = std::fs::read(payload_file).unwrap();
     let content_type: mime::Mime =
         "multipart/form-data; boundary=---------------------------5851692324164894962235391524"
@@ -516,6 +599,37 @@ async fn test_post_global_data_add_folder_root() {
     assert_eq!(resp.status(), StatusCode::CREATED);
     assert!(global_data_path.join("1").exists());
     assert!(global_data_path.join("1").is_dir());
+}
+
+#[actix_web::test]
+async fn test_post_global_data_add_folder_super() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let id = 42;
+    let new_record = GlobalData {
+        id,
+        global_data_name: "Dummy record".to_string(),
+        comment: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::global_data::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let global_data_path = app_config.global_data_path(id.to_string());
+    let folder_path = FilePath {
+        path_components: vec!["..".to_string(), "1".to_string()],
+    };
+    assert!(!global_data_path.join("../1").exists());
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/folders/globals/{}", id))
+        .set_json(folder_path)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert!(!global_data_path.join("../1").exists());
 }
 
 #[actix_web::test]
