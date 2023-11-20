@@ -38,8 +38,8 @@
     },
     {
       "id": "integration",
-      "name": "Integration and batch correction",
-      "description": "<p>Integrates different samples of the same type with each other and accounts for batch effects.</p><p><b>References</b><ol><li>Germain P, Lun A, Garcia Meixide C, Macnair W, Robinson M (2022). Doublet identification in single-cell sequencing data using scDblFinder. f1000research. <a href=\"https://doi.org/10.12688/f1000research.73600.2\">doi:10.12688/f1000research.73600.2</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "name": "Integration",
+      "description": "<p>Integrates different samples of the same type with each other.</p><p><b>References</b><ol><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
       "container": "integration",
       "dependencies": ["doublet_detection"],
       "variables": []

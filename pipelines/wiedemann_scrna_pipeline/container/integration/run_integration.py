@@ -16,6 +16,7 @@ MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["doublet_detection"] + "/"
 SAMPLE_INFO_DIRECTORY = "sample directory"
 SAMPLE_INFO_TYPE = "sample type"
+DEFAULT_BATCH_KEY = "batch"
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
@@ -35,25 +36,31 @@ with open(sample_info_path, newline="", encoding="utf-8") as csvfile:
     info_reader = csv.DictReader(csvfile, dialect="unix", delimiter=",", quotechar='"')
     for row in info_reader:
         sample_type = sample_info_map.get(row["sample type"])
-        sample_directory = os.path.join(INPUT_FOLDER, row["sample directory"])
+        sample_directory = row["sample directory"]
         if sample_type is None:
             sample_info_map[row["sample type"]] = [sample_directory]
         else:
             sample_type.append(sample_directory)
 
-for (key, values) in sample_info_map.items():
-    print(f"Processing batch {key} : {values}...")
+for key, values in sample_info_map.items():
+    print(f"Processing batch {key} : {values}...", flush=True)
     adatas = []
     for input_directory in values:
-        input_path = os.path.join(input_directory, "filtered_feature_bc_matrix.h5ad")
+        input_path = os.path.join(
+            INPUT_FOLDER, input_directory, "filtered_feature_bc_matrix.h5ad"
+        )
         print(f"\tReading {input_path}...")
         adatas.append(anndata.read_h5ad(input_path))
 
     print("\tMerging data...")
-    print(adatas)
-    adata_merged = anndata.AnnData.concatenate(adatas, join="outer")
-    print(adata_merged)
-
+    adata_merged = anndata.concat(
+        adatas,
+        axis=0,
+        join="outer",
+        merge=None,
+        label=DEFAULT_BATCH_KEY,
+        keys=values,
+    )
     print("\tWriting merged data to file...")
     output_folder_path = os.path.join(
         MOUNT_PATHS["output"], pathvalidate.sanitize_filename(key)
@@ -62,4 +69,3 @@ for (key, values) in sample_info_map.items():
     adata_merged.write(
         f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip"
     )
-
