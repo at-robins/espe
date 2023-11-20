@@ -6,21 +6,7 @@ RUN yes | pip install --upgrade pip
 RUN yes | pip install numpy==1.26.1 --exists-action i
 RUN yes | pip install scanpy[leiden]==1.9.6 --exists-action i
 RUN yes | pip install seaborn==0.12.2 --exists-action i
-RUN yes | pip install rpy2[all]==3.5.14 --exists-action i
-RUN yes | pip install anndata2ri==1.3.1 --exists-action i
-
-
-# Install R dependencies.
-# The library calls verify that the installation worked.
-WORKDIR /
-ENV R_REPO="\"https://cloud.r-project.org/\""
-RUN Rscript -e "install.packages(\"remotes\", repos = $R_REPO)"
-RUN Rscript -e "library(remotes)"
-RUN Rscript -e "remotes::install_version(\"Matrix\", version = \"1.6-1\", repos = $R_REPO)"
-RUN Rscript -e "library(Matrix)"
-RUN Rscript -e "remotes::install_version(\"BiocManager\", version = \"1.30.22\", repos = $R_REPO)"
-RUN Rscript -e "remotes::install_version(\"Seurat\", version = \"5.0.0\", repos = $R_REPO)"
-RUN Rscript -e "library(Seurat)"
+RUN yes | pip install pathvalidate==3.2.0 --exists-action i
 
 COPY run_integration.py /run.py
 ENTRYPOINT ["python", "run.py"]

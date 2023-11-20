@@ -156,10 +156,10 @@ def process_data(
         adata_filtered.layers["soupX_counts"] = soupx_output.T
         adata_filtered.X = adata_filtered.layers["soupX_counts"]
     n_cells_before_filter = adata_filtered.n_vars
-    print(f"Total number of features before filtering: {n_cells_before_filter}")
+    print(f"\tTotal number of features before filtering: {n_cells_before_filter}")
     sc.pp.filter_genes(adata_filtered, min_cells=20)
     n_cells_after_filter = adata_filtered.n_vars
-    print(f"Number of features after filtering: {n_cells_after_filter}")
+    print(f"\tNumber of features after filtering: {n_cells_after_filter}")
     print("\tWriting metrics to file...")
     metrics_writer.writerow(
         [
