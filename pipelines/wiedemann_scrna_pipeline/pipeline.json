@@ -77,10 +77,10 @@
       "variables": []
     },
     {
-      "id": "clustering_unbatched",
+      "id": "clustering_qc_unbatched",
       "name": "Unbatched QC clustering",
       "description": "<p>Clusters unbatched samples for quality control.</p><p><b>References</b><ol><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
-      "container": "clustering_unbatched",
+      "container": "clustering_qc_unbatched",
       "dependencies": ["feature_selection"],
       "variables": []
     }
