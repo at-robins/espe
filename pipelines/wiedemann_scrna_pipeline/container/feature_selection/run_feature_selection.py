@@ -21,6 +21,10 @@ from scipy.sparse import issparse
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["normalisation"] + "/"
+BATCHED_SUBFOLDER = "batched"
+UNBATCHED_SUBFOLDER = "unbatched"
+INPUT_FOLDER_BATCHED = f"{INPUT_FOLDER}{BATCHED_SUBFOLDER}/"
+INPUT_FOLDER_UNBATCHED = f"{INPUT_FOLDER}{UNBATCHED_SUBFOLDER}/"
 TOP_FEATURES = 4000
 DEFAULT_BATCH_KEY = "batch"
 
@@ -78,7 +82,7 @@ def process_data(file_path_input, output_folder_path):
     adata.var["binomial_deviance"] = binomial_deviance
     if DEFAULT_BATCH_KEY in adata.var_keys():
         batch_key = DEFAULT_BATCH_KEY
-        print("\tFound batch infromation.")
+        print("\tFound batch information.")
     else:
         batch_key = None
         print("\tNo batch information found. Proceeding without...")
@@ -104,7 +108,7 @@ def process_data(file_path_input, output_folder_path):
 
 
 # Iterates over all sample directories and processes them conserving the directory structure.
-for root, dirs, files in os.walk(INPUT_FOLDER):
+for root, dirs, files in os.walk(INPUT_FOLDER_UNBATCHED):
     for file in files:
         if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
             file_path_input = os.path.join(root, file)

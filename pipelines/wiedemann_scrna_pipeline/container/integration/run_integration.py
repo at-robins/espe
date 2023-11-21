@@ -27,7 +27,6 @@ sc.settings.set_figure_params(
 )
 sc.settings.figdir = MOUNT_PATHS["output"]
 
-
 # Sets batch information based on the supplied sample information.
 print("Parsing sample information...")
 sample_info_path = f"{MOUNT_PATHS['input']}/sample_information.csv"
@@ -42,6 +41,7 @@ with open(sample_info_path, newline="", encoding="utf-8") as csvfile:
         else:
             sample_type.append(sample_directory)
 
+# Processes each batch and merges the individual samples.
 for key, values in sample_info_map.items():
     print(f"Processing batch {key} : {values}...", flush=True)
     adatas = []

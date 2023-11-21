@@ -20,7 +20,8 @@ from scipy.sparse import csr_matrix
 from scipy.sparse import issparse
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = MOUNT_PATHS["dependencies"]["integration"] + "/"
+INPUT_FOLDER_BATCHED = MOUNT_PATHS["dependencies"]["integration"] + "/"
+INPUT_FOLDER_UNBATCHED = MOUNT_PATHS["dependencies"]["doublet_detection"] + "/"
 
 # Setup of rpy2.
 rcb.logger.setLevel(logging.INFO)
@@ -155,7 +156,7 @@ def plot_normalised_data(data, output_folder_path):
     fig.savefig(f"{output_folder_path}/histo_normalised_total_counts.svg")
 
 
-def process_data(file_path_filtered, output_folder_path):
+def normalise_data(file_path_filtered, output_folder_path):
     """
     Normalises the data using different algorithms.
     """
@@ -167,16 +168,28 @@ def process_data(file_path_filtered, output_folder_path):
     scran(adata_filtered, output_folder_path)
     plot_normalised_data(adata_filtered, output_folder_path)
     print("\tWriting filtered data to file...")
-    adata_filtered.write(f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip")
+    adata_filtered.write(
+        f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip"
+    )
 
 
-# Iterates over all sample directories and processes them conserving the directory structure.
-for root, dirs, files in os.walk(INPUT_FOLDER):
-    for file in files:
-        if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
-            file_path_filtered = os.path.join(root, file)
-            output_folder_path = os.path.join(
-                MOUNT_PATHS["output"], root.removeprefix(INPUT_FOLDER)
-            )
-            os.makedirs(output_folder_path, exist_ok=True)
-            process_data(file_path_filtered, output_folder_path)
+def process_data(input_directory, output_directory):
+    """
+    Iterates over all sample directories and processes the according files
+    while conserving the directory structure.
+    """
+    for root, dirs, files in os.walk(input_directory):
+        for file in files:
+            if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
+                file_path_filtered = os.path.join(root, file)
+                output_folder_path = os.path.join(
+                    MOUNT_PATHS["output"],
+                    output_directory,
+                    root.removeprefix(input_directory),
+                )
+                os.makedirs(output_folder_path, exist_ok=True)
+                normalise_data(file_path_filtered, output_folder_path)
+
+
+process_data(INPUT_FOLDER_UNBATCHED, "unbatched")
+process_data(INPUT_FOLDER_BATCHED, "batched")
