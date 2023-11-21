@@ -34,9 +34,6 @@ def process_data(file_path_input, output_folder_path):
 
     print("\tPerforming clustering...")
     adata.X = adata.layers["log1p_norm"]
-    # setting highly variable as highly deviant to use scanpy 'use_highly_variable' argument in sc.pp.pca
-    adata.var["highly_variable"] = adata.var["highly_deviant"]
-    sc.pp.pca(adata, svd_solver="arpack", use_highly_variable=True)
     sc.pp.neighbors(adata)
     sc.tl.umap(adata)
 

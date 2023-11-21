@@ -13,7 +13,7 @@ import seaborn as sns
 import warnings
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = MOUNT_PATHS["dependencies"]["doublet_detection"] + "/"
+INPUT_FOLDER = MOUNT_PATHS["dependencies"]["doublet_removal"] + "/"
 SAMPLE_INFO_DIRECTORY = "sample directory"
 SAMPLE_INFO_TYPE = "sample type"
 DEFAULT_BATCH_KEY = "batch"
