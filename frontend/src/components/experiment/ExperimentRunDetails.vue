@@ -12,7 +12,7 @@
         >
           <q-spinner size="xl" color="primary" />
         </div>
-        <div class="row no-wrap" style="overflow: auto">
+        <div class="row no-wrap q-pa-xs" style="overflow: auto">
           <div
             v-for="(stepGroup, indexGroup) in sortedSteps"
             :key="
@@ -21,51 +21,53 @@
             class="q-pb-md row no-wrap"
           >
             <div class="row flex-center no-wrap">
-              <div
-                v-for="(step, indexStep) in stepGroup"
-                :key="step.id"
-                :class="{ 'q-pb-md': indexStep < stepGroup.length - 1 }"
-              >
-                <q-btn
-                  rounded
-                  flat
-                  no-caps
-                  no-wrap
-                  @click="selectStep(step)"
-                  :class="getChipColour(step)"
+              <div class="col">
+                <div
+                  v-for="(step, indexStep) in stepGroup"
+                  :key="step.id"
+                  :class="{ 'q-pb-md': indexStep < stepGroup.length - 1 }"
                 >
-                  <div v-if="!step.status">
-                    <q-icon
-                      :name="symOutlinedNotStarted"
-                      color="primary"
-                      left
-                    />
-                  </div>
-                  <div v-else-if="step.status == PipelineStepStatus.Aborted">
-                    <q-icon
-                      :name="symOutlinedStopCircle"
-                      color="warning"
-                      left
-                    />
-                  </div>
-                  <div v-else-if="step.status == PipelineStepStatus.Failed">
-                    <q-icon :name="symOutlinedError" color="negative" left />
-                  </div>
-                  <div v-else-if="step.status == PipelineStepStatus.Finished">
-                    <q-icon
-                      :name="symOutlinedCheckCircle"
-                      color="positive"
-                      left
-                    />
-                  </div>
-                  <div v-else-if="step.status == PipelineStepStatus.Running">
-                    <q-spinner-orbit color="primary" class="on-left" />
-                  </div>
-                  <div v-else-if="step.status == PipelineStepStatus.Waiting">
-                    <q-spinner-hourglass color="primary" class="on-left" />
-                  </div>
-                  <div class="text-center">{{ step.name }}</div>
-                </q-btn>
+                  <q-btn
+                    rounded
+                    flat
+                    no-caps
+                    no-wrap
+                    @click="selectStep(step)"
+                    :class="getChipColour(step)"
+                  >
+                    <div v-if="!step.status">
+                      <q-icon
+                        :name="symOutlinedNotStarted"
+                        color="primary"
+                        left
+                      />
+                    </div>
+                    <div v-else-if="step.status == PipelineStepStatus.Aborted">
+                      <q-icon
+                        :name="symOutlinedStopCircle"
+                        color="warning"
+                        left
+                      />
+                    </div>
+                    <div v-else-if="step.status == PipelineStepStatus.Failed">
+                      <q-icon :name="symOutlinedError" color="negative" left />
+                    </div>
+                    <div v-else-if="step.status == PipelineStepStatus.Finished">
+                      <q-icon
+                        :name="symOutlinedCheckCircle"
+                        color="positive"
+                        left
+                      />
+                    </div>
+                    <div v-else-if="step.status == PipelineStepStatus.Running">
+                      <q-spinner-orbit color="primary" class="on-left" />
+                    </div>
+                    <div v-else-if="step.status == PipelineStepStatus.Waiting">
+                      <q-spinner-hourglass color="primary" class="on-left" />
+                    </div>
+                    <div class="text-center">{{ step.name }}</div>
+                  </q-btn>
+                </div>
               </div>
               <div v-if="indexGroup < sortedSteps.length - 1" class="q-ma-md">
                 <q-icon name="trending_flat" size="lg" />
