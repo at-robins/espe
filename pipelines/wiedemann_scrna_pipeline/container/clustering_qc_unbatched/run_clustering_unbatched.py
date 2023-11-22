@@ -34,6 +34,9 @@ def process_data(file_path_input, output_folder_path):
 
     print("\tPerforming clustering...")
     adata.X = adata.layers["log1p_norm"]
+    # Performing HGV and PCA first to reduce dimensionality for UMAP.
+    sc.pp.highly_variable_genes(adata)
+    sc.tl.pca(adata)
     sc.pp.neighbors(adata)
     sc.tl.umap(adata)
 

@@ -17,6 +17,10 @@ RUN Rscript -e "install.packages(\"remotes\", repos = $R_REPO)"
 RUN Rscript -e "library(remotes)"
 RUN Rscript -e "remotes::install_version(\"SoupX\", version = \"1.6.2\", repos = $R_REPO)"
 RUN Rscript -e "library(SoupX)"
+# Reinstalling irlba to prevent Matrix error.
+# See: https://github.com/bwlewis/irlba/issues/70
+RUN Rscript -e "remotes::install_version(\"irlba\", version = \"2.3.5.1\", repos = $R_REPO)"
+RUN Rscript -e "library(irlba)"
 
 COPY run_ambient_rna.py /run.py
 ENTRYPOINT ["python", "run.py"]

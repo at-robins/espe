@@ -48,7 +48,7 @@ def process_data(file_path, output_folder_path, metrics_writer):
     output_folder_path -- the corresponding output path
     metrics_writer -- the CSV writer to persist calculated metrics
     """
-    print(f"Processing file {file_path}")
+    print(f"Processing file {file_path}", flush=True)
     print("\tReading data...")
     adata = sc.read_10x_h5(filename=file_path)
     print("\tMaking variable names unique...")

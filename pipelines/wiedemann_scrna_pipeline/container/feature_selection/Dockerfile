@@ -16,13 +16,15 @@ WORKDIR /
 ENV R_REPO="\"https://cloud.r-project.org/\""
 RUN Rscript -e "install.packages(\"remotes\", repos = $R_REPO)"
 RUN Rscript -e "library(remotes)"
-RUN Rscript -e "remotes::install_version(\"Matrix\", version = \"1.6-1\", repos = $R_REPO)"
-RUN Rscript -e "library(Matrix)"
 RUN Rscript -e "remotes::install_version(\"BiocManager\", version = \"1.30.22\", repos = $R_REPO)"
 RUN Rscript -e "remotes::install_version(\"Seurat\", version = \"5.0.0\", repos = $R_REPO)"
 RUN Rscript -e "library(Seurat)"
 RUN Rscript -e "BiocManager::install(\"scry\", version = \"3.16\")"
 RUN Rscript -e "library(scry)"
+# Reinstalling irlba to prevent Matrix error.
+# See: https://github.com/bwlewis/irlba/issues/70
+RUN Rscript -e "remotes::install_version(\"irlba\", version = \"2.3.5.1\", repos = $R_REPO)"
+RUN Rscript -e "library(irlba)"
 
 COPY run_feature_selection.py /run.py
 ENTRYPOINT ["python", "run.py"]
