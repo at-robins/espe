@@ -53,7 +53,7 @@ def process_data(file_path_input, output_folder_path):
     print("\tPlotting data...")
     fig = sc.pl.umap(
         adata,
-        color=["batch"],
+        color=["total_counts", "pct_counts_mt", "doublet_score", "batch"],
         show=False,
         return_fig=True,
     )
