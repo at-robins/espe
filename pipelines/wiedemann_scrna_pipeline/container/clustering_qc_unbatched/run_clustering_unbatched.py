@@ -18,8 +18,17 @@ INPUT_FOLDER_UNBATCHED = f"{INPUT_FOLDER}{UNBATCHED_SUBFOLDER}/"
 # Setup of scanpy.
 sc.settings.verbosity = 2
 sc.settings.set_figure_params(
+    scanpy=True,
+    # # In case of bitmap exports, use high quality.
     dpi=300,
-    facecolor="white",
+    dpi_save=300,
+    # Export as SVG.
+    format="svg",
+    vector_friendly=False,
+    # Use transparent background.
+    transparent=True,
+    facecolor=None,
+    # Remove frames.
     frameon=False,
 )
 sc.settings.figdir = MOUNT_PATHS["output"]

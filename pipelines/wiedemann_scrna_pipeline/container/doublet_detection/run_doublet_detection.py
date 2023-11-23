@@ -30,12 +30,6 @@ ro.r(
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
-sc.settings.set_figure_params(
-    dpi=80,
-    facecolor="white",
-    frameon=False,
-)
-sc.settings.figdir = MOUNT_PATHS["output"]
 
 
 def process_data(file_path_filtered, output_folder_path, metrics_writer):

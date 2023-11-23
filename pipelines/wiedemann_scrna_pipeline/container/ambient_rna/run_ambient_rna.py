@@ -30,12 +30,6 @@ ro.r(
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
-sc.settings.set_figure_params(
-    dpi=80,
-    facecolor="white",
-    frameon=False,
-)
-sc.settings.figdir = MOUNT_PATHS["output"]
 
 
 def get_raw_file(raw_file_folder):

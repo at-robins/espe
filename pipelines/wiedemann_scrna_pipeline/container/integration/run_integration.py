@@ -20,12 +20,6 @@ DEFAULT_BATCH_KEY = "batch"
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
-sc.settings.set_figure_params(
-    dpi=300,
-    facecolor="white",
-    frameon=False,
-)
-sc.settings.figdir = MOUNT_PATHS["output"]
 
 # Sets batch information based on the supplied sample information.
 print("Parsing sample information...")
