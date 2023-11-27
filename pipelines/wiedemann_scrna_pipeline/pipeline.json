@@ -1,8 +1,8 @@
 {
   "id": "wiedemann_scrna_pipeline",
   "name": "Wiedemann single cell RNA-Seq pipeline",
-  "description": "<p>This pipeline processes single cell RNA-Seq data. For data obtained with fixed cell protocols it is recommended to skip the ambient RNA removal step by using the according step variable below.</p><p><b>Input specifications</b><br />Each sample needs to be provided as a separate folder containing the filtered and raw H5 count matrices that are output by <a href=\"https://www.10xgenomics.com/support/software/cell-ranger/analysis/outputs/cr-outputs-overview\">CellRanger</a>. The files need to end with <code>filtered_feature_bc_matrix.h5</code> and <code>raw_feature_bc_matrix.h5</code> respectively. Additionally, a <code>sample_information.csv</code> (comma delimeted and UTF-8 encoded) at the directory root is needed that is used for sample naming and replicate detection. An example can be downloaded <a href=\"/api/pipelines/attachments/wiedemann_scrna_pipeline/sample_information.csv\">here</a>.</p><p><b>System requirements</b><br />64 GB of RAM are recommended for pipeline execution.</p>",
-  "steps": [
+  "description": "<espe-import>pipeline_description.html</espe-import>",
+    "steps": [
     {
       "id": "preprocessing",
       "name": "Preprocessing",
@@ -81,6 +81,14 @@
       "name": "Unbatched QC clustering",
       "description": "<p>Clusters unbatched samples for quality control.</p><p><b>References</b><ol><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
       "container": "clustering_qc_unbatched",
+      "dependencies": ["feature_selection"],
+      "variables": []
+    },
+    {
+      "id": "batch_correction",
+      "name": "Batch correction",
+      "description": "<espe-import>step_batch_correction_description.html</espe-import>",
+      "container": "batch_correction",
       "dependencies": ["feature_selection"],
       "variables": []
     }
