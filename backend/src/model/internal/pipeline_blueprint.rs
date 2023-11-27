@@ -3,6 +3,15 @@ use std::path::PathBuf;
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 
+use crate::application::error::SeqError;
+
+/// The pipeline sub-directory that imports are stored in.
+const IMPORT_DIRECOTRY: &str = "imports";
+/// The tag marking the start of an import.
+const IMPORT_START_TAG: &str = "<espe-import>";
+/// The tag marking the end of an import.
+const IMPORT_END_TAG: &str = "</espe-import>";
+
 /// The definition of a pipeline step.
 #[derive(Debug, Clone, Getters, PartialEq, Serialize, Deserialize)]
 pub struct PipelineStepBlueprint {
@@ -66,6 +75,77 @@ impl ContextualisedPipelineBlueprint {
             pipeline,
             context: context.into(),
         }
+    }
+
+    /// Returns the context path of the imports directory.
+    pub fn imports_path(&self) -> PathBuf {
+        self.context.join(IMPORT_DIRECOTRY)
+    }
+
+    /// Resolves all imports specified within the pipeline blueprint.
+    pub fn resolve_imports(&mut self) -> Result<(), SeqError> {
+        let imports_path = self.imports_path();
+        if imports_path.is_dir() {
+            log::info!("Resolving pipeline imports for {}", imports_path.display());
+            // Resolve pipeline description imports.
+            if let Some(import_content) =
+                Self::load_description_import(self.pipeline.description(), &imports_path)?
+            {
+                self.pipeline.description = import_content;
+            }
+            // Resolve pipeline step description imports.
+            for step_index in 0..self.pipeline().steps().len() {
+                if let Some(import_content) = Self::load_description_import(
+                    self.pipeline().steps()[step_index].description(),
+                    &imports_path,
+                )? {
+                    self.pipeline.steps[step_index].description = import_content;
+                }
+                // Resolve pipeline step variable description imports.
+                for variable_index in 0..self.pipeline().steps()[step_index].variables().len() {
+                    if let Some(import_content) = Self::load_description_import(
+                        self.pipeline().steps()[step_index].variables()[variable_index]
+                            .description(),
+                        &imports_path,
+                    )? {
+                        self.pipeline.steps[step_index].variables[variable_index].description =
+                            import_content;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks the specified description for an import statement and
+    /// loads the import file's content if specified.
+    ///
+    /// # Parameters
+    ///
+    /// * `description` - the description to check for an import statement
+    /// * `imports_path` - the context path for pipeline imports
+    fn load_description_import(
+        description: &String,
+        imports_path: &PathBuf,
+    ) -> Result<Option<String>, SeqError> {
+        let trimmed = description.trim();
+        let trimmed_lowercase = trimmed.to_lowercase();
+        if trimmed_lowercase.starts_with(&IMPORT_START_TAG.to_lowercase())
+            && trimmed_lowercase.ends_with(&IMPORT_END_TAG.to_lowercase())
+        {
+            // Appends the import file specified in the import tag
+            // to the pipeline specific import path.
+            let import_path = imports_path.join(
+                trimmed[IMPORT_START_TAG.len()..trimmed.len() - IMPORT_END_TAG.len()]
+                    .trim()
+                    .to_string(),
+            );
+            // If the import is valid, return the import file's content.
+            if import_path.is_file() {
+                return Ok(Some(std::fs::read_to_string(import_path)?));
+            }
+        }
+        Ok(None)
     }
 }
 

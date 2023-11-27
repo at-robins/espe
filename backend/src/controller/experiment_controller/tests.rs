@@ -246,7 +246,6 @@ async fn test_get_experiment_pipelines() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
     let fetched_data: Vec<ExperimentPipelineBlueprint> = test::read_body_json(resp).await;
-    format!("{}/pipelines", TEST_RESOURCES_PATH);
     assert_eq!(fetched_data.len(), 1);
     let pipeline = &fetched_data[0];
     assert_eq!(pipeline.id(), "testing_pipeline");
