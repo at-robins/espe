@@ -1,0 +1,33 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: .05rem;
+    border-radius: .2rem;
+  }
+</style>
+<p>Performs an initial quality control of sequenced reads and removes low quality reads.</p>
+<p>
+  <b>Output</b><br />
+  For each sample the preprocessed <code>filtered_feature_bc_matrix.h5ad</code> file is generated.
+  Metrics are summed up in the <code>metrics.csv</code> file. Additionally the following plots are generated per sample:
+<ul>
+  <li><code>histo_raw_total_counts.svg</code>: historgram of the raw counts before
+    filtering low quality cells</li>
+  <li><code>violin_raw_mitochondiral_counts.svg</code>: violin plot of the percentage of mitochondrial genes before
+    filtering low quality cells</li>
+  <li><code>scatter_raw_number_of_genes.svg</code>: scatter plot of total genes, total counts and percentage of
+    mitochondrial counts per cell before filtering low quality cells</li>
+  <li><code>scatter_filtered_number_of_genes.svg</code>: scatter plot of total genes, total counts and percentage of
+    mitochondrial counts per cell after filtering low quality cells</li>
+</ul>
+</p>
+<p>
+  <b>References</b>
+</p>
+<ol>
+  <li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev
+    Genet (2023). <a href="https://doi.org/10.1038/s41576-023-00586-w">https://doi.org/10.1038/s41576-023-00586-w</a>
+  </li>
+</ol>

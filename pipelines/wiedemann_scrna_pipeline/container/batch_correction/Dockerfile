@@ -19,7 +19,7 @@ RUN Rscript -e "library(remotes)"
 RUN Rscript -e "remotes::install_version(\"BiocManager\", version = \"1.30.22\", repos = $R_REPO)"
 RUN Rscript -e "remotes::install_version(\"Seurat\", version = \"5.0.0\", repos = $R_REPO)"
 RUN Rscript -e "library(Seurat)"
-RUN Rscript -e "BiocManager::install(\"SCIBER\", version = \"0.2.2\")"
+RUN Rscript -e "remotes::install_version(\"SCIBER\", version = \"0.2.2\", repos = $R_REPO)"
 RUN Rscript -e "library(SCIBER)"
 # Reinstalling irlba to prevent Matrix error.
 # See: https://github.com/bwlewis/irlba/issues/70
