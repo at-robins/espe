@@ -48,15 +48,14 @@ def process_data(input_file_path, output_folder_path):
     """
     print(f"Processing file {input_file_path}", flush=True)
     print("\tReading data...")
-    # TODO: REMOVE!
-    if not "tumour" in input_file_path:
-        return
     adata = anndata.read_h5ad(input_file_path)
     adata = adata[:, adata.var["highly_deviant"]].copy()
+
     print(f"\tUsing data {adata.n_vars} features for {adata.n_obs} cells")
     sciber_genes = adata.var_names
     sciber_cells = []
     sciber_data = []
+    adata_subsets = []
     batches = adata.obs[DEFAULT_BATCH_KEY].cat.categories
 
     observations = {"index": 0, "count": 0}
@@ -68,8 +67,12 @@ def process_data(input_file_path, output_folder_path):
             observations["count"] = adata_subset.n_obs
             observations["index"] = len(sciber_data)
         # Collects batch infomration.
-        sciber_data.append(adata_subset.X.T)
+        sciber_data.append(adata_subset.layers["log1p_norm"].T)
         sciber_cells.append(adata_subset.obs_names)
+        adata_subsets.append(adata_subset.copy())
+    print(f"\tSetting batch {batches[observations['index']]} with {observations['count']} observations as reference batch.")
+    # Removes the AnnData object to save memory.
+    del adata
 
     print("\tLoading R dependencies...")
     importr("Seurat")
@@ -97,31 +100,24 @@ def process_data(input_file_path, output_folder_path):
     sciber_output = sciber_function(
         sciber_data, sciber_genes, sciber_cells, observations["index"] + 1, threads
     )
-    print(sciber_output.values())
+    for i in range(0, len(sciber_output), 1):
+        (key, value) = sciber_output.byindex(i)
+        adata_subsets[i].layers["log1p_norm"] = value.T
 
-    # print("\tUpdating data with doublet information...")
-    # doublet_detect_output = doublet_detect_function(
-    #     adata_filtered.X.T,
-    # )
-    # doublet_classes = doublet_detect_output.obs["scDblFinder.class"].to_numpy()
-    # adata_filtered.obs["doublet_score"] = doublet_detect_output.obs[
-    #     "scDblFinder.score"
-    # ].to_numpy()
-    # adata_filtered.obs["doublet_class"] = doublet_classes
-
-    # print("\tWriting metrics to file...")
-    # metrics_writer.writerow(
-    #     [
-    #         input_file_path.removeprefix(INPUT_FOLDER),
-    #         adata_filtered.n_obs,
-    #         np.count_nonzero(doublet_classes == "singlet"),
-    #         np.count_nonzero(doublet_classes == "doublet"),
-    #     ]
-    # )
-    # print("\tWriting data to file...")
-    # adata.write(
-    #     f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip"
-    # )
+    print("\tMerging batches...")
+    adata = anndata.concat(
+        adata_subsets,
+        axis=0,
+        join="outer",
+        merge=None,
+        label=None,
+        keys=None,
+    )
+    
+    print("\tWriting data to file...")
+    adata.write(
+        f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip"
+    )
 
 
 # Iterates over all sample directories and processes them conserving the directory structure.

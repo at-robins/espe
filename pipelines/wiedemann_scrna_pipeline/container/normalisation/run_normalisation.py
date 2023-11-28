@@ -65,7 +65,7 @@ def shifted_logarithm(data, output_folder_path):
 def analytic_pearson_residuals(data, output_folder_path):
     """
     Normalises the data using the analytic Pearson residuals algorithm.
-    Useful for identification of variable features and
+    Useful for identification of variable features and rare cell populations.
     """
     print("\tApplying analytic Pearson residuals normalisation...")
     analytic_pearson = sc.experimental.pp.normalize_pearson_residuals(
