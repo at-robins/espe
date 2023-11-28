@@ -59,9 +59,15 @@ def process_data(input_file_path, output_folder_path):
     sciber_data = []
     batches = adata.obs[DEFAULT_BATCH_KEY].cat.categories
 
+    observations = {"index": 0, "count": 0}
     for batch in batches:
         print(f"\tExtracting batch {batch}...")
         adata_subset = adata[adata.obs[DEFAULT_BATCH_KEY] == batch]
+        # Update the reference batch based on total cell number.
+        if adata_subset.n_obs > observations["count"]:
+            observations["count"] = adata_subset.n_obs
+            observations["index"] = len(sciber_data)
+        # Collects batch infomration.
         sciber_data.append(adata_subset.X.T)
         sciber_cells.append(adata_subset.obs_names)
 
@@ -71,20 +77,27 @@ def process_data(input_file_path, output_folder_path):
     print("\tRunning batch correction...")
     sciber_function = ro.r(
         """
-            function(data, genes, cells, threads) {
+            function(data, genes, cells, reference_batch_index, threads) {
                 # Constructs dataframes.
                 for(i in 1:length(data)){
                     rownames(data[[i]]) = genes
                     colnames(data[[i]]) = cells[[i]]
                     data[[i]] <- as.matrix(as(data[[i]], "sparseMatrix"))
                 }
-                return(SCIBER(input_batches = data, n_core = threads, seed = 42))
+                return(SCIBER(
+                    input_batches = data,
+                    ref_index = reference_batch_index,
+                    n_core = threads,
+                    seed = 42
+                ))
             }
             """
     )
-    sciber_output = sciber_function(sciber_data, sciber_genes, sciber_cells, threads)
-    print(sciber_output.keys())
-    print(type(sciber_output))
+    # Add 1 to the reference batch index as R has 1 based indices.
+    sciber_output = sciber_function(
+        sciber_data, sciber_genes, sciber_cells, observations["index"] + 1, threads
+    )
+    print(sciber_output.values())
 
     # print("\tUpdating data with doublet information...")
     # doublet_detect_output = doublet_detect_function(
@@ -105,7 +118,7 @@ def process_data(input_file_path, output_folder_path):
     #         np.count_nonzero(doublet_classes == "doublet"),
     #     ]
     # )
-    # print("\tWriting filtered data to file...")
+    # print("\tWriting data to file...")
     # adata.write(
     #     f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip"
     # )
