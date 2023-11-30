@@ -61,7 +61,7 @@ def process_data(input_file_path, output_folder_path):
     observations = {"index": 0, "count": 0}
     for batch in batches:
         print(f"\tExtracting batch {batch}...")
-        adata_subset = adata[adata.obs[DEFAULT_BATCH_KEY] == batch]
+        adata_subset = adata[adata.obs[DEFAULT_BATCH_KEY] == batch].copy()
         # Update the reference batch based on total cell number.
         if adata_subset.n_obs > observations["count"]:
             observations["count"] = adata_subset.n_obs
@@ -69,7 +69,7 @@ def process_data(input_file_path, output_folder_path):
         # Collects batch infomration.
         sciber_data.append(adata_subset.layers["log1p_norm"].T)
         sciber_cells.append(adata_subset.obs_names)
-        adata_subsets.append(adata_subset.copy())
+        adata_subsets.append(adata_subset)
     print(f"\tSetting batch {batches[observations['index']]} with {observations['count']} observations as reference batch.")
     # Removes the AnnData object to save memory.
     del adata
