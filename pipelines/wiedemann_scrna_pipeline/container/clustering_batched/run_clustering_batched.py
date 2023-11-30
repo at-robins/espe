@@ -92,7 +92,9 @@ def process_data(file_path_input, output_folder_path):
     double_positive_mask = np.logical_and(eomes > 0, hobit > 0)
     double_negative_mask = np.logical_and(eomes <= 0, hobit <= 0)
 
-
+    adata.obs["double_negative"] = np.select([double_negative_mask, ~double_negative_mask], ["double negative", "positive"])
+    sc.tl.rank_genes_groups(adata, groupby = "double_negative", layer="log1p_norm", method='wilcoxon')
+    print(sc.get.rank_genes_groups_df(adata, group = "double negative").to_string(), flush=True)
 
     print(f"EOMES positive: {len(eomes[np.logical_and(eomes > 0, hobit == 0)]) / len(eomes)}")
     print(f"HOBIT positive: {len(hobit[np.logical_and(hobit > 0, eomes == 0)]) / len(eomes)}")
@@ -134,6 +136,7 @@ def process_data(file_path_input, output_folder_path):
     sns.displot(data=nkp46[double_negative_mask], bins=100, kde=False).set(
         xlabel="NKP46 expression", ylabel="Number of cells"
     ).savefig(f"{output_folder_path}/histo_nkp46_double_negative.svg")
+
 
 # Iterates over all sample directories and processes them conserving the directory structure.
 for root, dirs, files in os.walk(INPUT_FOLDER_BATCHED):
