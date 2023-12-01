@@ -10,6 +10,22 @@
       "container": "ilc_composition",
       "dependencies": [],
       "variables": []
+    },
+    {
+      "id": "clustering_cell_type",
+      "name": "Clustering",
+      "description": "<espe-import>step_clustering_cell_type_description.html</espe-import>",
+      "container": "clustering_cell_type",
+      "dependencies": ["ilc_composition"],
+      "variables": []
+    },
+    {
+      "id": "differential_gene_expression",
+      "name": "Differential gene expression",
+      "description": "<espe-import>step_clustering_differential_gene_expression_description.html</espe-import>",
+      "container": "differential_gene_expression",
+      "dependencies": ["ilc_composition"],
+      "variables": []
     }
   ]
 }

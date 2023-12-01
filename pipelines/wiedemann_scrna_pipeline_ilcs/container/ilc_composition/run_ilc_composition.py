@@ -32,66 +32,83 @@ sc.settings.set_figure_params(
 sc.settings.figdir = MOUNT_PATHS["output"]
 
 
-def process_data(file_path_input, output_folder_path):
+def process_data(file_path_input, output_folder_path, metrics_writer):
     """
     Performs analyses.
     """
     print(f"Processing file {file_path_input}", flush=True)
     print("\tReading data...")
     adata = anndata.read_h5ad(file_path_input)
+    # adata.layers["non_normalised"] = adata.X
+
+    # layer_used = "non_normalised"
+    layer_used = "log1p_norm"
+    # layer_used = "scran_normalisation"
+    # layer_used = "analytic_pearson_residuals"
 
     n_genes_plot_raw = sc.pl.scatter(
         adata=adata,
         x="Eomes",
         y="Zfp683",
-        layers = "log1p_norm",
+        layers=layer_used,
         title="EOMES vs. HOBIT",
         show=False,
     )
-    n_genes_plot_raw.set(
-        xlabel="EOMES", ylabel="HOBIT"
-    )
-    n_genes_plot_raw.figure.savefig(
-        f"{output_folder_path}/scatter_eomes_hobit.svg"
-    )
+    n_genes_plot_raw.set(xlabel="EOMES", ylabel="HOBIT")
+    n_genes_plot_raw.figure.savefig(f"{output_folder_path}/scatter_eomes_hobit.svg")
 
-    eomes = adata[:, "Eomes"].layers["log1p_norm"].toarray()
-    hobit = adata[:, "Zfp683"].layers["log1p_norm"].toarray()
-    cd49a = adata[:, "Itga1"].layers["log1p_norm"].toarray()
-    cd49b = adata[:, "Itga2"].layers["log1p_norm"].toarray()
-    tbet = adata[:, "Tbx21"].layers["log1p_norm"].toarray()
-    nkp46 = adata[:, "Ncr1"].layers["log1p_norm"].toarray()
-    nk11 = adata[:, "Klrb1"].layers["log1p_norm"].toarray()
+    eomes = adata[:, "Eomes"].layers[layer_used].toarray()
+    hobit = adata[:, "Zfp683"].layers[layer_used].toarray()
+    cd49a = adata[:, "Itga1"].layers[layer_used].toarray()
+    cd49b = adata[:, "Itga2"].layers[layer_used].toarray()
+    tbet = adata[:, "Tbx21"].layers[layer_used].toarray()
+    nkp46 = adata[:, "Ncr1"].layers[layer_used].toarray()
+    nk11 = adata[:, "Klrb1"].layers[layer_used].toarray()
 
-    eomes_positve_mask = np.logical_and(eomes > 0, hobit <= 0)
+    eomes_positive_mask = np.logical_and(eomes > 0, hobit <= 0)
     hobit_positive_mask = np.logical_and(hobit > 0, eomes <= 0)
     double_positive_mask = np.logical_and(eomes > 0, hobit > 0)
     double_negative_mask = np.logical_and(eomes <= 0, hobit <= 0)
 
-    adata.obs["double_negative"] = np.select([double_negative_mask, ~double_negative_mask], ["double negative", "positive"])
-    sc.tl.rank_genes_groups(adata, groupby = "double_negative", layer="log1p_norm", method='wilcoxon')
-    print(sc.get.rank_genes_groups_df(adata, group = "double negative").to_string(), flush=True)
+    adata.obs["cell_type"] = np.select(
+        [
+            eomes_positive_mask,
+            hobit_positive_mask,
+            double_positive_mask,
+            double_negative_mask,
+        ],
+        ["NK cell", "ILC1", "intermediate group 1 ILC", "negative"],
+    )
+    # sc.tl.rank_genes_groups(
+    #     adata, groupby="cell_type", layer=layer_used, method="wilcoxon"
+    # )
+    # print(
+    #     sc.get.rank_genes_groups_df(adata, group="negative").to_string(),
+    #     flush=True,
+    # )
 
-    print(f"EOMES positive: {len(eomes[np.logical_and(eomes > 0, hobit == 0)]) / len(eomes)}")
-    print(f"HOBIT positive: {len(hobit[np.logical_and(hobit > 0, eomes == 0)]) / len(eomes)}")
-    print(f"double positive: {len(eomes[np.logical_and(eomes > 0, hobit > 0)]) / len(eomes)}")
-    print(f"double negative: {len(eomes[np.logical_and(eomes == 0, hobit == 0)]) / len(eomes)}")
+    print("\tWriting metrics to file...")
+    metrics_writer.writerow(
+        [
+            file_path_input.removeprefix(INPUT_FOLDER),
+            np.count_nonzero(eomes_positive_mask),
+            np.count_nonzero(hobit_positive_mask),
+            np.count_nonzero(double_positive_mask),
+            np.count_nonzero(double_negative_mask),
+        ]
+    )
 
+    print("\tWriting data to file...")
+    adata.write(f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip")
+
+    print("\tPlotting data...")
     sns.displot(data=eomes, bins=100, kde=False).set(
         xlabel="EOMES expression", ylabel="Number of cells"
     ).savefig(f"{output_folder_path}/histo_eomes.svg")
 
-    sns.displot(data=eomes[hobit > 0], bins=100, kde=False).set(
-        xlabel="EOMES expression", ylabel="Number of cells"
-    ).savefig(f"{output_folder_path}/histo_eomes_no_0hobit.svg")
-
     sns.displot(data=hobit, bins=100, kde=False).set(
         xlabel="HOBIT expression", ylabel="Number of cells"
     ).savefig(f"{output_folder_path}/histo_hobit.svg")
-
-    sns.displot(data=hobit[eomes > 0], bins=100, kde=False).set(
-        xlabel="HOBIT expression", ylabel="Number of cells"
-    ).savefig(f"{output_folder_path}/histo_hobit_no_0eomes.svg")
 
     sns.displot(data=cd49a[double_negative_mask], bins=100, kde=False).set(
         xlabel="CD49A expression", ylabel="Number of cells"
@@ -114,13 +131,29 @@ def process_data(file_path_input, output_folder_path):
     ).savefig(f"{output_folder_path}/histo_nkp46_double_negative.svg")
 
 
-# Iterates over all sample directories and processes them conserving the directory structure.
-for root, dirs, files in os.walk(INPUT_FOLDER):
-    for file in files:
-        if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
-            file_path_input = os.path.join(root, file)
-            output_folder_path = os.path.join(
-                MOUNT_PATHS["output"], root.removeprefix(INPUT_FOLDER)
-            )
-            os.makedirs(output_folder_path, exist_ok=True)
-            process_data(file_path_input, output_folder_path)
+with open(
+    f"{MOUNT_PATHS['output']}/metrics.csv", mode="w", newline="", encoding="utf-8"
+) as csvfile:
+    metrics_writer = csv.writer(
+        csvfile, dialect="unix", delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
+    )
+    metrics_writer.writerow(
+        [
+            "Sample",
+            "Total number of cells",
+            "Number of NK cells",
+            "Number of ILC1s",
+            "Number of intermediate group 1 ILCs",
+            "Number of negative cells",
+        ]
+    )
+    # Iterates over all sample directories and processes them conserving the directory structure.
+    for root, dirs, files in os.walk(INPUT_FOLDER):
+        for file in files:
+            if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
+                file_path_input = os.path.join(root, file)
+                output_folder_path = os.path.join(
+                    MOUNT_PATHS["output"], root.removeprefix(INPUT_FOLDER)
+                )
+                os.makedirs(output_folder_path, exist_ok=True)
+                process_data(file_path_input, output_folder_path, metrics_writer)
