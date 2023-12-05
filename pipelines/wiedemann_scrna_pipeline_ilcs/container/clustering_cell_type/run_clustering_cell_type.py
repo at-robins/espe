@@ -12,7 +12,7 @@ import seaborn as sns
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["ilc_composition"] + "/"
-DEFAULT_BATCH_KEY = "cell_type"
+CELL_TYPE_KEY = "cell_type"
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
@@ -44,11 +44,11 @@ def process_data(file_path_input, output_folder_path):
     # Performing HGV and PCA first to reduce dimensionality for UMAP.
     adata.var["highly_variable"] = adata.var["highly_deviant"]
 
-    batches = adata.obs[DEFAULT_BATCH_KEY].cat.categories
+    cell_types = adata.obs[CELL_TYPE_KEY].cat.categories
 
-    for batch in batches:
-        print(f"\tPerform clustering for cell type {batch}...", flush=True)
-        adata_subset = adata[adata.obs[DEFAULT_BATCH_KEY] == batch].copy()
+    for cell_type in cell_types:
+        print(f"\tPerform clustering for cell type {cell_type}...", flush=True)
+        adata_subset = adata[adata.obs[CELL_TYPE_KEY] == cell_type].copy()
         if adata_subset.n_obs < 20:
             print("\tNot enough cells. Skipping cell type...")
         else:
@@ -72,7 +72,7 @@ def process_data(file_path_input, output_folder_path):
                 show=False,
                 return_fig=True,
             )
-            fig.savefig(f"{output_folder_path}/umap_{batch}.svg")
+            fig.savefig(f"{output_folder_path}/umap_{cell_type}.svg")
 
 
 # Iterates over all sample directories and processes them conserving the directory structure.
