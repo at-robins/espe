@@ -20,11 +20,19 @@
       "variables": []
     },
     {
+      "id": "pseudobulk_generation",
+      "name": "Pseudo-bulk aggregation",
+      "description": "<espe-import>step_pseudobulk_generation_description.html</espe-import>",
+      "container": "pseudobulk_generation",
+      "dependencies": ["ilc_composition"],
+      "variables": []
+    },
+    {
       "id": "differential_gene_expression",
       "name": "Differential gene expression",
-      "description": "<espe-import>step_clustering_differential_gene_expression_description.html</espe-import>",
+      "description": "<espe-import>step_differential_gene_expression_description.html</espe-import>",
       "container": "differential_gene_expression",
-      "dependencies": ["ilc_composition"],
+      "dependencies": ["pseudobulk_generation"],
       "variables": []
     }
   ]
