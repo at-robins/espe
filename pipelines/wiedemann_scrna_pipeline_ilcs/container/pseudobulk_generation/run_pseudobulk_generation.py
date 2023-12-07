@@ -104,6 +104,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
 # Replaces NAs with zeros.
 pseudobulk_data.fillna(0, inplace=True)
 
+# Sets row names.
 row_names = list(
     map(
         lambda name: name.replace(" ", "_"),
@@ -115,11 +116,17 @@ row_names = list(
 )
 pseudobulk_data.index = row_names
 
+# Sets additional variables.
 pseudobulk_adata = anndata.AnnData(X=pseudobulk_data)
 pseudobulk_adata.obs[OUTPUT_SAMPLE_KEY] = samples
 pseudobulk_adata.obs[OUTPUT_REPLICATE_KEY] = replicates
 pseudobulk_adata.obs[OUTPUT_CELL_TYPE_KEY] = cell_types
 pseudobulk_adata.obs[OUTPUT_CELL_NUMBER] = n_cells
+
+# Sets categorical data to a categorical data type.
+pseudobulk_adata.obs[OUTPUT_SAMPLE_KEY] = pseudobulk_adata.obs[OUTPUT_SAMPLE_KEY].astype("category")
+pseudobulk_adata.obs[OUTPUT_REPLICATE_KEY] = pseudobulk_adata.obs[OUTPUT_REPLICATE_KEY].astype("category")
+pseudobulk_adata.obs[OUTPUT_CELL_TYPE_KEY] = pseudobulk_adata.obs[OUTPUT_CELL_TYPE_KEY].astype("category")
 
 print("\tWriting pseudobulk data to file...")
 pseudobulk_adata.write(f"{MOUNT_PATHS['output']}/pseudobulk.h5ad", compression="gzip")
