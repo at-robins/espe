@@ -35,20 +35,20 @@ ro.r(
 sc.settings.verbosity = 2
 
 
-def process_data(file_path_filtered, output_folder_path, metrics_writer):
+def aggregate_pseudobulk_data(file_path_sample, sample_name):
     """
-    Detects and marks doublets.
+    Aggregates pseudobulk data.
     """
-    print(f"Processing file {file_path_filtered}", flush=True)
+    print(f"Processing file {file_path_sample}", flush=True)
     print("\tReading data...")
-    adata = anndata.read_h5ad(file_path_filtered)
+    adata = anndata.read_h5ad(file_path_sample)
 
     cell_types = adata.obs[CELL_TYPE_KEY].cat.categories
     batches = adata.obs[BATCH_KEY].cat.categories
+
     pseudobulk_dataframe = pd.DataFrame()
 
     print(f"\tNumber of total observations: {adata.n_obs}")
-
     for cell_type in cell_types:
         for batch in batches:
             print(f"\tProcessing batch {batch} and cell type {cell_type}")
@@ -58,14 +58,13 @@ def process_data(file_path_filtered, output_folder_path, metrics_writer):
             aggregated_row = adata_subset.to_df().agg(np.sum)
             aggregated_row["celltype"] = cell_type
             aggregated_row["replicate"] = batch
+            aggregated_row["sample"] = sample_name
             pseudobulk_dataframe = pd.concat(
                 [pseudobulk_dataframe, aggregated_row.to_frame().T],
                 ignore_index=False,
                 join="outer",
             )
-
-    pseudobulk_dataframe.fillna(0, inplace=True)
-    print(pseudobulk_dataframe)
+    return pseudobulk_dataframe
 
     # print("\tLoading R dependencies...")
     # importr("Seurat")
@@ -125,27 +124,25 @@ def process_data(file_path_filtered, output_folder_path, metrics_writer):
     # )
 
 
-with open(
-    f"{MOUNT_PATHS['output']}/metrics.csv", mode="w", newline="", encoding="utf-8"
-) as csvfile:
-    metrics_writer = csv.writer(
-        csvfile, dialect="unix", delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
-    )
-    metrics_writer.writerow(
-        [
-            "Sample",
-            "Total number of cells",
-            "Number of singlets",
-            "Number of doublets",
-        ]
-    )
-    # Iterates over all sample directories and processes them conserving the directory structure.
-    for root, dirs, files in os.walk(INPUT_FOLDER):
-        for file in files:
-            if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
-                file_path_filtered = os.path.join(root, file)
-                output_folder_path = os.path.join(
-                    MOUNT_PATHS["output"], root.removeprefix(INPUT_FOLDER)
-                )
-                os.makedirs(output_folder_path, exist_ok=True)
-                process_data(file_path_filtered, output_folder_path, metrics_writer)
+
+# Aggregated pseudo-bulk scRNA-Seq data.
+pseudobulk_data = pd.DataFrame()
+
+# Iterates over all sample directories and collects pseudo bulk data.
+for root, dirs, files in os.walk(INPUT_FOLDER):
+    for file in files:
+        if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
+            input_file_path = os.path.join(root, file)
+            tmp_aggregate = aggregate_pseudobulk_data(
+                file_path_sample=input_file_path,
+                sample_name=root.removeprefix(INPUT_FOLDER),
+            )
+            pseudobulk_data = pd.concat(
+                [pseudobulk_data, tmp_aggregate],
+                ignore_index=False,
+                join="outer",
+            )
+
+# Replaces NAs with zeros.
+pseudobulk_data.fillna(0, inplace=True)
+
