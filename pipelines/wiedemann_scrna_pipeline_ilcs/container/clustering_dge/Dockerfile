@@ -8,5 +8,5 @@ RUN yes | pip install scanpy[leiden]==1.9.6 --exists-action i
 RUN yes | pip install seaborn==0.12.2 --exists-action i
 RUN yes | pip install pathvalidate==3.2.0 --exists-action i
 
-COPY run_clustering_cell_type.py /run.py
+COPY run_clustering_dge.py /run.py
 ENTRYPOINT ["python", "run.py"]

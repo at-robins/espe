@@ -60,23 +60,26 @@ def convert_string_to_r(val: str) -> str:
 
 
 def differential_gene_expression(
-    pseudobulk_adata, sample_type_a, sample_type_b, cell_type, output_folder_path
+    pseudobulk_adata,
+    sample_type_reference,
+    sample_type_test,
+    cell_type,
+    output_folder_path,
 ):
     """
     Performes differential gene expression analysis.
     """
     print(
-        f"Comparing {sample_type_a} and {sample_type_b} for cell type {cell_type}",
+        f"Comparing {sample_type_reference} and {sample_type_test} for cell type {cell_type}",
         flush=True,
     )
-    os.makedirs(output_folder_path, exist_ok=True)
 
     # Subsetting data.
-    sample_a_mask = adata.obs[SAMPLE_KEY] == sample_type_a
-    sample_b_mask = adata.obs[SAMPLE_KEY] == sample_type_b
+    sample_reference_mask = adata.obs[SAMPLE_KEY] == sample_type_reference
+    sample_test_mask = adata.obs[SAMPLE_KEY] == sample_type_test
     cell_type_mask = adata.obs[CELL_TYPE_KEY] == cell_type
     data_mask = np.logical_and(
-        np.logical_or(sample_a_mask, sample_b_mask), cell_type_mask
+        np.logical_or(sample_reference_mask, sample_test_mask), cell_type_mask
     )
     adata_subset = adata[data_mask]
 
@@ -96,7 +99,7 @@ def differential_gene_expression(
     print("\tRunning R...")
     edger_function = ro.r(
         """
-        function(data, sample_a, sample_b, output_path){
+        function(data, sample_reference, sample_test, output_path){
             # create an edgeR object with counts and grouping factor
             y <- DGEList(assay(data, "X"), group = colnames(data))
             # filter out genes with low counts
@@ -124,21 +127,23 @@ def differential_gene_expression(
             plotBCV(y)
             dev.off()
             # eval workaround as make makeContrasts does not accept a string variable.
-            contrast_string = paste("sample", sample_a, " - sample", sample_b, sep = "")
+            contrast_string = paste("sample", sample_test, " - sample", sample_reference, sep = "")
             cmd <- paste("myContrast <- makeContrasts(", contrast_string, ", levels = y$design)", sep ='"')
             eval(parse(text = cmd))
             qlf <- glmQLFTest(fit, contrast=myContrast)
             # get all of the DE genes and calculate Benjamini-Hochberg adjusted FDR
             tt <- topTags(qlf, n = Inf)
             tt <- tt$table
-            write.csv(tt, paste(output_path, "differentiall_gene_expression.csv", sep = "/"), row.names=TRUE)
+            write.csv(tt, paste(output_path, "differential_gene_expression.csv", sep = "/"), row.names=TRUE)
             svg(paste(output_path, "smear_plot.svg", sep = "/"))
             plotSmear(qlf, de.tags = rownames(tt)[which(tt$FDR<=0.05)])
             dev.off()
         }
         """
     )
-    edger_function(adata_subset, sample_type_a, sample_type_b, output_folder_path)
+    edger_function(
+        adata_subset, sample_type_reference, sample_type_test, output_folder_path
+    )
 
 
 print("Reading pseudobulk data...")
@@ -155,22 +160,50 @@ sample_comparisons = []
 with open(sample_comparison_path, newline="", encoding="utf-8") as csvfile:
     info_reader = csv.DictReader(csvfile, dialect="unix", delimiter=",", quotechar='"')
     for row in info_reader:
-        sample_a = row["sample 1"]
-        sample_b = row["sample 2"]
-        sample_comparisons.append((sample_a, sample_b))
+        sample_reference = row["reference sample"]
+        sample_test = row["test sample"]
+        sample_comparisons.append((sample_reference, sample_test))
 
 # Runs differential gene expression analysis.
-for sample_a, sample_b in sample_comparisons:
+for sample_reference, sample_test in sample_comparisons:
     for cell_type in adata.obs[CELL_TYPE_KEY].cat.categories:
         output_path = os.path.join(
             MOUNT_PATHS["output"],
-            pathvalidate.sanitize_filename(f"{sample_a}__vs__{sample_b}"),
+            pathvalidate.sanitize_filename(f"{sample_reference}__vs__{sample_test}"),
             pathvalidate.sanitize_filename(cell_type),
         )
+        os.makedirs(output_path, exist_ok=True)
+        with open(
+            os.path.join(output_path, "info.csv"),
+            mode="w",
+            newline="",
+            encoding="utf-8",
+        ) as csvfile:
+            info_writer = csv.writer(
+                csvfile,
+                dialect="unix",
+                delimiter=",",
+                quotechar='"',
+                quoting=csv.QUOTE_MINIMAL,
+            )
+            info_writer.writerows(
+                [
+                    [
+                        "reference sample",
+                        "test sample",
+                        "cell type",
+                    ],
+                    [
+                        sample_reference,
+                        sample_test,
+                        cell_type,
+                    ],
+                ]
+            )
         differential_gene_expression(
             adata,
-            sample_type_a=convert_string_to_r(sample_a),
-            sample_type_b=convert_string_to_r(sample_b),
+            sample_type_reference=convert_string_to_r(sample_reference),
+            sample_type_test=convert_string_to_r(sample_test),
             cell_type=cell_type,
             output_folder_path=output_path,
         )

@@ -34,6 +34,14 @@
       "container": "differential_gene_expression",
       "dependencies": ["pseudobulk_generation"],
       "variables": []
+    },
+    {
+      "id": "clustering_dge",
+      "name": "Clustering differentially expressed genes",
+      "description": "<espe-import>step_clustering_cell_type_description.html</espe-import>",
+      "container": "clustering_dge",
+      "dependencies": ["clustering_cell_type", "differential_gene_expression"],
+      "variables": []
     }
   ]
 }

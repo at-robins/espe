@@ -7,12 +7,14 @@ import json
 import logging
 import numpy as np
 import os
+import pathvalidate
 import scanpy as sc
 import seaborn as sns
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["ilc_composition"] + "/"
 CELL_TYPE_KEY = "cell_type"
+MINIMUM_CELL_NUMBER = 20
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
@@ -49,7 +51,7 @@ def process_data(file_path_input, output_folder_path):
     for cell_type in cell_types:
         print(f"\tPerform clustering for cell type {cell_type}...", flush=True)
         adata_subset = adata[adata.obs[CELL_TYPE_KEY] == cell_type].copy()
-        if adata_subset.n_obs < 20:
+        if adata_subset.n_obs < MINIMUM_CELL_NUMBER:
             print("\tNot enough cells. Skipping cell type...")
         else:
             sc.pp.pca(adata_subset, svd_solver="arpack", use_highly_variable=True)
@@ -61,18 +63,22 @@ def process_data(file_path_input, output_folder_path):
             sc.pp.neighbors(adata_subset, n_pcs=n_pcs)
             sc.tl.umap(adata_subset)
             sc.tl.leiden(adata_subset, key_added="leiden_res0_25", resolution=0.25)
-            sc.tl.leiden(adata_subset, key_added="leiden_res0_5", resolution=0.5)
-            sc.tl.leiden(adata_subset, key_added="leiden_res1", resolution=1.0)
+            sc.tl.leiden(adata_subset, key_added="leiden_res0_50", resolution=0.5)
+            sc.tl.leiden(adata_subset, key_added="leiden_res1_00", resolution=1.0)
 
             print("\tPlotting data...")
             fig = sc.pl.umap(
                 adata_subset,
-                color=["leiden_res0_25", "leiden_res0_5", "leiden_res1", "batch"],
+                color=["leiden_res0_25", "leiden_res0_50", "leiden_res1_00", "batch"],
                 legend_loc="on data",
                 show=False,
                 return_fig=True,
             )
-            fig.savefig(f"{output_folder_path}/umap_{cell_type}.svg")
+            sanitised_cell_type = pathvalidate.sanitize_filename(cell_type)
+            fig.savefig(f"{output_folder_path}/umap_{sanitised_cell_type}.svg")
+
+            print("\tWriting data to file...")
+            adata_subset.write(f"{output_folder_path}/clustered_{sanitised_cell_type}.h5ad", compression="gzip")
 
 
 # Iterates over all sample directories and processes them conserving the directory structure.
