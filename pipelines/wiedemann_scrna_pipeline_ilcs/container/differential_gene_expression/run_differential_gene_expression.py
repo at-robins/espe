@@ -9,6 +9,7 @@ import logging
 import numpy as np
 import os
 import pandas as pd
+import pathvalidate
 import scanpy as sc
 import seaborn as sns
 import rpy2.rinterface_lib.callbacks as rcb
@@ -34,6 +35,28 @@ ro.r(
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
+sc.settings.set_figure_params(
+    scanpy=True,
+    # # In case of bitmap exports, use high quality.
+    dpi=300,
+    dpi_save=300,
+    # Export as SVG.
+    format="svg",
+    vector_friendly=False,
+    # Use transparent background.
+    transparent=True,
+    facecolor=None,
+    # Remove frames.
+    frameon=False,
+)
+sc.settings.figdir = MOUNT_PATHS["output"]
+
+
+def convert_string_to_r(val: str) -> str:
+    """
+    Converts a string to a valid R string.
+    """
+    return val.replace(" ", "_")
 
 
 def differential_gene_expression(
@@ -57,6 +80,16 @@ def differential_gene_expression(
     )
     adata_subset = adata[data_mask]
 
+    # Performs a preliminary PCA.
+    # adata_subset.layers['counts'] = adata_subset.X.copy()
+    # sc.pp.normalize_total(adata_subset, target_sum=1e6)
+    # sc.pp.log1p(adata_subset)
+    # sc.pp.pca(adata_subset)
+    # adata_subset.obs["lib_size"] = np.sum(adata_subset.layers["counts"], axis=1)
+    # adata_subset.obs["log_lib_size"] = np.log(adata_subset.obs["lib_size"])
+    # sc.pl.pca(adata_subset, color=adata_subset.obs, ncols=1, size=300, save=True)
+    # adata_subset.X = adata_subset.layers['counts'].copy()
+
     print("\tLoading R dependencies...")
     importr("Seurat")
     importr("edgeR")
@@ -76,7 +109,6 @@ def differential_gene_expression(
             # normalize
             y <- calcNormFactors(y)
             # create a vector that is concatentation of condition and cell type that we will later use with contrasts
-            replicate <- colData(data)$replicate
             sample <- colData(data)$sample
             # create a design matrix: here we have multiple donors so also consider that in the design matrix
             design <- model.matrix(~ 0 + sample)
@@ -84,45 +116,61 @@ def differential_gene_expression(
             y <- estimateDisp(y, design = design)
             # fit the model
             fit <- glmQLFit(y, design)
-            print("\tPlotting data...")
+            print("Plotting data...")
             svg(paste(output_path, "mds_plot.svg", sep = "/"))
             plotMDS(y)
             dev.off()
             svg(paste(output_path, "bcv_plot.svg", sep = "/"))
             plotBCV(y)
             dev.off()
-            print(colnames(y$design))
-            contrast_string = paste("sample", sample_a, "-sample", sample_b, sep = "")
-            print(contrast_string)
-            myContrast <- makeContrasts(contrast_string, levels = y$design)
+            # eval workaround as make makeContrasts does not accept a string variable.
+            contrast_string = paste("sample", sample_a, " - sample", sample_b, sep = "")
+            cmd <- paste("myContrast <- makeContrasts(", contrast_string, ", levels = y$design)", sep ='"')
+            eval(parse(text = cmd))
             qlf <- glmQLFTest(fit, contrast=myContrast)
             # get all of the DE genes and calculate Benjamini-Hochberg adjusted FDR
             tt <- topTags(qlf, n = Inf)
             tt <- tt$table
             write.csv(tt, paste(output_path, "differentiall_gene_expression.csv", sep = "/"), row.names=TRUE)
-            return(list("fit"=fit, "design"=design, "y"=y))
+            svg(paste(output_path, "smear_plot.svg", sep = "/"))
+            plotSmear(qlf, de.tags = rownames(tt)[which(tt$FDR<=0.05)])
+            dev.off()
         }
         """
     )
-    edger_output = edger_function(
-        adata_subset, sample_type_a, sample_type_b, output_folder_path
-    )
+    edger_function(adata_subset, sample_type_a, sample_type_b, output_folder_path)
 
 
 print("Reading pseudobulk data...")
 adata = anndata.read_h5ad(f"{INPUT_FOLDER}pseudobulk.h5ad")
 
 # Replaces invalid characters in sample names.
-adata.obs[SAMPLE_KEY] = list(
-    map(lambda val: val.replace(" ", "_"), adata.obs[SAMPLE_KEY])
-)
+adata.obs[SAMPLE_KEY] = list(map(convert_string_to_r, adata.obs[SAMPLE_KEY]))
 adata.obs[SAMPLE_KEY] = adata.obs[SAMPLE_KEY].astype("category")
 
+
+print("Parsing information for sample comparisons...")
+sample_comparison_path = f"{MOUNT_PATHS['input']}/sample_comparison.csv"
+sample_comparisons = []
+with open(sample_comparison_path, newline="", encoding="utf-8") as csvfile:
+    info_reader = csv.DictReader(csvfile, dialect="unix", delimiter=",", quotechar='"')
+    for row in info_reader:
+        sample_a = row["sample 1"]
+        sample_b = row["sample 2"]
+        sample_comparisons.append((sample_a, sample_b))
+
 # Runs differential gene expression analysis.
-differential_gene_expression(
-    adata,
-    sample_type_a="control_tissue",
-    sample_type_b="tumourous_tissue",
-    cell_type="NK cell",
-    output_folder_path=MOUNT_PATHS["output"],
-)
+for sample_a, sample_b in sample_comparisons:
+    for cell_type in adata.obs[CELL_TYPE_KEY].cat.categories:
+        output_path = os.path.join(
+            MOUNT_PATHS["output"],
+            pathvalidate.sanitize_filename(f"{sample_a}__vs__{sample_b}"),
+            pathvalidate.sanitize_filename(cell_type),
+        )
+        differential_gene_expression(
+            adata,
+            sample_type_a=convert_string_to_r(sample_a),
+            sample_type_b=convert_string_to_r(sample_b),
+            cell_type=cell_type,
+            output_folder_path=output_path,
+        )

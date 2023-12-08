@@ -9,7 +9,6 @@ RUN yes | pip install seaborn==0.12.2 --exists-action i
 RUN yes | pip install rpy2[all]==3.5.14 --exists-action i
 RUN yes | pip install anndata2ri==1.3.1 --exists-action i
 
-
 # Install R dependencies.
 # The library calls verify that the installation worked.
 WORKDIR /
@@ -27,6 +26,8 @@ RUN Rscript -e "library(edgeR)"
 # See: https://github.com/bwlewis/irlba/issues/70
 RUN Rscript -e "remotes::install_version(\"irlba\", version = \"2.3.5.1\", repos = $R_REPO)"
 RUN Rscript -e "library(irlba)"
+
+RUN yes | pip install pathvalidate==3.2.0 --exists-action i
 
 COPY run_differential_gene_expression.py /run.py
 ENTRYPOINT ["python", "run.py"]
