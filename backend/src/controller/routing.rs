@@ -24,8 +24,7 @@ use super::{
     },
     log_controller::get_experiment_step_logs,
     pipeline_controller::{
-        get_pipeline_blueprint, get_pipeline_blueprints, get_pipeline_instance,
-        patch_pipeline_blueprints,
+        get_pipeline_blueprint, get_pipeline_blueprints, patch_pipeline_blueprints,
     },
 };
 
@@ -48,7 +47,6 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/ui/{rest:.*}", web::get().to(index))
     // Pipelines
     .route("/api/pipelines/attachments/{pipeline}/{attachment}", web::get().to(get_pipeline_attachment))
-    .route("/api/pipelines/instances/{id}", web::get().to(get_pipeline_instance))
     .route("/api/pipelines/blueprint", web::get().to(get_pipeline_blueprint))
     .route("/api/pipelines/blueprints", web::get().to(get_pipeline_blueprints))
     .route("/api/pipelines/blueprints", web::patch().to(patch_pipeline_blueprints))
