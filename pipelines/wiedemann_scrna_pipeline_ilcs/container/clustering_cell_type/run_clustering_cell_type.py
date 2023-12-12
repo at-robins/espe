@@ -42,6 +42,7 @@ def process_data(file_path_input, output_folder_path):
     print(f"Processing file {file_path_input}", flush=True)
     print("\tReading data...")
     adata = anndata.read_h5ad(file_path_input)
+    adata.layers["counts"] = adata.X
     adata.X = adata.layers["log1p_norm"]
     # Performing HGV and PCA first to reduce dimensionality for UMAP.
     adata.var["highly_variable"] = adata.var["highly_deviant"]
@@ -78,7 +79,31 @@ def process_data(file_path_input, output_folder_path):
             fig.savefig(f"{output_folder_path}/umap_{sanitised_cell_type}.svg")
 
             print("\tWriting data to file...")
-            adata_subset.write(f"{output_folder_path}/clustered_{sanitised_cell_type}.h5ad", compression="gzip")
+            adata_subset.write(
+                f"{output_folder_path}/clustered_{sanitised_cell_type}.h5ad",
+                compression="gzip",
+            )
+
+            print("\tPlotting marker genes...")
+            sc.tl.rank_genes_groups(
+                adata_subset,
+                groupby="leiden_res1_00",
+                method="wilcoxon",
+                key_added="marker_genes_leiden_res1_00",
+            )
+
+            fig = sc.pl.rank_genes_groups_dotplot(
+                adata_subset,
+                groupby="leiden_res1_00",
+                standard_scale="var",
+                n_genes=5,
+                key="marker_genes_leiden_res1_00",
+                show=False,
+                return_fig=True,
+            )
+            fig.savefig(
+                f"{output_folder_path}/marker_genes_resolution_1_00_{sanitised_cell_type}.svg"
+            )
 
 
 # Iterates over all sample directories and processes them conserving the directory structure.
