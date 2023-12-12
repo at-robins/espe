@@ -13,6 +13,7 @@ import seaborn as sns
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["ilc_composition"] + "/"
+CLUSTERING_INFO_FILE = os.path.join(MOUNT_PATHS["input"], "sample_clustering.csv")
 CELL_TYPE_KEY = "cell_type"
 MINIMUM_CELL_NUMBER = 20
 
@@ -106,13 +107,149 @@ def process_data(file_path_input, output_folder_path):
             )
 
 
-# Iterates over all sample directories and processes them conserving the directory structure.
-for root, dirs, files in os.walk(INPUT_FOLDER):
-    for file in files:
-        if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
-            file_path_input = os.path.join(root, file)
-            output_folder_path = os.path.join(
-                MOUNT_PATHS["output"], root.removeprefix(INPUT_FOLDER)
+def cluster_pool(sample_id: str, sample_pool: [str]):
+    """
+    Performs clustering.
+    """
+    input_files = list(
+        map(
+            lambda sample: os.path.join(
+                INPUT_FOLDER,
+                pathvalidate.sanitize_filename(sample),
+                "filtered_feature_bc_matrix.h5ad",
+            ),
+            sample_pool,
+        )
+    )
+    output_folder_path = os.path.join(
+        MOUNT_PATHS["output"], pathvalidate.sanitize_filename(sample_id)
+    )
+    os.makedirs(output_folder_path, exist_ok=True)
+
+    print(f"Processing files {input_files} as pool {sample_id}", flush=True)
+    print("\tReading data...")
+    adatas = list(
+        map(
+            lambda input_file: anndata.read_h5ad(input_file),
+            input_files,
+        )
+    )
+
+    # Combines highly variant genes
+    combined_deviant_genes = None
+    for adata in adatas:
+        if combined_deviant_genes is None:
+            combined_deviant_genes = adata.var["highly_deviant"]
+        else:
+            combined_deviant_genes = combined_deviant_genes.combine(
+                adata.var["highly_deviant"], lambda a, b: a or b, False
             )
-            os.makedirs(output_folder_path, exist_ok=True)
-            process_data(file_path_input, output_folder_path)
+
+    print("\tMerging sample pool...")
+    adata_pool = anndata.concat(
+        adatas,
+        axis=0,
+        join="outer",
+        merge="same",
+        uns_merge="same",
+        label="sample",
+        keys=sample_pool,
+    )
+    adata_pool.var["highly_variable"] = combined_deviant_genes
+    adata_pool.layers["counts"] = adata_pool.X
+    np.nan_to_num(adata_pool.layers["log1p_norm"], copy=False, nan=0.0)
+    adata_pool.X = adata_pool.layers["log1p_norm"]
+
+    cell_types = adata_pool.obs[CELL_TYPE_KEY].cat.categories
+    for cell_type in cell_types:
+        print(f"\tPerform clustering for cell type {cell_type}...", flush=True)
+        print(adata_pool.n_obs)
+        adata_subset = adata_pool[adata_pool.obs[CELL_TYPE_KEY] == cell_type].copy()
+        print(adata_subset.n_obs)
+        if adata_subset.n_obs < MINIMUM_CELL_NUMBER:
+            print("\tNot enough cells. Skipping cell type...")
+        else:
+            sc.pp.pca(adata_subset, svd_solver="arpack", use_highly_variable=True)
+            n_pcs_max = adata_subset.obsm["X_pca"].shape[1]
+            if n_pcs_max < 30:
+                n_pcs = n_pcs_max
+            else:
+                n_pcs = 30
+            sc.pp.neighbors(adata_subset, n_pcs=n_pcs)
+            sc.tl.umap(adata_subset)
+            sc.tl.leiden(adata_subset, key_added="leiden_res0_25", resolution=0.25)
+            sc.tl.leiden(adata_subset, key_added="leiden_res0_50", resolution=0.5)
+            sc.tl.leiden(adata_subset, key_added="leiden_res1_00", resolution=1.0)
+
+            print("\tPlotting data...")
+            fig = sc.pl.umap(
+                adata_subset,
+                color=[
+                    "leiden_res0_25",
+                    "leiden_res0_50",
+                    "leiden_res1_00",
+                    "batch",
+                    "sample",
+                ],
+                legend_loc="on data",
+                show=False,
+                return_fig=True,
+            )
+            sanitised_cell_type = pathvalidate.sanitize_filename(cell_type)
+            fig.savefig(f"{output_folder_path}/umap_{sanitised_cell_type}.svg")
+
+            print("\tWriting data to file...")
+            adata_subset.write(
+                f"{output_folder_path}/clustered_{sanitised_cell_type}.h5ad",
+                compression="gzip",
+            )
+
+            print("\tPlotting marker genes...")
+            sc.tl.rank_genes_groups(
+                adata_subset,
+                groupby="leiden_res1_00",
+                method="wilcoxon",
+                key_added="marker_genes_leiden_res1_00",
+            )
+
+            fig = sc.pl.rank_genes_groups_dotplot(
+                adata_subset,
+                groupby="leiden_res1_00",
+                standard_scale="var",
+                n_genes=5,
+                key="marker_genes_leiden_res1_00",
+                show=False,
+                return_fig=True,
+            )
+            fig.savefig(
+                f"{output_folder_path}/marker_genes_resolution_1_00_{sanitised_cell_type}.svg"
+            )
+
+
+print("Parsing information for sample clustering...")
+sample_pools = {}
+with open(CLUSTERING_INFO_FILE, newline="", encoding="utf-8") as csvfile:
+    info_reader = csv.reader(csvfile, dialect="unix", delimiter=",", quotechar='"')
+    for row in info_reader:
+        pool_id = row[0]
+        pool = list(
+            filter(lambda value: value != "", map(lambda value: value.strip(), row[1:]))
+        )
+        sample_pools[pool_id] = pool
+
+
+# Clusters sample pools.
+for sample_id, sample_pool in sample_pools.items():
+    cluster_pool(sample_id, sample_pool)
+
+
+# Iterates over all sample directories and processes them conserving the directory structure.
+# for root, dirs, files in os.walk(INPUT_FOLDER):
+#     for file in files:
+#         if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
+#             file_path_input = os.path.join(root, file)
+#             output_folder_path = os.path.join(
+#                 MOUNT_PATHS["output"], root.removeprefix(INPUT_FOLDER)
+#             )
+#             os.makedirs(output_folder_path, exist_ok=True)
+#             process_data(file_path_input, output_folder_path)
