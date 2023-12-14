@@ -226,39 +226,76 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
                 f"{output_folder_path}/marker_genes_resolution_1_00_{sanitised_cell_type}.svg"
             )
 
-RESOLUTIONS_PER_ITERATION = 4;
+RESOLUTIONS_PER_ITERATION = 64;
 STARTING_RESOLUTION_MIN = 0.1;
-STARTING_RESOLUTION_MAX = 1.0;
-MAX_ITERATIONS = 5;
+STARTING_RESOLUTION_MAX = 2.0;
+MAX_ITERATIONS = 1;
+STABILITY_SLIDING_WINDOW = 3;
 
 def determine_optimal_clusters(adata: anndata.AnnData):
     """
-    Itertively determines the otpimal resolution for clustering.
+    Itertively determines the optimal resolution for clustering.
     """
     print("Optimising resolution...")
     current_iteration = 1
     min_resolution = STARTING_RESOLUTION_MIN
     max_resolution = STARTING_RESOLUTION_MAX
+    # Copies AnnData here once instead of in the actual loop where 
+    # needed to mitigate an associated memory leak.
+    adata_tmp = adata.copy()
     while current_iteration <= MAX_ITERATIONS:
         print(f"Iteration {current_iteration}/{MAX_ITERATIONS}")
         current_iteration += 1
         step_increase = (max_resolution - min_resolution) / (RESOLUTIONS_PER_ITERATION - 1)
-        for resolution in np.arange(min_resolution, max_resolution, step_increase):
+        resolutions = [min_resolution + step_increase * i for i in range(RESOLUTIONS_PER_ITERATION)]
+        last_aggregate = None 
+        stabilities = []
+        for resolution in resolutions:
             print(f"Testing resolution {resolution}")
-            adata_tmp = adata.copy()
             sc.tl.leiden(adata_tmp, key_added="leiden_tmp", resolution=resolution)
-            print(resolution, flush=True)
-            group_clusters(adata_tmp)
+            current_aggregate = aggregate_clusters(adata_tmp)
+            if last_aggregate is not None:
+                stability = calc_stability(last_aggregate, current_aggregate)
+                stabilities.append(stability)
+                print(f"\tOverall stability: {stability}")
+            last_aggregate = current_aggregate
+    sliding_window_normalisation = []
+    for i in range(len(stabilities) - STABILITY_SLIDING_WINDOW + 1):
+        current_window = stabilities[i: i + STABILITY_SLIDING_WINDOW]
+        sliding_window_normalisation.append(sum(current_window) / STABILITY_SLIDING_WINDOW)
+    print(f"\tNormalised stability: {sliding_window_normalisation}")
 
-def group_clusters(adata: anndata.AnnData):
+
+def aggregate_clusters(adata: anndata.AnnData):
     """
-    Groups cells into clusters.
+    Aggregates cell clusters.
     """
-    print("Optimising resolution...")
-    clusters = adata.obs["leiden_tmp"]
-    print(type(clusters))
-    for cluster in clusters:
-        print(cluster)
+    print("\tAggregating cell clusters...")
+    aggregate = {}
+    for barcode, cluster in adata.obs["leiden_tmp"].items():
+        if cluster in aggregate:
+            aggregate[cluster].add(barcode)
+        else:
+            aggregate[cluster] = {barcode}
+    return aggregate
+
+
+def calc_stability(low_resolution, high_resolution):
+    """
+    Calculates the overall cluster stability between two resolutions.
+    """
+    print("\tCalulating stability...")
+    cluster_stabilities = []
+    for query_set in high_resolution.values():
+        tmp_cluster_stability = []
+        for reference_set in low_resolution.values():
+            overlap = query_set.intersection(reference_set)
+            tmp_cluster_stability.append(len(overlap)/len(query_set))
+        # Use the maximum overlap found to calculate the cluster stability.
+        cluster_stabilities.append(max(tmp_cluster_stability))
+    print(f"\tNumber of clusters: {len(cluster_stabilities)} ; stabilities: {cluster_stabilities}", flush=True)
+    return sum(cluster_stabilities) / len(cluster_stabilities)
+ 
 
 
 print("Parsing information for sample clustering...")
