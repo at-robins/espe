@@ -177,6 +177,7 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
                 n_pcs = 30
             sc.pp.neighbors(adata_subset, n_pcs=n_pcs)
             sc.tl.umap(adata_subset)
+            determine_optimal_clusters(adata_subset)
             sc.tl.leiden(adata_subset, key_added="leiden_res0_25", resolution=0.25)
             sc.tl.leiden(adata_subset, key_added="leiden_res0_50", resolution=0.5)
             sc.tl.leiden(adata_subset, key_added="leiden_res1_00", resolution=1.0)
@@ -224,6 +225,40 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
             fig.savefig(
                 f"{output_folder_path}/marker_genes_resolution_1_00_{sanitised_cell_type}.svg"
             )
+
+RESOLUTIONS_PER_ITERATION = 4;
+STARTING_RESOLUTION_MIN = 0.1;
+STARTING_RESOLUTION_MAX = 1.0;
+MAX_ITERATIONS = 5;
+
+def determine_optimal_clusters(adata: anndata.AnnData):
+    """
+    Itertively determines the otpimal resolution for clustering.
+    """
+    print("Optimising resolution...")
+    current_iteration = 1
+    min_resolution = STARTING_RESOLUTION_MIN
+    max_resolution = STARTING_RESOLUTION_MAX
+    while current_iteration <= MAX_ITERATIONS:
+        print(f"Iteration {current_iteration}/{MAX_ITERATIONS}")
+        current_iteration += 1
+        step_increase = (max_resolution - min_resolution) / (RESOLUTIONS_PER_ITERATION - 1)
+        for resolution in np.arange(min_resolution, max_resolution, step_increase):
+            print(f"Testing resolution {resolution}")
+            adata_tmp = adata.copy()
+            sc.tl.leiden(adata_tmp, key_added="leiden_tmp", resolution=resolution)
+            print(resolution, flush=True)
+            group_clusters(adata_tmp)
+
+def group_clusters(adata: anndata.AnnData):
+    """
+    Groups cells into clusters.
+    """
+    print("Optimising resolution...")
+    clusters = adata.obs["leiden_tmp"]
+    print(type(clusters))
+    for cluster in clusters:
+        print(cluster)
 
 
 print("Parsing information for sample clustering...")
