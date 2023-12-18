@@ -178,7 +178,10 @@ def cluster_pool(sample_id: str, sample_pool: [str], metrics_writer):
             sc.pp.neighbors(adata_subset, n_pcs=n_pcs)
             sc.tl.umap(adata_subset)
             determine_optimal_clusters(
-                adata_subset, f"{sample_id}_{cell_type}", metrics_writer
+                adata_subset,
+                f"{sample_id}_{cell_type}",
+                output_folder_path,
+                metrics_writer,
             )
             sc.tl.leiden(adata_subset, key_added="leiden_res0_25", resolution=0.25)
             sc.tl.leiden(adata_subset, key_added="leiden_res0_50", resolution=0.5)
@@ -229,15 +232,15 @@ def cluster_pool(sample_id: str, sample_pool: [str], metrics_writer):
             )
 
 
-RESOLUTIONS_PER_ITERATION = 64
-STARTING_RESOLUTION_MIN = 0.1
+RESOLUTIONS_PER_ITERATION = 100
+STARTING_RESOLUTION_MIN = 0.0
 STARTING_RESOLUTION_MAX = 2.0
 MAX_ITERATIONS = 1
 STABILITY_SLIDING_WINDOW = 3
 
 
 def determine_optimal_clusters(
-    adata: anndata.AnnData, sample_name: str, metrics_writer
+    adata: anndata.AnnData, sample_name: str, output_folder_path, metrics_writer
 ):
     """
     Itertively determines the optimal resolution for clustering.
@@ -259,27 +262,107 @@ def determine_optimal_clusters(
             min_resolution + step_increase * i for i in range(RESOLUTIONS_PER_ITERATION)
         ]
         last_aggregate = None
-        stabilities = []
+        # The initial stability is estiamted as 1.
+        stabilities = [1.0]
+        aggregates = {}
         for resolution in resolutions:
             print(f"Testing resolution {resolution}")
             sc.tl.leiden(adata_tmp, key_added="leiden_tmp", resolution=resolution)
             # On population basis.
             current_aggregate = aggregate_clusters(adata_tmp)
+            insert_or_append_aggregate(
+                aggregates=aggregates,
+                new_aggregate=current_aggregate,
+                new_resolution=resolution,
+            )
             if last_aggregate is not None:
                 stability = calc_stability(last_aggregate, current_aggregate)
                 stabilities.append(stability)
-                metrics_writer.writerow(
-                    [sample_name, "Stability", resolution, stability]
-                )
+                # metrics_writer.writerow(
+                #     [sample_name, "Stability", resolution, stability]
+                # )
                 print(f"\tOverall stability: {stability}")
             last_aggregate = current_aggregate
-    sliding_window_normalisation = []
-    for i in range(len(stabilities) - STABILITY_SLIDING_WINDOW + 1):
-        current_window = stabilities[i : i + STABILITY_SLIDING_WINDOW]
-        sliding_window_normalisation.append(
-            sum(current_window) / STABILITY_SLIDING_WINDOW
-        )
-    print(f"\tNormalised stability: {sliding_window_normalisation}")
+
+        ordered_n_cluster_list = sorted(aggregates.keys(), reverse=True)
+        final_stabilites: [ClusterProperties] = []
+        if len(ordered_n_cluster_list) == 0:
+            # This should never happen, but just in case provide a dummy value.
+            final_stabilites = [
+                ClusterProperties(
+                    number_of_clusters=1,
+                    resolution=STARTING_RESOLUTION_MAX,
+                    stability=1.0,
+                )
+            ]
+        elif len(ordered_n_cluster_list) == 1:
+            # If there is only 1 cluster, the stability is 1 as there is nothing to compare it to.
+            final_stabilites = [
+                ClusterProperties(
+                    number_of_clusters=ordered_n_cluster_list[0],
+                    resolution=STARTING_RESOLUTION_MAX,
+                    stability=1.0,
+                )
+            ]
+        else:
+            low_ordered = [
+                None,
+                *ordered_n_cluster_list[0 : len(ordered_n_cluster_list) - 1],
+            ]
+            do_on_first_iteration: bool = True
+            for low_clusters, high_clusters in zip(low_ordered, ordered_n_cluster_list):
+                print(
+                    f"\tComparing the following number of clusters {low_clusters} vs. {high_clusters}"
+                )
+                if low_clusters is None:
+                    calc_stabilities(
+                        aggregates[low_clusters], aggregates[high_clusters]
+                    )
+                elif do_on_first_iteration:
+                    do_on_first_iteration = False
+                    print(len(aggregates[low_clusters]))
+                    print(len(aggregates[high_clusters]))
+                    tmp_stability_combi: StabilityCombination = calc_stabilities(
+                        aggregates[low_clusters], aggregates[high_clusters]
+                    )
+                    final_stabilites.append(
+                        ClusterProperties(
+                            number_of_clusters=high_clusters,
+                            resolution=tmp_stability_combi.resolution_high,
+                            stability=tmp_stability_combi.stability,
+                        )
+                    )
+                    aggregates[low_clusters] = [aggregates[low_clusters][tmp_stability_combi.index_low]]
+                else:
+                    tmp_stability_combi: StabilityCombination = calc_stabilities(
+                        aggregates[low_clusters], aggregates[high_clusters]
+                    )
+                    # final_stabilites.append()
+        # sns.lineplot(x=resolutions, y=stabilities).get_figure().savefig(
+        #     os.path.join(
+        #         output_folder_path,
+        #         f"{pathvalidate.sanitize_filename(sample_name)}_lineplot.svg",
+        #     )
+        # )
+    # sliding_window_normalisation = []
+    # for i in range(len(stabilities) - STABILITY_SLIDING_WINDOW + 1):
+    #     current_window = stabilities[i : i + STABILITY_SLIDING_WINDOW]
+    #     sliding_window_normalisation.append(
+    #         sum(current_window) / STABILITY_SLIDING_WINDOW
+    #     )
+    # print(f"\tNormalised stability: {sliding_window_normalisation}")
+
+
+def insert_or_append_aggregate(aggregates, new_aggregate, new_resolution):
+    """
+    Aggregates cell clusters.
+    """
+    aggregated_clusters = new_aggregate.values()
+    n_clusters = len(aggregated_clusters)
+    if n_clusters in aggregates:
+        aggregates[n_clusters].append((new_resolution, aggregated_clusters))
+    else:
+        aggregates[n_clusters] = [(new_resolution, aggregated_clusters)]
 
 
 def aggregate_clusters(adata: anndata.AnnData):
@@ -296,11 +379,58 @@ def aggregate_clusters(adata: anndata.AnnData):
     return aggregate
 
 
+class StabilityCombination:
+    def __init__(index_low, resolution_low, index_high, resolution_high, stability):
+        self.index_low = index_low
+        self.resolution_low = resolution_low
+        self.index_high = index_high
+        self.resolution_high = resolution_high
+        self.stability = stability
+
+
+class ClusterProperties:
+    def __init__(number_of_clusters, resolution, stability):
+        self.number_of_clusters = number_of_clusters
+        self.resolution = resolution
+        self.stability = stability
+
+
+def calc_stabilities(low_resolutions, high_resolutions) -> StabilityCombination:
+    """
+    Calculates the ideal cluster stability between two resolution series.
+    """
+    print("\tCalculating stabilities...")
+    highest_cluster_stability: StabilityCombination = None
+    for ih, high_resolution in enumerate(high_resolution.values()):
+        for il, low_resolution in enumerate(low_resolution.values()):
+            current_cluster_stability = calc_stability(
+                low_resolution[1], high_resolution[1]
+            )
+            # Select the combination with the highest stability and combined resolution.
+            if (
+                highest_cluster_stability is None
+                or highest_cluster_stability.stability > current_cluster_stability
+                or (
+                    highest_cluster_stability.stability == current_cluster_stability
+                    and low_resolution[0] + high_resolution[0]
+                    > highest_cluster_stability.resolution_low + resolution_high
+                )
+            ):
+                highest_cluster_stability = StabilityCombination(
+                    il,
+                    low_resolution[0],
+                    ih,
+                    high_resolution[0],
+                    current_cluster_stability,
+                )
+    return highest_cluster_stability
+
+
 def calc_stability(low_resolution, high_resolution):
     """
     Calculates the overall cluster stability between two resolutions.
     """
-    print("\tCalulating stability...")
+    print("\tCalculating stability...")
     cluster_stabilities = []
     for query_set in high_resolution.values():
         tmp_cluster_stability = []
