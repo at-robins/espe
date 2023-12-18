@@ -107,7 +107,7 @@ def process_data(file_path_input, output_folder_path):
             )
 
 
-def cluster_pool(sample_id: str, sample_pool: [str]):
+def cluster_pool(sample_id: str, sample_pool: [str], metrics_writer):
     """
     Performs clustering.
     """
@@ -130,7 +130,7 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
     print("\tReading data...")
     adatas = list(
         map(
-            lambda input_file: anndata.read_h5ad(input_file),
+            anndata.read_h5ad,
             input_files,
         )
     )
@@ -177,7 +177,9 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
                 n_pcs = 30
             sc.pp.neighbors(adata_subset, n_pcs=n_pcs)
             sc.tl.umap(adata_subset)
-            determine_optimal_clusters(adata_subset)
+            determine_optimal_clusters(
+                adata_subset, f"{sample_id}_{cell_type}", metrics_writer
+            )
             sc.tl.leiden(adata_subset, key_added="leiden_res0_25", resolution=0.25)
             sc.tl.leiden(adata_subset, key_added="leiden_res0_50", resolution=0.5)
             sc.tl.leiden(adata_subset, key_added="leiden_res1_00", resolution=1.0)
@@ -226,13 +228,17 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
                 f"{output_folder_path}/marker_genes_resolution_1_00_{sanitised_cell_type}.svg"
             )
 
-RESOLUTIONS_PER_ITERATION = 64;
-STARTING_RESOLUTION_MIN = 0.1;
-STARTING_RESOLUTION_MAX = 2.0;
-MAX_ITERATIONS = 1;
-STABILITY_SLIDING_WINDOW = 3;
 
-def determine_optimal_clusters(adata: anndata.AnnData):
+RESOLUTIONS_PER_ITERATION = 64
+STARTING_RESOLUTION_MIN = 0.1
+STARTING_RESOLUTION_MAX = 2.0
+MAX_ITERATIONS = 1
+STABILITY_SLIDING_WINDOW = 3
+
+
+def determine_optimal_clusters(
+    adata: anndata.AnnData, sample_name: str, metrics_writer
+):
     """
     Itertively determines the optimal resolution for clustering.
     """
@@ -240,29 +246,39 @@ def determine_optimal_clusters(adata: anndata.AnnData):
     current_iteration = 1
     min_resolution = STARTING_RESOLUTION_MIN
     max_resolution = STARTING_RESOLUTION_MAX
-    # Copies AnnData here once instead of in the actual loop where 
+    # Copies AnnData here once instead of in the actual loop where
     # needed to mitigate an associated memory leak.
     adata_tmp = adata.copy()
     while current_iteration <= MAX_ITERATIONS:
         print(f"Iteration {current_iteration}/{MAX_ITERATIONS}")
         current_iteration += 1
-        step_increase = (max_resolution - min_resolution) / (RESOLUTIONS_PER_ITERATION - 1)
-        resolutions = [min_resolution + step_increase * i for i in range(RESOLUTIONS_PER_ITERATION)]
-        last_aggregate = None 
+        step_increase = (max_resolution - min_resolution) / (
+            RESOLUTIONS_PER_ITERATION - 1
+        )
+        resolutions = [
+            min_resolution + step_increase * i for i in range(RESOLUTIONS_PER_ITERATION)
+        ]
+        last_aggregate = None
         stabilities = []
         for resolution in resolutions:
             print(f"Testing resolution {resolution}")
             sc.tl.leiden(adata_tmp, key_added="leiden_tmp", resolution=resolution)
+            # On population basis.
             current_aggregate = aggregate_clusters(adata_tmp)
             if last_aggregate is not None:
                 stability = calc_stability(last_aggregate, current_aggregate)
                 stabilities.append(stability)
+                metrics_writer.writerow(
+                    [sample_name, "Stability", resolution, stability]
+                )
                 print(f"\tOverall stability: {stability}")
             last_aggregate = current_aggregate
     sliding_window_normalisation = []
     for i in range(len(stabilities) - STABILITY_SLIDING_WINDOW + 1):
-        current_window = stabilities[i: i + STABILITY_SLIDING_WINDOW]
-        sliding_window_normalisation.append(sum(current_window) / STABILITY_SLIDING_WINDOW)
+        current_window = stabilities[i : i + STABILITY_SLIDING_WINDOW]
+        sliding_window_normalisation.append(
+            sum(current_window) / STABILITY_SLIDING_WINDOW
+        )
     print(f"\tNormalised stability: {sliding_window_normalisation}")
 
 
@@ -290,12 +306,14 @@ def calc_stability(low_resolution, high_resolution):
         tmp_cluster_stability = []
         for reference_set in low_resolution.values():
             overlap = query_set.intersection(reference_set)
-            tmp_cluster_stability.append(len(overlap)/len(query_set))
+            tmp_cluster_stability.append(len(overlap) / len(query_set))
         # Use the maximum overlap found to calculate the cluster stability.
         cluster_stabilities.append(max(tmp_cluster_stability))
-    print(f"\tNumber of clusters: {len(cluster_stabilities)} ; stabilities: {cluster_stabilities}", flush=True)
+    print(
+        f"\tNumber of clusters: {len(cluster_stabilities)} ; stabilities: {cluster_stabilities}",
+        flush=True,
+    )
     return sum(cluster_stabilities) / len(cluster_stabilities)
- 
 
 
 print("Parsing information for sample clustering...")
@@ -309,10 +327,23 @@ with open(CLUSTERING_INFO_FILE, newline="", encoding="utf-8") as csvfile:
         )
         sample_pools[pool_id] = pool
 
-
-# Clusters sample pools.
-for sample_id, sample_pool in sample_pools.items():
-    cluster_pool(sample_id, sample_pool)
+with open(
+    f"{MOUNT_PATHS['output']}/metrics.csv", mode="w", newline="", encoding="utf-8"
+) as csvfile:
+    metrics_writer = csv.writer(
+        csvfile, dialect="unix", delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
+    )
+    metrics_writer.writerow(
+        [
+            "Sample",
+            "Analysis",
+            "Resolution",
+            "Stability",
+        ]
+    )
+    # Clusters sample pools.
+    for sample_id, sample_pool in sample_pools.items():
+        cluster_pool(sample_id, sample_pool, metrics_writer)
 
 
 # Iterates over all sample directories and processes them conserving the directory structure.
