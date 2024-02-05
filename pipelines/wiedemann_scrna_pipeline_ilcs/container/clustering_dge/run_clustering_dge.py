@@ -69,7 +69,7 @@ def plot_genes(input_directory, output_folder_path, sample, cell_type):
                         genes_down.append(gene)
    
                     if gene not in adata.var_names:
-                        print(f"\tGene {gene} not present in data. Adding with value of 0...")
+                        print(f"\tGene {gene} not present in data. Adding with value of NaN...")
                         adata.obs[gene] = [np.nan] * adata.n_obs
 
         genes_up.sort()

@@ -3,22 +3,22 @@
   "name": "Wiedemann single cell RNA-Seq pipeline for group 1 ILC analysis",
   "description": "<espe-import>pipeline_description.html</espe-import>",
     "steps": [
-    {
-      "id": "ilc_composition",
-      "name": "Group 1 ILC composition",
-      "description": "<espe-import>step_ilc_composition_description.html</espe-import>",
-      "container": "ilc_composition",
-      "dependencies": [],
-      "variables": []
-    },
-    {
-      "id": "clustering_cell_type",
-      "name": "Clustering",
-      "description": "<espe-import>step_clustering_cell_type_description.html</espe-import>",
-      "container": "clustering_cell_type",
-      "dependencies": ["ilc_composition"],
-      "variables": []
-    },
+      {
+        "id": "clustering_cell_type",
+        "name": "Clustering",
+        "description": "<espe-import>step_clustering_cell_type_description.html</espe-import>",
+        "container": "clustering_cell_type",
+        "dependencies": [],
+        "variables": []
+      },
+      {
+        "id": "marker_expression",
+        "name": "Marker expression",
+        "description": "<espe-import>step_marker_expression_description.html</espe-import>",
+        "container": "marker_expression",
+        "dependencies": ["clustering_cell_type"],
+        "variables": []
+      },
     {
       "id": "cluster_comparison",
       "name": "Cluster comparison",
@@ -32,7 +32,7 @@
       "name": "Pseudo-bulk aggregation",
       "description": "<espe-import>step_pseudobulk_generation_description.html</espe-import>",
       "container": "pseudobulk_generation",
-      "dependencies": ["ilc_composition"],
+      "dependencies": [],
       "variables": []
     },
     {

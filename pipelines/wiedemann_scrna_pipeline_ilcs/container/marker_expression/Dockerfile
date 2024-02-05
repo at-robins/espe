@@ -7,5 +7,5 @@ RUN yes | pip install numpy==1.26.1 --exists-action i
 RUN yes | pip install scanpy[leiden]==1.9.6 --exists-action i
 RUN yes | pip install seaborn==0.12.2 --exists-action i
 
-COPY run_ilc_composition.py /run.py
+COPY run_marker_expression.py /run.py
 ENTRYPOINT ["python", "run.py"]
