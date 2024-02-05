@@ -20,6 +20,14 @@
       "variables": []
     },
     {
+      "id": "cluster_comparison",
+      "name": "Cluster comparison",
+      "description": "<espe-import>step_cluster_comparison_description.html</espe-import>",
+      "container": "cluster_comparison",
+      "dependencies": ["clustering_cell_type"],
+      "variables": []
+    },
+    {
       "id": "pseudobulk_generation",
       "name": "Pseudo-bulk aggregation",
       "description": "<espe-import>step_pseudobulk_generation_description.html</espe-import>",

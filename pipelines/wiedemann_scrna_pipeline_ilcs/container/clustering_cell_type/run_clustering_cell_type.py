@@ -181,7 +181,6 @@ def cluster_pool(sample_id: str, sample_pool: [str], metrics_writer):
                 adata_subset,
                 f"{sample_id}_{cell_type}",
                 output_folder_path,
-                metrics_writer,
             )
             sc.tl.leiden(adata_subset, key_added="leiden_res0_25", resolution=0.25)
             sc.tl.leiden(adata_subset, key_added="leiden_res0_50", resolution=0.5)
@@ -240,7 +239,7 @@ STABILITY_SLIDING_WINDOW = 3
 
 
 def determine_optimal_clusters(
-    adata: anndata.AnnData, sample_name: str, output_folder_path, metrics_writer
+    adata: anndata.AnnData, sample_name: str, output_folder_path
 ):
     """
     Itertively determines the optimal resolution for clustering.
@@ -252,105 +251,30 @@ def determine_optimal_clusters(
     # Copies AnnData here once instead of in the actual loop where
     # needed to mitigate an associated memory leak.
     adata_tmp = adata.copy()
-    while current_iteration <= MAX_ITERATIONS:
-        print(f"Iteration {current_iteration}/{MAX_ITERATIONS}")
-        current_iteration += 1
-        step_increase = (max_resolution - min_resolution) / (
-            RESOLUTIONS_PER_ITERATION - 1
+    cluster_data_path = os.path.join(output_folder_path, f"{pathvalidate.sanitize_filename(sample_name)}.csv")
+    with open(
+        cluster_data_path, mode="w", newline="", encoding="utf-8"
+    ) as csvfile:
+        metrics_writer = csv.writer(
+            csvfile, dialect="unix", delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
         )
-        resolutions = [
-            min_resolution + step_increase * i for i in range(RESOLUTIONS_PER_ITERATION)
-        ]
-        last_aggregate = None
-        # The initial stability is estiamted as 1.
-        stabilities = [1.0]
-        aggregates = {}
-        for resolution in resolutions:
-            print(f"Testing resolution {resolution}")
-            sc.tl.leiden(adata_tmp, key_added="leiden_tmp", resolution=resolution)
-            # On population basis.
-            current_aggregate = aggregate_clusters(adata_tmp)
-            insert_or_append_aggregate(
-                aggregates=aggregates,
-                new_aggregate=current_aggregate,
-                new_resolution=resolution,
+        while current_iteration <= MAX_ITERATIONS:
+            print(f"Iteration {current_iteration}/{MAX_ITERATIONS}")
+            current_iteration += 1
+            step_increase = (max_resolution - min_resolution) / (
+                RESOLUTIONS_PER_ITERATION - 1
             )
-            if last_aggregate is not None:
-                stability = calc_stability(last_aggregate, current_aggregate)
-                stabilities.append(stability)
-                # metrics_writer.writerow(
-                #     [sample_name, "Stability", resolution, stability]
-                # )
-                print(f"\tOverall stability: {stability}")
-            last_aggregate = current_aggregate
-
-        ordered_n_cluster_list = sorted(aggregates.keys(), reverse=True)
-        final_stabilites: [ClusterProperties] = []
-        if len(ordered_n_cluster_list) == 0:
-            # This should never happen, but just in case provide a dummy value.
-            final_stabilites = [
-                ClusterProperties(
-                    number_of_clusters=1,
-                    resolution=STARTING_RESOLUTION_MAX,
-                    stability=1.0,
-                )
+            resolutions = [
+                min_resolution + step_increase * i for i in range(RESOLUTIONS_PER_ITERATION)
             ]
-        elif len(ordered_n_cluster_list) == 1:
-            # If there is only 1 cluster, the stability is 1 as there is nothing to compare it to.
-            final_stabilites = [
-                ClusterProperties(
-                    number_of_clusters=ordered_n_cluster_list[0],
-                    resolution=STARTING_RESOLUTION_MAX,
-                    stability=1.0,
+            for resolution in resolutions:
+                print(f"Testing resolution {resolution}")
+                sc.tl.leiden(adata_tmp, key_added="leiden_tmp", resolution=resolution)
+                # On population basis.
+                # current_aggregate = aggregate_clusters(adata_tmp)
+                metrics_writer.writerow(
+                    [resolution, *adata_tmp.obs["leiden_tmp"].values]
                 )
-            ]
-        else:
-            low_ordered = [
-                None,
-                *ordered_n_cluster_list[0 : len(ordered_n_cluster_list) - 1],
-            ]
-            do_on_first_iteration: bool = True
-            for low_clusters, high_clusters in zip(low_ordered, ordered_n_cluster_list):
-                print(
-                    f"\tComparing the following number of clusters {low_clusters} vs. {high_clusters}"
-                )
-                if low_clusters is None:
-                    calc_stabilities(
-                        aggregates[low_clusters], aggregates[high_clusters]
-                    )
-                elif do_on_first_iteration:
-                    do_on_first_iteration = False
-                    print(len(aggregates[low_clusters]))
-                    print(len(aggregates[high_clusters]))
-                    tmp_stability_combi: StabilityCombination = calc_stabilities(
-                        aggregates[low_clusters], aggregates[high_clusters]
-                    )
-                    final_stabilites.append(
-                        ClusterProperties(
-                            number_of_clusters=high_clusters,
-                            resolution=tmp_stability_combi.resolution_high,
-                            stability=tmp_stability_combi.stability,
-                        )
-                    )
-                    aggregates[low_clusters] = [aggregates[low_clusters][tmp_stability_combi.index_low]]
-                else:
-                    tmp_stability_combi: StabilityCombination = calc_stabilities(
-                        aggregates[low_clusters], aggregates[high_clusters]
-                    )
-                    # final_stabilites.append()
-        # sns.lineplot(x=resolutions, y=stabilities).get_figure().savefig(
-        #     os.path.join(
-        #         output_folder_path,
-        #         f"{pathvalidate.sanitize_filename(sample_name)}_lineplot.svg",
-        #     )
-        # )
-    # sliding_window_normalisation = []
-    # for i in range(len(stabilities) - STABILITY_SLIDING_WINDOW + 1):
-    #     current_window = stabilities[i : i + STABILITY_SLIDING_WINDOW]
-    #     sliding_window_normalisation.append(
-    #         sum(current_window) / STABILITY_SLIDING_WINDOW
-    #     )
-    # print(f"\tNormalised stability: {sliding_window_normalisation}")
 
 
 def insert_or_append_aggregate(aggregates, new_aggregate, new_resolution):
@@ -463,14 +387,14 @@ with open(
     metrics_writer = csv.writer(
         csvfile, dialect="unix", delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
     )
-    metrics_writer.writerow(
-        [
-            "Sample",
-            "Analysis",
-            "Resolution",
-            "Stability",
-        ]
-    )
+    # metrics_writer.writerow(
+    #     [
+    #         "Sample",
+    #         "Analysis",
+    #         "Resolution",
+    #         "Stability",
+    #     ]
+    # )
     # Clusters sample pools.
     for sample_id, sample_pool in sample_pools.items():
         cluster_pool(sample_id, sample_pool, metrics_writer)
