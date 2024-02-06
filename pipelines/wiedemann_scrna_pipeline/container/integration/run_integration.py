@@ -7,6 +7,7 @@ import json
 import logging
 import numpy as np
 import os
+import pandas as pd
 import pathvalidate
 import scanpy as sc
 import seaborn as sns
@@ -16,7 +17,8 @@ MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["doublet_removal"] + "/"
 SAMPLE_INFO_DIRECTORY = "sample directory"
 SAMPLE_INFO_TYPE = "sample type"
-DEFAULT_BATCH_KEY = "batch"
+BATCH_KEY = "batch"
+BATCH_TYPE_KEY = "batch_type"
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
@@ -52,9 +54,11 @@ for key, values in sample_info_map.items():
         axis=0,
         join="outer",
         merge=None,
-        label=DEFAULT_BATCH_KEY,
+        label=BATCH_KEY,
         keys=values,
     )
+    adata_merged.obs[BATCH_TYPE_KEY] = pd.Categorical(np.repeat(key, adata_merged.n_obs))
+    
     print("\tWriting merged data to file...")
     output_folder_path = os.path.join(
         MOUNT_PATHS["output"], pathvalidate.sanitize_filename(key)
