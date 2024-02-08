@@ -10,8 +10,12 @@ import scanpy as sc
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["input"] + "/"
-BATCH_TYPE_KEY = "batch_type"
-BATCH_KEY = "batch"
+
+# The replicates.
+REPLICATE_KEY = "replicate_name"
+# The samples that consists of different replicates.
+SAMPLE_TYPE_KEY = "sample_type"
+
 OUTPUT_SAMPLE_KEY = "sample"
 OUTPUT_REPLICATE_KEY = "replicate"
 OUTPUT_CELL_NUMBER = "cellcount"
@@ -28,7 +32,7 @@ def aggregate_pseudobulk_data(file_path_sample):
     print("\tReading data...")
     adata = anndata.read_h5ad(file_path_sample)
 
-    batches = adata.obs[BATCH_KEY].cat.categories
+    batches = adata.obs[REPLICATE_KEY].cat.categories
 
     pseudobulk_dataframe = pd.DataFrame()
     sample_array = []
@@ -37,14 +41,14 @@ def aggregate_pseudobulk_data(file_path_sample):
 
     print(f"\tNumber of total observations: {adata.n_obs}")
     for batch in batches:
-        print(f"\tProcessing batch {batch}")
-        batch_mask = adata.obs[BATCH_KEY] == batch
+        print(f"\tProcessing replicate {batch}")
+        batch_mask = adata.obs[REPLICATE_KEY] == batch
         adata_subset = adata[batch_mask]
         n_obs_subset = adata_subset.n_obs
         print(f"\t\tNumber of subset observations: {n_obs_subset}")
         if n_obs_subset > 0:
             # A single batch / replicate there can only have one sample type.
-            sample_name = adata.obs[BATCH_TYPE_KEY].cat.categories[0]
+            sample_name = adata.obs[SAMPLE_TYPE_KEY].cat.categories[0]
             aggregated_row = adata_subset.to_df().agg(np.sum)
             sample_array.append(sample_name)
             replicate_array.append(batch)

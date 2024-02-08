@@ -23,7 +23,7 @@ INPUT_FOLDER = MOUNT_PATHS["dependencies"]["feature_selection"] + "/"
 BATCHED_SUBFOLDER = "batched"
 INPUT_FOLDER_BATCHED = f"{INPUT_FOLDER}{BATCHED_SUBFOLDER}/"
 
-DEFAULT_BATCH_KEY = "batch"
+DEFAULT_BATCH_KEY = "replicate_name"
 
 # Setup of rpy2.
 rcb.logger.setLevel(logging.INFO)
@@ -49,7 +49,6 @@ def process_data(input_file_path, output_folder_path):
     print(f"Processing file {input_file_path}", flush=True)
     print("\tReading data...")
     adata = anndata.read_h5ad(input_file_path)
-    adata = adata[:, adata.var["highly_deviant"]].copy()
 
     print(f"\tUsing data {adata.n_vars} features for {adata.n_obs} cells")
     sciber_genes = adata.var_names
@@ -109,7 +108,8 @@ def process_data(input_file_path, output_folder_path):
         adata_subsets,
         axis=0,
         join="outer",
-        merge=None,
+        merge="same",
+        uns_merge="same",
         label=None,
         keys=None,
     )

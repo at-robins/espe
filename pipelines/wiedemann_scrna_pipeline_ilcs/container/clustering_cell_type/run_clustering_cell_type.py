@@ -7,6 +7,7 @@ import json
 import logging
 import numpy as np
 import os
+import pandas as pd
 import pathvalidate
 import scanpy as sc
 import seaborn as sns
@@ -15,6 +16,14 @@ MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["input"] + "/"
 CLUSTERING_INFO_FILE = os.path.join(MOUNT_PATHS["input"], "sample_clustering.csv")
 MINIMUM_CELL_NUMBER = 20
+# The replicates.
+REPLICATE_KEY = "replicate_name"
+# The samples that consists of different replicates.
+SAMPLE_TYPE_KEY = "sample_type"
+# The clustering information.
+CLUSTER_KEY = "leiden_clustering"
+# The sample groups that have been clustered together.
+CLUSTERING_GROUP_KEY = "clustering_group"
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
@@ -80,13 +89,16 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
         join="outer",
         merge="same",
         uns_merge="same",
-        label="sample",
-        keys=sample_pool,
+        label=None,
+        keys=None,
     )
     adata_pool.var["highly_variable"] = combined_deviant_genes
     adata_pool.layers["counts"] = adata_pool.X
     np.nan_to_num(adata_pool.layers["log1p_norm"], copy=False, nan=0.0)
     adata_pool.X = adata_pool.layers["log1p_norm"]
+    adata_pool.obs[CLUSTERING_GROUP_KEY] = pd.Categorical(
+        np.repeat(sample_id, adata_pool.n_obs)
+    )
 
     print(f"\tPerforming clustering for {adata_pool.n_obs} cells...", flush=True)
     if adata_pool.n_obs < MINIMUM_CELL_NUMBER:
@@ -100,20 +112,20 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
             n_pcs = 30
         sc.pp.neighbors(adata_pool, n_pcs=n_pcs)
         sc.tl.umap(adata_pool)
-        output_cluster_data(
-            adata_pool,
-            f"{sample_id}",
-            output_folder_path,
-        )
-        sc.tl.leiden(adata_pool, key_added="leiden_clustering", resolution=1.0)
+        # output_cluster_data(
+        #     adata_pool,
+        #     f"{sample_id}",
+        #     output_folder_path,
+        # )
+        sc.tl.leiden(adata_pool, key_added=CLUSTER_KEY, resolution=1.0)
 
         print("\tPlotting data...")
         fig = sc.pl.umap(
             adata_pool,
             color=[
-                "leiden_clustering",
-                "batch",
-                "sample",
+                CLUSTER_KEY,
+                REPLICATE_KEY,
+                SAMPLE_TYPE_KEY,
             ],
             legend_loc="on data",
             show=False,
@@ -130,14 +142,14 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
         print("\tPlotting marker genes...")
         sc.tl.rank_genes_groups(
             adata_pool,
-            groupby="leiden_clustering",
+            groupby=CLUSTER_KEY,
             method="wilcoxon",
             key_added="marker_genes_leiden",
         )
 
         fig = sc.pl.rank_genes_groups_dotplot(
             adata_pool,
-            groupby="leiden_clustering",
+            groupby=CLUSTER_KEY,
             standard_scale="var",
             n_genes=5,
             key="marker_genes_leiden",
@@ -152,9 +164,7 @@ STARTING_RESOLUTION_MIN = 0.0
 STARTING_RESOLUTION_MAX = 2.0
 
 
-def output_cluster_data(
-    adata: anndata.AnnData, sample_name: str, output_folder_path
-):
+def output_cluster_data(adata: anndata.AnnData, sample_name: str, output_folder_path):
     """
     Performs clustering at different resolutions and outputs the resulting data.
     """

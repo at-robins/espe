@@ -97,7 +97,7 @@
       "name": "Clustering",
       "description": "<espe-import>step_clustering_batched_description.html</espe-import>",
       "container": "clustering_batched",
-      "dependencies": ["feature_selection"],
+      "dependencies": ["batch_correction"],
       "variables": []
     },
     {

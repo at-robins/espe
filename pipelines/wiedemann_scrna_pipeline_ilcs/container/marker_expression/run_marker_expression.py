@@ -15,6 +15,13 @@ MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["clustering_cell_type"] + "/"
 MARKER_FILE = os.path.join(MOUNT_PATHS["input"], "markers.csv")
 
+# The replicates.
+REPLICATE_KEY = "replicate_name"
+# The samples that consists of different replicates.
+SAMPLE_TYPE_KEY = "sample_type"
+# The clustering information.
+CLUSTER_KEY = "leiden_clustering"
+
 # Setup of scanpy.
 sc.settings.verbosity = 2
 sc.settings.set_figure_params(
@@ -58,7 +65,7 @@ def process_data(file_path_input, output_folder_path):
     print("\tPlotting data...")
     fig = sc.pl.umap(
         adata,
-        color=["leiden_clustering", "batch", "sample", *genes],
+        color=[CLUSTER_KEY, REPLICATE_KEY, SAMPLE_TYPE_KEY, *genes],
         legend_loc="on data",
         show=False,
         return_fig=True,
