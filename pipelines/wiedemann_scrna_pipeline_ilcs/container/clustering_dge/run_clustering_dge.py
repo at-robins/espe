@@ -14,9 +14,9 @@ import seaborn as sns
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER_CLUSTERING = MOUNT_PATHS["dependencies"]["clustering_cell_type"] + "/"
 INPUT_FOLDER_DGE = MOUNT_PATHS["dependencies"]["differential_gene_expression"] + "/"
-CELL_TYPE_KEY = "cell_type"
 LOG2_FOLD_CHANGE_CUTOFF = 0.5
 FDR_CUTOFF = 0.05
+CLUSTER_KEY = "leiden_clustering"
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
@@ -37,14 +37,14 @@ sc.settings.set_figure_params(
 sc.settings.figdir = MOUNT_PATHS["output"]
 
 
-def plot_genes(input_directory, output_folder_path, sample, cell_type):
+def plot_genes(input_directory, output_folder_path, sample):
     """
     Plots the genes.
     """
     adata_path = os.path.join(
         INPUT_FOLDER_CLUSTERING,
         pathvalidate.sanitize_filename(sample),
-        f"clustered_{pathvalidate.sanitize_filename(cell_type)}.h5ad",
+        "clustered.h5ad",
     )
     print(f"\tReading clustering data {adata_path}...")
     if os.path.exists(adata_path):
@@ -78,15 +78,13 @@ def plot_genes(input_directory, output_folder_path, sample, cell_type):
         print(f"\tUsing upregulated genes {genes_up}...")
         print(f"\tUsing upregulated genes {genes_down}...")
         if adata.n_obs < 20:
-            print("\tNot enough cells. Skipping cell type...")
+            print("\tNot enough cells. Skipping sample...")
         else:
             print("\tPlotting data...")
             fig = sc.pl.umap(
                 adata,
                 color=[
-                    "leiden_res0_25",
-                    "leiden_res0_50",
-                    "leiden_res1_00",
+                    CLUSTER_KEY,
                     "batch",
                     *genes_up,
                 ],
@@ -95,14 +93,12 @@ def plot_genes(input_directory, output_folder_path, sample, cell_type):
                 return_fig=True,
             )
             fig.savefig(
-                f"{output_folder_path}/umap_upregulated_{pathvalidate.sanitize_filename(sample)}_{pathvalidate.sanitize_filename(cell_type)}.svg"
+                f"{output_folder_path}/umap_upregulated_{pathvalidate.sanitize_filename(sample)}.svg"
             )
             fig = sc.pl.umap(
                 adata,
                 color=[
-                    "leiden_res0_25",
-                    "leiden_res0_50",
-                    "leiden_res1_00",
+                    CLUSTER_KEY,
                     "batch",
                     *genes_down,
                 ],
@@ -111,7 +107,7 @@ def plot_genes(input_directory, output_folder_path, sample, cell_type):
                 return_fig=True,
             )
             fig.savefig(
-                f"{output_folder_path}/umap_downregulated_{pathvalidate.sanitize_filename(sample)}_{pathvalidate.sanitize_filename(cell_type)}.svg"
+                f"{output_folder_path}/umap_downregulated_{pathvalidate.sanitize_filename(sample)}.svg"
             )
     else:
         print("\tFile does not exist. Skipping probably due to cell numbers being too low for clustering...")
@@ -132,11 +128,10 @@ def process_data(input_directory, output_folder_path):
         row = next(info_reader) # The file only has one row.
         sample_reference = row["reference sample"]
         sample_test = row["test sample"]
-        cell_type = row["cell type"]
 
-    print(f"\tProcessing samples {sample_reference} and {sample_test} for cell type {cell_type}")
-    plot_genes(input_directory=input_directory, output_folder_path=output_folder_path, sample=sample_reference, cell_type=cell_type)
-    plot_genes(input_directory=input_directory, output_folder_path=output_folder_path, sample=sample_test, cell_type=cell_type)
+    print(f"\tProcessing samples {sample_reference} and {sample_test}")
+    plot_genes(input_directory=input_directory, output_folder_path=output_folder_path, sample=sample_reference)
+    plot_genes(input_directory=input_directory, output_folder_path=output_folder_path, sample=sample_test)
 
 
 # Iterates over all sample directories and processes them conserving the directory structure.

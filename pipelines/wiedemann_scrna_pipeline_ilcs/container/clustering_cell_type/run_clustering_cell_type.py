@@ -88,7 +88,7 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
     np.nan_to_num(adata_pool.layers["log1p_norm"], copy=False, nan=0.0)
     adata_pool.X = adata_pool.layers["log1p_norm"]
 
-    print(f"\tPerform clustering for {adata_pool.n_obs} cells...", flush=True)
+    print(f"\tPerforming clustering for {adata_pool.n_obs} cells...", flush=True)
     if adata_pool.n_obs < MINIMUM_CELL_NUMBER:
         print("\tNot enough cells. Skipping sample...")
     else:

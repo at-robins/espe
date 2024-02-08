@@ -10,19 +10,19 @@ import numpy as np
 import os
 import pandas as pd
 import pathvalidate
-import scanpy as sc
-import seaborn as sns
 import rpy2.rinterface_lib.callbacks as rcb
 import rpy2.robjects as ro
+import scanpy as sc
+import seaborn as sns
 import warnings
 
 from rpy2.robjects.packages import importr
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["pseudobulk_generation"] + "/"
-CELL_TYPE_KEY = "celltype"
 SAMPLE_KEY = "sample"
 REPLICATE_KEY = "replicate"
+VALID_R_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
 
 # Setup of rpy2.
 rcb.logger.setLevel(logging.INFO)
@@ -56,42 +56,43 @@ def convert_string_to_r(val: str) -> str:
     """
     Converts a string to a valid R string.
     """
-    return val.replace(" ", "_")
+    return "".join(list(map(lambda letter: letter if letter in VALID_R_CHARACTERS else "." , val.replace(" ", "_"))))
 
 
 def differential_gene_expression(
     pseudobulk_adata,
     sample_type_reference,
     sample_type_test,
-    cell_type,
     output_folder_path,
 ):
     """
     Performes differential gene expression analysis.
     """
     print(
-        f"Comparing {sample_type_reference} and {sample_type_test} for cell type {cell_type}",
+        f"Comparing {sample_type_reference} and {sample_type_test}...",
         flush=True,
     )
 
     # Subsetting data.
-    sample_reference_mask = adata.obs[SAMPLE_KEY] == sample_type_reference
-    sample_test_mask = adata.obs[SAMPLE_KEY] == sample_type_test
-    cell_type_mask = adata.obs[CELL_TYPE_KEY] == cell_type
-    data_mask = np.logical_and(
-        np.logical_or(sample_reference_mask, sample_test_mask), cell_type_mask
+    sample_reference_mask = (
+        pseudobulk_adata.obs[SAMPLE_KEY] == sample_type_reference
     )
-    adata_subset = adata[data_mask]
+    sample_test_mask = pseudobulk_adata.obs[SAMPLE_KEY] == sample_type_test
+    data_mask = np.logical_or(sample_reference_mask, sample_test_mask)
 
-    # Performs a preliminary PCA.
-    # adata_subset.layers['counts'] = adata_subset.X.copy()
-    # sc.pp.normalize_total(adata_subset, target_sum=1e6)
-    # sc.pp.log1p(adata_subset)
-    # sc.pp.pca(adata_subset)
-    # adata_subset.obs["lib_size"] = np.sum(adata_subset.layers["counts"], axis=1)
-    # adata_subset.obs["log_lib_size"] = np.log(adata_subset.obs["lib_size"])
-    # sc.pl.pca(adata_subset, color=adata_subset.obs, ncols=1, size=300, save=True)
-    # adata_subset.X = adata_subset.layers['counts'].copy()
+    if pseudobulk_adata[sample_reference_mask].n_obs < 2:
+        print(
+            f"\t{sample_type_reference} has only {pseudobulk_adata[sample_reference_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping comparison..."
+        )
+        return
+
+    if pseudobulk_adata[sample_test_mask].n_obs < 2:
+        print(
+            f"\t{sample_type_test} has only {pseudobulk_adata[sample_test_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping comparison..."
+        )
+        return
+
+    adata_subset = pseudobulk_adata[data_mask]
 
     print("\tLoading R dependencies...")
     importr("Seurat")
@@ -100,26 +101,26 @@ def differential_gene_expression(
     edger_function = ro.r(
         """
         function(data, sample_reference, sample_test, output_path){
-            # create an edgeR object with counts and grouping factor
+            # Creates an edgeR object with counts and grouping factor.
             y <- DGEList(assay(data, "X"), group = colnames(data))
-            # filter out genes with low counts
-            print("Dimensions before subsetting:")
+            # Filters out genes with low counts.
+            print("\\tSamples before subsetting:")
             print(dim(y))
             keep <- filterByExpr(y)
             y <- y[keep, , keep.lib.sizes=FALSE]
-            print("Dimensions after subsetting:")
+            print("\\tSamples after subsetting:")
             print(dim(y))
-            # normalize
+            # Performs normalisation.
             y <- calcNormFactors(y)
-            # create a vector that is concatentation of condition and cell type that we will later use with contrasts
+            # Creates a vector that is concatentation of condition and variables that we will later use with contrasts
             sample <- colData(data)$sample
-            # create a design matrix: here we have multiple donors so also consider that in the design matrix
+            # Creates the design matrix.
             design <- model.matrix(~ 0 + sample)
-            # estimate dispersion
+            # Estimates dispersion.
             y <- estimateDisp(y, design = design)
-            # fit the model
+            # Fits the model.
             fit <- glmQLFit(y, design)
-            print("Plotting data...")
+            print("\tPlotting data...")
             svg(paste(output_path, "mds_plot.svg", sep = "/"))
             plotMDS(y)
             dev.off()
@@ -131,7 +132,7 @@ def differential_gene_expression(
             cmd <- paste("myContrast <- makeContrasts(", contrast_string, ", levels = y$design)", sep ='"')
             eval(parse(text = cmd))
             qlf <- glmQLFTest(fit, contrast=myContrast)
-            # get all of the DE genes and calculate Benjamini-Hochberg adjusted FDR
+            # Returns all of the DE genes and calculates Benjamini-Hochberg adjusted FDR.
             tt <- topTags(qlf, n = Inf)
             tt <- tt$table
             write.csv(tt, paste(output_path, "differential_gene_expression.csv", sep = "/"), row.names=TRUE)
@@ -166,44 +167,39 @@ with open(sample_comparison_path, newline="", encoding="utf-8") as csvfile:
 
 # Runs differential gene expression analysis.
 for sample_reference, sample_test in sample_comparisons:
-    for cell_type in adata.obs[CELL_TYPE_KEY].cat.categories:
-        output_path = os.path.join(
-            MOUNT_PATHS["output"],
-            pathvalidate.sanitize_filename(f"{sample_reference}__vs__{sample_test}"),
-            pathvalidate.sanitize_filename(cell_type),
+    output_path = os.path.join(
+        MOUNT_PATHS["output"],
+        pathvalidate.sanitize_filename(f"{sample_reference}__vs__{sample_test}"),
+    )
+    os.makedirs(output_path, exist_ok=True)
+    with open(
+        os.path.join(output_path, "info.csv"),
+        mode="w",
+        newline="",
+        encoding="utf-8",
+    ) as csvfile:
+        info_writer = csv.writer(
+            csvfile,
+            dialect="unix",
+            delimiter=",",
+            quotechar='"',
+            quoting=csv.QUOTE_MINIMAL,
         )
-        os.makedirs(output_path, exist_ok=True)
-        with open(
-            os.path.join(output_path, "info.csv"),
-            mode="w",
-            newline="",
-            encoding="utf-8",
-        ) as csvfile:
-            info_writer = csv.writer(
-                csvfile,
-                dialect="unix",
-                delimiter=",",
-                quotechar='"',
-                quoting=csv.QUOTE_MINIMAL,
-            )
-            info_writer.writerows(
+        info_writer.writerows(
+            [
                 [
-                    [
-                        "reference sample",
-                        "test sample",
-                        "cell type",
-                    ],
-                    [
-                        sample_reference,
-                        sample_test,
-                        cell_type,
-                    ],
-                ]
-            )
-        differential_gene_expression(
-            adata,
-            sample_type_reference=convert_string_to_r(sample_reference),
-            sample_type_test=convert_string_to_r(sample_test),
-            cell_type=cell_type,
-            output_folder_path=output_path,
+                    "reference sample",
+                    "test sample",
+                ],
+                [
+                    sample_reference,
+                    sample_test,
+                ],
+            ]
         )
+    differential_gene_expression(
+        adata,
+        sample_type_reference=convert_string_to_r(sample_reference),
+        sample_type_test=convert_string_to_r(sample_test),
+        output_folder_path=output_path,
+    )
