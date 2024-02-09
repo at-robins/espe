@@ -73,7 +73,7 @@ def process_data(file_path_input, output_folder_path):
     fig.savefig(f"{output_folder_path}/marker_expression.svg")
 
 
-if os.path.isfile(MARKER_FILE):
+if not os.path.isfile(MARKER_FILE):
     print("No marker file present. Exiting...")
     sys.exit()
 
