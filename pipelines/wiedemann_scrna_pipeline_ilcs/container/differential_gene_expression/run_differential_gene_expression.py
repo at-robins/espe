@@ -104,12 +104,10 @@ def differential_gene_expression(
             # Creates an edgeR object with counts and grouping factor.
             y <- DGEList(assay(data, "X"), group = colnames(data))
             # Filters out genes with low counts.
-            print("\\tSamples before subsetting:")
-            print(dim(y))
+            cat("\\tFeatures and samples before subsetting: ", dim(y)[1], " x ", dim(y)[2], "\\n", sep="")
             keep <- filterByExpr(y)
             y <- y[keep, , keep.lib.sizes=FALSE]
-            print("\\tSamples after subsetting:")
-            print(dim(y))
+            cat("\\tFeatures and samples after subsetting: ", dim(y)[1], " x ", dim(y)[2], "\\n", sep="")
             # Performs normalisation.
             y <- calcNormFactors(y)
             # Creates a vector that is concatentation of condition and variables that we will later use with contrasts
@@ -120,7 +118,7 @@ def differential_gene_expression(
             y <- estimateDisp(y, design = design)
             # Fits the model.
             fit <- glmQLFit(y, design)
-            print("\tPlotting data...")
+            cat("\\tPlotting data...\\n", sep="")
             svg(paste(output_path, "mds_plot.svg", sep = "/"))
             plotMDS(y)
             dev.off()

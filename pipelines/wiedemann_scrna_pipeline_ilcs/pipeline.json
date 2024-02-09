@@ -44,11 +44,11 @@
       "variables": []
     },
     {
-      "id": "clustering_dge",
-      "name": "Clustering differentially expressed genes",
-      "description": "<espe-import>step_clustering_cell_type_description.html</espe-import>",
-      "container": "clustering_dge",
-      "dependencies": ["clustering_cell_type", "differential_gene_expression"],
+      "id": "clustered_pseudobulk_generation",
+      "name": "Cluster pseudo-bulk aggregation",
+      "description": "<espe-import>step_clustered_pseudobulk_generation_description.html</espe-import>",
+      "container": "clustered_pseudobulk_generation",
+      "dependencies": ["clustering_cell_type"],
       "variables": []
     }
   ]

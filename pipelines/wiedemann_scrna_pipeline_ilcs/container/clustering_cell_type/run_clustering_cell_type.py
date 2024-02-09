@@ -16,6 +16,7 @@ MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["input"] + "/"
 CLUSTERING_INFO_FILE = os.path.join(MOUNT_PATHS["input"], "sample_clustering.csv")
 MINIMUM_CELL_NUMBER = 20
+
 # The replicates.
 REPLICATE_KEY = "replicate_name"
 # The samples that consists of different replicates.
