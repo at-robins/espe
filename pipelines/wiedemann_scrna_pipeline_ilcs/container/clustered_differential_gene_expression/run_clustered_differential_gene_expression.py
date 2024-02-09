@@ -10,16 +10,17 @@ import numpy as np
 import os
 import pandas as pd
 import pathvalidate
-import rpy2.rinterface_lib.callbacks as rcb
-import rpy2.robjects as ro
 import scanpy as sc
 import seaborn as sns
+import rpy2.rinterface_lib.callbacks as rcb
+import rpy2.robjects as ro
 import warnings
 
 from rpy2.robjects.packages import importr
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = MOUNT_PATHS["dependencies"]["pseudobulk_generation"] + "/"
+INPUT_FOLDER = MOUNT_PATHS["dependencies"]["clustered_pseudobulk_generation"] + "/"
+CLUSTER_KEY = "cluster"
 SAMPLE_KEY = "sample"
 REPLICATE_KEY = "replicate"
 VALID_R_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
@@ -70,30 +71,38 @@ def differential_gene_expression(
     pseudobulk_adata,
     sample_type_reference,
     sample_type_test,
+    cluster,
     output_folder_path,
 ):
     """
     Performes differential gene expression analysis.
     """
     print(
-        f"Comparing {sample_type_reference} and {sample_type_test}...",
+        f"Comparing {sample_type_reference} and {sample_type_test} for cluster {cluster}",
         flush=True,
     )
 
     # Subsetting data.
-    sample_reference_mask = pseudobulk_adata.obs[SAMPLE_KEY] == sample_type_reference
+    sample_reference_mask = (
+        pseudobulk_adata.obs[SAMPLE_KEY] == sample_type_reference
+    )
     sample_test_mask = pseudobulk_adata.obs[SAMPLE_KEY] == sample_type_test
-    data_mask = np.logical_or(sample_reference_mask, sample_test_mask)
+    cluster_mask = pseudobulk_adata.obs[CLUSTER_KEY] == cluster
+    data_mask = np.logical_and(
+        np.logical_or(sample_reference_mask, sample_test_mask), cluster_mask
+    )
+    reference_cluster_mask = np.logical_and(sample_reference_mask, cluster_mask)
+    test_cluster_mask = np.logical_and(sample_test_mask, cluster_mask)
 
-    if pseudobulk_adata[sample_reference_mask].n_obs < 2:
+    if pseudobulk_adata[reference_cluster_mask].n_obs < 2:
         print(
-            f"\t{sample_type_reference} has only {pseudobulk_adata[sample_reference_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping comparison..."
+            f"\t{sample_type_reference} has only {pseudobulk_adata[reference_cluster_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
         )
         return
 
-    if pseudobulk_adata[sample_test_mask].n_obs < 2:
+    if pseudobulk_adata[test_cluster_mask].n_obs < 2:
         print(
-            f"\t{sample_type_test} has only {pseudobulk_adata[sample_test_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping comparison..."
+            f"\t{sample_type_test} has only {pseudobulk_adata[test_cluster_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
         )
         return
 
@@ -106,7 +115,7 @@ def differential_gene_expression(
     edger_function = ro.r(
         """
         function(data, sample_reference, sample_test, output_path){
-            # Creates an edgeR object with counts and grouping factor.
+           # Creates an edgeR object with counts and grouping factor.
             y <- DGEList(assay(data, "X"), group = colnames(data))
             # Filters out genes with low counts.
             cat("\\tFeatures and samples before subsetting: ", dim(y)[1], " x ", dim(y)[2], "\\n", sep="")
@@ -151,10 +160,12 @@ def differential_gene_expression(
 
 
 print("Reading pseudobulk data...")
-adata = anndata.read_h5ad(f"{INPUT_FOLDER}pseudobulk.h5ad")
+adata = anndata.read_h5ad(f"{INPUT_FOLDER}cluster_pseudobulk.h5ad")
 
 # Replaces invalid characters in sample names.
-adata.obs[SAMPLE_KEY] = list(map(convert_string_to_r, adata.obs[SAMPLE_KEY]))
+adata.obs[SAMPLE_KEY] = list(
+    map(convert_string_to_r, adata.obs[SAMPLE_KEY])
+)
 adata.obs[SAMPLE_KEY] = adata.obs[SAMPLE_KEY].astype("category")
 
 
@@ -170,39 +181,44 @@ with open(sample_comparison_path, newline="", encoding="utf-8") as csvfile:
 
 # Runs differential gene expression analysis.
 for sample_reference, sample_test in sample_comparisons:
-    output_path = os.path.join(
-        MOUNT_PATHS["output"],
-        pathvalidate.sanitize_filename(f"{sample_reference}__vs__{sample_test}"),
-    )
-    os.makedirs(output_path, exist_ok=True)
-    with open(
-        os.path.join(output_path, "info.csv"),
-        mode="w",
-        newline="",
-        encoding="utf-8",
-    ) as csvfile:
-        info_writer = csv.writer(
-            csvfile,
-            dialect="unix",
-            delimiter=",",
-            quotechar='"',
-            quoting=csv.QUOTE_MINIMAL,
+    for cluster in adata.obs[CLUSTER_KEY].cat.categories:
+        output_path = os.path.join(
+            MOUNT_PATHS["output"],
+            pathvalidate.sanitize_filename(f"{sample_reference}__vs__{sample_test}"),
+            pathvalidate.sanitize_filename(cluster),
         )
-        info_writer.writerows(
-            [
+        os.makedirs(output_path, exist_ok=True)
+        with open(
+            os.path.join(output_path, "info.csv"),
+            mode="w",
+            newline="",
+            encoding="utf-8",
+        ) as csvfile:
+            info_writer = csv.writer(
+                csvfile,
+                dialect="unix",
+                delimiter=",",
+                quotechar='"',
+                quoting=csv.QUOTE_MINIMAL,
+            )
+            info_writer.writerows(
                 [
-                    "reference sample",
-                    "test sample",
-                ],
-                [
-                    sample_reference,
-                    sample_test,
-                ],
-            ]
+                    [
+                        "reference sample",
+                        "test sample",
+                        "cluster",
+                    ],
+                    [
+                        sample_reference,
+                        sample_test,
+                        cluster,
+                    ],
+                ]
+            )
+        differential_gene_expression(
+            adata,
+            sample_type_reference=convert_string_to_r(sample_reference),
+            sample_type_test=convert_string_to_r(sample_test),
+            cluster=cluster,
+            output_folder_path=output_path,
         )
-    differential_gene_expression(
-        adata,
-        sample_type_reference=convert_string_to_r(sample_reference),
-        sample_type_test=convert_string_to_r(sample_test),
-        output_folder_path=output_path,
-    )
