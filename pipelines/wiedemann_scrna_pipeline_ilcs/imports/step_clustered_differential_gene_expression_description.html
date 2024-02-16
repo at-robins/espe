@@ -1,4 +1,31 @@
-<p>Calculates differentially expressed genes between different clusters.</p>
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: .05rem;
+    border-radius: .2rem;
+  }
+</style>
+<p>Calculates differentially expressed genes of specific clusters and of clusteres between sample types.</p>
+<p>
+  <b>Output</b><br />
+  For each clustering group and each cluster a respective subfolder is generated at
+  <code>cluster_comparison/{clustering_group}/{cluster}</code>. Similarly, for each sample type / condition comparison
+  specified in the <code>sample_comparison.csv</code> and each cluster a respective subfolder is generated at
+  <code>sample_comparison/{sample_type_1}__vs__{sample_type_2}/{cluster}</code>. Each subfolder contains the following
+  files:
+<ul>
+  <li><code>differential_gene_expression.csv</code>: a CSV containing differentially expressed genes including log2 fold
+    change, p value and FDR</li>
+  <li><code>info.csv</code>: a CSV file containing information related to the differential gene expression analysis</li>
+  <li><code>mds_plot_plot.svg</code>: a multi-dimensional scaling plot of the pseudobulk data (similar samples are
+    expected to be located in close proximity)</li>
+  <li><code>bcv_plot.svg</code>: a biological coefficient of variation plot that shows gene expression variability</li>
+  <li><code>smear_plot.svg</code>: a smear plot that shows change in expression against abundance</li>
+</ul>
+</p>
+
 <p><b>References</b></p>
 <ol>
   <li>
