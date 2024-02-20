@@ -10,16 +10,19 @@ import numpy as np
 import os
 import pandas as pd
 import pathvalidate
-import scanpy as sc
-import seaborn as sns
 import rpy2.rinterface_lib.callbacks as rcb
 import rpy2.robjects as ro
+import scanpy as sc
+import seaborn as sns
+import shutil
 import warnings
 
 from rpy2.robjects.packages import importr
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["clustered_pseudobulk_generation"] + "/"
+FOLDER_COMPARISON_SAMPLE = "sample_comparison"
+FOLDER_COMPARISON_CLUSTER = "cluster_comparison"
 CLUSTER_KEY = "cluster"
 SAMPLE_KEY = "sample"
 REPLICATE_KEY = "replicate"
@@ -97,12 +100,14 @@ def differential_gene_expression(
         print(
             f"\t{sample_type_reference} has only {pseudobulk_adata[reference_cluster_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
         )
+        shutil.rmtree(output_folder_path)
         return
 
     if pseudobulk_adata[test_cluster_mask].n_obs < 2:
         print(
             f"\t{sample_type_test} has only {pseudobulk_adata[test_cluster_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
         )
+        shutil.rmtree(output_folder_path)
         return
 
     adata_subset = pseudobulk_adata[data_mask]
@@ -140,9 +145,9 @@ def differential_gene_expression(
             dev.off()
             # eval workaround as make makeContrasts does not accept a string variable.
             contrast_string = paste("sample", sample_test, " - sample", sample_reference, sep = "")
-            cmd <- paste("myContrast <- makeContrasts(", contrast_string, ", levels = y$design)", sep ='"')
+            cmd <- paste("sample_contrast <- makeContrasts(", contrast_string, ", levels = y$design)", sep ='"')
             eval(parse(text = cmd))
-            qlf <- glmQLFTest(fit, contrast=myContrast)
+            qlf <- glmQLFTest(fit, contrast=sample_contrast)
             # Returns all of the DE genes and calculates Benjamini-Hochberg adjusted FDR.
             tt <- topTags(qlf, n = Inf)
             tt <- tt$table
@@ -192,14 +197,15 @@ def differential_gene_expression_exclude(
         print(
             f"\t{clustering_group_test} has only {adata_subset.n_obs} replicates for cluster {cluster}. This is not enough to measure dispersion. Skipping cluster comparison..."
         )
+        shutil.rmtree(output_folder_path)
         return
 
     if adata_subset_exclude.n_obs < 2:
         print(
             f"\t{clustering_group_test} has only {adata_subset_exclude.n_obs} replicates when excluding cluster {cluster}. This is not enough to measure dispersion. Skipping cluster comparison..."
         )
+        shutil.rmtree(output_folder_path)
         return
-
 
     adata_merged = anndata.concat(
         [adata_subset, adata_subset_exclude],
@@ -232,7 +238,6 @@ def differential_gene_expression_exclude(
             sample <- colData(data)$sample
             # Creates the design matrix.
             design <- model.matrix(~ 0 + excluded + sample)
-            print(design)
             # Estimates dispersion.
             y <- estimateDisp(y, design = design)
             # Fits the model.
@@ -244,11 +249,8 @@ def differential_gene_expression_exclude(
             svg(paste(output_path, "bcv_plot.svg", sep = "/"))
             plotBCV(y)
             dev.off()
-            # eval workaround as make makeContrasts does not accept a string variable.
-            contrast_string = paste("excluded", "no", " - excluded", "yes", sep = "")
-            cmd <- paste("myContrast <- makeContrasts(", contrast_string, ", levels = y$design)", sep ='"')
-            eval(parse(text = cmd))
-            qlf <- glmQLFTest(fit, contrast=myContrast)
+            exclude_contrast <- makeContrasts("excludedno-excludedyes", levels = y$design)
+            qlf <- glmQLFTest(fit, contrast=exclude_contrast)
             # Returns all of the DE genes and calculates Benjamini-Hochberg adjusted FDR.
             tt <- topTags(qlf, n = Inf)
             tt <- tt$table
@@ -304,6 +306,7 @@ for sample_reference, sample_test in sample_comparisons:
     for cluster in adata_cluster.obs[CLUSTER_KEY].cat.categories:
         output_path = os.path.join(
             MOUNT_PATHS["output"],
+            FOLDER_COMPARISON_SAMPLE,
             pathvalidate.sanitize_filename(f"{sample_reference}__vs__{sample_test}"),
             pathvalidate.sanitize_filename(cluster),
         )
@@ -348,6 +351,7 @@ for clustering_group in adata_cluster.obs[CLUSTERING_GROUP_KEY].cat.categories:
     for cluster in adata_cluster.obs[CLUSTER_KEY].cat.categories:
         output_path = os.path.join(
             MOUNT_PATHS["output"],
+            FOLDER_COMPARISON_CLUSTER,
             pathvalidate.sanitize_filename(clustering_group),
             pathvalidate.sanitize_filename(cluster),
         )
@@ -368,12 +372,10 @@ for clustering_group in adata_cluster.obs[CLUSTERING_GROUP_KEY].cat.categories:
             info_writer.writerows(
                 [
                     [
-                        "sample",
-                        "clustering_group"
+                        "clustering_group",
                         "cluster",
                     ],
                     [
-                        sample_test,
                         clustering_group,
                         cluster,
                     ],

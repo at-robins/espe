@@ -37,6 +37,7 @@ def aggregate_pseudobulk_data(file_path_sample, cluster_exclude=False):
     print(f"Processing file {file_path_sample}", flush=True)
     print("\tReading data...")
     adata = anndata.read_h5ad(file_path_sample)
+    adata.X = adata.layers["counts"]
 
     clusters = adata.obs[CLUSTER_KEY].cat.categories
     replicates = adata.obs[REPLICATE_KEY].cat.categories
@@ -162,9 +163,9 @@ def process_data(cluster_exclude=False):
 
     print("\tWriting pseudobulk data to file...")
     output_file_name = (
-        "cluster_pseudobulk.h5ad"
+        "cluster_exclude_pseudobulk.h5ad"
         if cluster_exclude
-        else "cluster_exclude_pseudobulk.h5ad"
+        else "cluster_pseudobulk.h5ad"
     )
     pseudobulk_adata.write(
         os.path.join(MOUNT_PATHS["output"], output_file_name), compression="gzip"

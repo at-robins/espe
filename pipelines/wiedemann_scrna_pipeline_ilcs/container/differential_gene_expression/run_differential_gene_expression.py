@@ -14,6 +14,7 @@ import rpy2.rinterface_lib.callbacks as rcb
 import rpy2.robjects as ro
 import scanpy as sc
 import seaborn as sns
+import shutil
 import warnings
 
 from rpy2.robjects.packages import importr
@@ -89,12 +90,14 @@ def differential_gene_expression(
         print(
             f"\t{sample_type_reference} has only {pseudobulk_adata[sample_reference_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping comparison..."
         )
+        shutil.rmtree(output_folder_path)
         return
 
     if pseudobulk_adata[sample_test_mask].n_obs < 2:
         print(
             f"\t{sample_type_test} has only {pseudobulk_adata[sample_test_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping comparison..."
         )
+        shutil.rmtree(output_folder_path)
         return
 
     adata_subset = pseudobulk_adata[data_mask]
