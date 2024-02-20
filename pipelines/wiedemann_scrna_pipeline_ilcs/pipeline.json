@@ -58,6 +58,14 @@
       "container": "clustered_differential_gene_expression",
       "dependencies": ["clustered_pseudobulk_generation"],
       "variables": []
+    },
+    {
+      "id": "clustered_dge_overlap",
+      "name": "Cluster DGE overlap",
+      "description": "<espe-import>step_clustered_dge_overlap_description.html</espe-import>",
+      "container": "clustered_dge_overlap",
+      "dependencies": ["clustered_differential_gene_expression"],
+      "variables": []
     }
   ]
 }

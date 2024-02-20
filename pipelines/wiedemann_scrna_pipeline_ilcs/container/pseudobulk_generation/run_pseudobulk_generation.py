@@ -31,7 +31,6 @@ def aggregate_pseudobulk_data(file_path_sample):
     print(f"Processing file {file_path_sample}", flush=True)
     print("\tReading data...")
     adata = anndata.read_h5ad(file_path_sample)
-    adata.X = adata.layers["counts"]
 
     batches = adata.obs[REPLICATE_KEY].cat.categories
 
