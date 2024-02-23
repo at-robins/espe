@@ -1,0 +1,44 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: .05rem;
+    border-radius: .2rem;
+  }
+</style>
+<p>Performs gene set overrepresentation analysis for cluster specific genes.</p>
+<p>
+  <b>Output</b><br />
+  For each clustering group and each cluster <code>ora_table.csv</code> is produced containing the following columns:
+<ul>
+  <li><code>Term</code>: the ID of the respective pathway</li>
+</ul>
+<br />
+Additionally a barplot <code>ora_barplot_fdr.svg</code> is created showing the top pathways sorted by FDR.
+</p>
+<p><b>References</b></p>
+<ol>
+  <li>
+    Badia-i-Mompel P., Vélez Santiago J., Braunger J., Geiss C., Dimitrov D., Müller-Dott S., Taus P., Dugourd A.,
+    Holland C.H., Ramirez Flores R.O. and Saez-Rodriguez J. 2022. decoupleR: ensemble of computational methods to infer
+    biological activities from omics data. Bioinformatics Advances.
+    <a href="https://doi.org/10.1093/bioadv/vbac016">
+      https://doi.org/10.1093/bioadv/vbac016
+    </a>
+  </li>
+  <li>
+    Hong G, Zhang W, Li H, Shen X, Guo Z. Separate enrichment analysis of pathways for up- and downregulated genes. J R
+    Soc Interface. 2013 Dec 18;11(92):20130950.
+    <a href="https://doi.org/10.1098/rsif.2013.0950">
+      https://doi.org/10.1098/rsif.2013.0950
+    </a>
+  </li>
+  <li>
+    Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell
+    analysis across modalities. Nat Rev Genet (2023).
+    <a href="https://doi.org/10.1038/s41576-023-00586-w">
+      https://doi.org/10.1038/s41576-023-00586-w
+    </a>
+  </li>
+</ol>

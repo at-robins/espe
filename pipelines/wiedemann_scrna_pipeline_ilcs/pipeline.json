@@ -2,23 +2,23 @@
   "id": "wiedemann_scrna_pipeline_ilcs",
   "name": "Wiedemann single cell RNA-Seq pipeline for group 1 ILC analysis",
   "description": "<espe-import>pipeline_description.html</espe-import>",
-    "steps": [
-      {
-        "id": "clustering_cell_type",
-        "name": "Clustering",
-        "description": "<espe-import>step_clustering_cell_type_description.html</espe-import>",
-        "container": "clustering_cell_type",
-        "dependencies": [],
-        "variables": []
-      },
-      {
-        "id": "marker_expression",
-        "name": "Marker expression",
-        "description": "<espe-import>step_marker_expression_description.html</espe-import>",
-        "container": "marker_expression",
-        "dependencies": ["clustering_cell_type"],
-        "variables": []
-      },
+  "steps": [
+    {
+      "id": "clustering_cell_type",
+      "name": "Clustering",
+      "description": "<espe-import>step_clustering_cell_type_description.html</espe-import>",
+      "container": "clustering_cell_type",
+      "dependencies": [],
+      "variables": []
+    },
+    {
+      "id": "marker_expression",
+      "name": "Marker expression",
+      "description": "<espe-import>step_marker_expression_description.html</espe-import>",
+      "container": "marker_expression",
+      "dependencies": ["clustering_cell_type"],
+      "variables": []
+    },
     {
       "id": "cluster_comparison",
       "name": "Cluster comparison",
@@ -65,6 +65,22 @@
       "description": "<espe-import>step_clustered_dge_overlap_description.html</espe-import>",
       "container": "clustered_dge_overlap",
       "dependencies": ["clustered_differential_gene_expression"],
+      "variables": []
+    },
+    {
+      "id": "clustered_gsea",
+      "name": "Cluster gene set enrichment analysis",
+      "description": "<espe-import>step_clustered_gsea_description.html</espe-import>",
+      "container": "clustered_gsea",
+      "dependencies": ["clustered_differential_gene_expression"],
+      "variables": []
+    },
+    {
+      "id": "clustered_ora",
+      "name": "Cluster overrepresentation analysis",
+      "description": "<espe-import>step_clustered_ora_description.html</espe-import>",
+      "container": "clustered_ora",
+      "dependencies": ["clustered_dge_overlap"],
       "variables": []
     }
   ]

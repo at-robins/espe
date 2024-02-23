@@ -152,7 +152,7 @@ for clustering_group, group_info in dge_input.items():
 
         print("\tPlotting data...")
         gsea_results_filtered = (
-            gsea_results[gsea_results["pval"] >= 0.05]
+            gsea_results[gsea_results["pval"] <= 0.05]
             .head(20)
             .assign(
                 **{"-log10(pval)": lambda x: -np.log10(x["pval"])},

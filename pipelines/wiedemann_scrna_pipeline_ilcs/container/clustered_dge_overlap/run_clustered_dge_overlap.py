@@ -122,7 +122,7 @@ for clustering_group, group_info in dge_input.items():
             [
                 [
                     "Gene",
-                    "Regultaion",
+                    "Regulation",
                     "Overlap",
                     "Clusters",
                 ],

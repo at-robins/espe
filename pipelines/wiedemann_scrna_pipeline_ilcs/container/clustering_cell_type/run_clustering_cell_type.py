@@ -160,9 +160,9 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
         fig.savefig(f"{output_folder_path}/marker_genes.svg")
 
 
-RESOLUTIONS_PER_ITERATION = 100
+RESOLUTIONS_PER_ITERATION = 201
 STARTING_RESOLUTION_MIN = 0.0
-STARTING_RESOLUTION_MAX = 2.0
+STARTING_RESOLUTION_MAX = 4.0
 
 
 def output_cluster_data(adata: anndata.AnnData, sample_name: str, output_folder_path):
