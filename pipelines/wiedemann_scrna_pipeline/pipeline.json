@@ -93,14 +93,6 @@
       "variables": []
     },
     {
-      "id": "clustering_batched",
-      "name": "Clustering",
-      "description": "<espe-import>step_clustering_batched_description.html</espe-import>",
-      "container": "clustering_batched",
-      "dependencies": ["batch_correction"],
-      "variables": []
-    },
-    {
       "id": "clustering_qc_batched_corrected",
       "name": "Batched corrected QC clustering",
       "description": "<espe-import>step_clustering_qc_batched_corrected_description.html</espe-import>",
