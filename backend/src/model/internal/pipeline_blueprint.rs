@@ -50,6 +50,9 @@ pub struct PipelineBlueprint {
     /// The [`PipelineStepBlueprint`] that make up the pipeline.
     #[getset(get = "pub")]
     steps: Vec<PipelineStepBlueprint>,
+    /// The global variables that can be specified for the pipeline.
+    #[getset(get = "pub")]
+    global_variables: Vec<PipelineStepVariable>,
 }
 
 /// The definition of a pipeline in the context of its containing directory.

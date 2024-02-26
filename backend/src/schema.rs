@@ -32,6 +32,17 @@ table! {
 }
 
 table! {
+    pipeline_global_variable (id) {
+        id -> Integer,
+        experiment_id -> Integer,
+        pipeline_id -> Text,
+        variable_id -> Text,
+        variable_value -> Nullable<Text>,
+        creation_time -> Timestamp,
+    }
+}
+
+table! {
     pipeline_step_variable (id) {
         id -> Integer,
         experiment_id -> Integer,
@@ -44,11 +55,13 @@ table! {
 }
 
 joinable!(experiment_execution -> experiment (experiment_id));
+joinable!(pipeline_global_variable -> experiment (experiment_id));
 joinable!(pipeline_step_variable -> experiment (experiment_id));
 
 allow_tables_to_appear_in_same_query!(
     experiment,
     experiment_execution,
     global_data,
+    pipeline_global_variable,
     pipeline_step_variable,
 );

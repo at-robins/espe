@@ -2,6 +2,16 @@
     "id": "testing_pipeline",
     "name": "Testing pipeline",
     "description": "This pipeline is for testing purposes.",
+    "global_variables": [
+        {
+            "id": "global_number",
+            "name": "Global number",
+            "description": "A global number field.",
+            "category": {
+                "tag": "Number"
+            }
+        }
+    ],
     "steps": [
         {
             "id": "fastqc",

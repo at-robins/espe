@@ -165,11 +165,7 @@ pub fn run_pipeline_step<T: AsRef<str>>(
         mount_map_globals
             .insert(global_var_id.to_string(), serde_json::Value::String(target.clone()));
         let global_data_path = app_config.global_data_path(global_var_value);
-        arguments.extend(pipeline_step_mount(
-            &global_data_path,
-            target,
-            true,
-        ));
+        arguments.extend(pipeline_step_mount(&global_data_path, target, true));
         // Create global data directory in case the reposiory is empty.
         std::fs::create_dir_all(&global_data_path)?;
     }
@@ -721,11 +717,13 @@ impl ContainerHandler {
         let step = self.get_executed_step()?;
         if let Some(pipeline) = self.loaded_pipelines.get(&step.pipeline_id) {
             let mut connection = self.database_manager.database_connection()?;
-            let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
+            let values_global = crate::model::db::pipeline_global_variable::PipelineGlobalVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
+            let values_step = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
             // The stati of the pipeline steps should be None at this point so an empty map is supplied instead of loading them from the database.
             let pipeline = ExperimentPipelineBlueprint::from_internal(
                 pipeline.pipeline(),
-                values,
+                values_global,
+                values_step,
                 HashMap::new(),
             );
             if let Some(step_blueprint) = pipeline

@@ -228,7 +228,8 @@ pub async fn get_experiment_pipelines(
         ExperimentExecution::get_by_experiment(experiment_id, &mut connection)?;
     let mut experiment_pipelines = Vec::new();
     for pipeline in pipelines.pipelines() {
-        let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
+        let values_global = crate::model::db::pipeline_global_variable::PipelineGlobalVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
+        let values_step = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
         let stati: HashMap<String, String> = all_experiment_stati
             .iter()
             .filter(|execution| &execution.pipeline_id == pipeline.pipeline().id())
@@ -238,7 +239,8 @@ pub async fn get_experiment_pipelines(
             .collect();
         experiment_pipelines.push(ExperimentPipelineBlueprint::from_internal(
             pipeline.pipeline(),
-            values,
+            values_global,
+            values_step,
             stati,
         ));
     }
@@ -256,14 +258,20 @@ pub async fn get_experiment_pipeline_run(
     let experiment = Experiment::get(experiment_id, &mut connection)?;
     let experiment_pipeline = if let Some(pipeline_id) = experiment.pipeline_id {
         if let Some(pipeline) = pipelines.get(&pipeline_id) {
-            let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
+            let values_global = crate::model::db::pipeline_global_variable::PipelineGlobalVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
+            let values_step = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
             let stati: HashMap<String, String> =
                 ExperimentExecution::get_by_experiment(experiment_id, &mut connection)?
                     .into_iter()
                     .filter(|execution| &execution.pipeline_id == &pipeline_id)
                     .map(|execution| (execution.pipeline_step_id, execution.execution_status))
                     .collect();
-            Some(ExperimentPipelineBlueprint::from_internal(pipeline.pipeline(), values, stati))
+            Some(ExperimentPipelineBlueprint::from_internal(
+                pipeline.pipeline(),
+                values_global,
+                values_step,
+                stati,
+            ))
         } else {
             return Err(SeqError::new(
                 "Not Found",
