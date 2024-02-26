@@ -1,0 +1,29 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: .05rem;
+    border-radius: .2rem;
+  }
+</style>
+<p>Clusters separated samples with different resolutions to reveal sub-populations inside NK cells and ILC1s.</p>
+<p>
+  <b>Output</b><br />
+  For each clustering group the following files are generated:
+<ul>
+  <li><code>clustered.h5ad</code>: the concatenated sample data including clustering information</li>
+  <li><code>umap.svg</code>: a UMAP visualisation of the clustering, sample types and replicates</li>
+  <li><code>marker_genes.svg</code>: a dotplot showing marker genes for the respective clusteres</li>
+</ul>
+</p>
+<p><b>References</b></p>
+<ol>
+  <li>
+    Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell
+    analysis across modalities. Nat Rev Genet (2023).
+    <a href="https://doi.org/10.1038/s41576-023-00586-w">
+      https://doi.org/10.1038/s41576-023-00586-w
+    </a>
+  </li>
+</ol>

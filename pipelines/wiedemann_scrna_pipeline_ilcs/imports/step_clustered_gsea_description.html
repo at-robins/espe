@@ -1,0 +1,48 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: .05rem;
+    border-radius: .2rem;
+  }
+</style>
+<p>Performs gene set enrichment analysis for each cluster in each clustering group.</p>
+<p>
+  <b>Output</b><br />
+  For each clustering group and each cluster <code>gsea_table.csv</code> is produced containing the following columns:
+<ul>
+  <li><code>source</code>: the ID of the respective pathway</li>
+  <li><code>score</code>: the enrichment score of the pathway</li>
+  <li><code>norm</code>: the normalised enrichment score of the pathway</li>
+  <li><code>pval</code>: the p-value for the enrichment</li>
+</ul>
+<br />
+Additionally a barplot <code>gsea_barplot_pval.svg</code> is created showing the top pathways sorted by p-value.
+</p>
+<p><b>References</b></p>
+<ol>
+  <li>
+    Badia-i-Mompel P., Vélez Santiago J., Braunger J., Geiss C., Dimitrov D., Müller-Dott S., Taus P., Dugourd A.,
+    Holland C.H., Ramirez Flores R.O. and Saez-Rodriguez J. 2022. decoupleR: ensemble of computational methods to infer
+    biological activities from omics data. Bioinformatics Advances.
+    <a href="https://doi.org/10.1093/bioadv/vbac016">
+      https://doi.org/10.1093/bioadv/vbac016
+    </a>
+  </li>
+  <li>
+    Subramanian A, Tamayo P, Mootha VK, Mukherjee S, Ebert BL, Gillette MA, Paulovich A, Pomeroy SL, Golub TR, Lander
+    ES, Mesirov JP. Gene set enrichment analysis: a knowledge-based approach for interpreting genome-wide expression
+    profiles. Proc Natl Acad Sci U S A. 2005 Oct 25;102(43):15545-50.
+    <a href="https://doi.org/10.1073/pnas.0506580102">
+      https://doi.org/10.1073/pnas.0506580102
+    </a>
+  </li>
+  <li>
+    Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell
+    analysis across modalities. Nat Rev Genet (2023).
+    <a href="https://doi.org/10.1038/s41576-023-00586-w">
+      https://doi.org/10.1038/s41576-023-00586-w
+    </a>
+  </li>
+</ol>

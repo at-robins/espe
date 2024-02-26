@@ -1,0 +1,31 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: .05rem;
+    border-radius: .2rem;
+  }
+</style>
+<p>Aggregates single-cell data into pseudo-bulk data for differential gene expression analysis.</p>
+<p>
+  <b>Output</b><br />
+  Each annotated sample is into a common <code>pseudobulk.h5ad</code> file. It contains the following
+  additional observation variables:
+</p>
+<ul>
+  <li><code>sample</code>: the sample name / type</li>
+  <li><code>replicate</code>: the replicate or batch for the specified sample type</li>
+  <li><code>cellcount</code>: the number of cells that were used to create the pseudo-bulk sample</li>
+</ul>
+
+<p><b>References</b></p>
+<ol>
+  <li>
+    Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell
+    analysis across modalities. Nat Rev Genet (2023).
+    <a href="https://doi.org/10.1038/s41576-023-00586-w">
+      https://doi.org/10.1038/s41576-023-00586-w
+    </a>
+  </li>
+</ol>

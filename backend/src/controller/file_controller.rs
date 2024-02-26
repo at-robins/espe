@@ -15,7 +15,7 @@ use crate::{
         internal::archive::ArchiveMetadata,
     },
     service::multipart_service::{
-        create_temporary_file, delete_temporary_file, parse_multipart_file,
+        create_temporary_file, delete_temporary_file, parse_multipart_file, UploadForm,
     },
 };
 use actix_files::NamedFile;
@@ -126,6 +126,17 @@ pub async fn delete_files_by_path(
     let delete_path = delete_info.file_path();
     let mut connection = database_manager.database_connection()?;
     category.entity_exists(id, &mut connection)?;
+    if let Err(validation_error) = delete_info.validate() {
+        return Err(SeqError::new(
+            "Invalid request",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The file path {:?} is invalid and deletion faild with error: {}.",
+                delete_info, validation_error
+            ),
+            "The requested path is invalid.",
+        ));
+    }
 
     let data_path = category.base_path(app_config, id);
     let full_path: PathBuf = data_path.join(&delete_path);
@@ -193,6 +204,18 @@ pub async fn post_add_folder(
             SeqErrorType::BadRequestError,
             "The specified path is empty.",
             "The specified path is invalid.",
+        ));
+    }
+    // Error if path is invalid.
+    if let Err(validation_error) = upload_info.validate() {
+        return Err(SeqError::new(
+            "Invalid request",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The file path {:?} is invalid and upload faild with error: {}.",
+                upload_info, validation_error
+            ),
+            "The requested path is invalid.",
         ));
     }
 
@@ -318,6 +341,22 @@ pub async fn get_experiment_download_step_results(
     info: web::Path<(i32, String)>,
 ) -> Result<NamedFile, SeqError> {
     let (experiment_id, archive_id) = info.into_inner();
+
+    // If the archive ID contains a path seperator return an error
+    // as it is not a valid ID and allows attacks by using relative
+    // components.
+    if PathBuf::from(&archive_id).iter().count() != 1 {
+        return Err(SeqError::new(
+            "Bad request",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The archive id {} is invalid and is probalbly supposed to compromise the system.",
+                archive_id
+            ),
+            "Invalid archive ID.",
+        ));
+    }
+
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection)?;
 
@@ -348,6 +387,51 @@ pub async fn get_experiment_download_step_results(
         serde_json::from_reader(std::fs::File::open(&archive_meta_path)?)?;
 
     Ok(NamedFile::from_file(std::fs::File::open(&archive_path)?, archive_meta.file_name())?)
+}
+
+pub async fn get_pipeline_attachment(
+    app_config: web::Data<Configuration>,
+    info: web::Path<(String, String)>,
+) -> Result<NamedFile, SeqError> {
+    let (pipeline_directory, attachment_name) = info.into_inner();
+
+    // If the attachment name or pipeline folder contain a path seperator 
+    // return an error as this allows attacks by using relative components.
+    if PathBuf::from(&pipeline_directory).iter().count() != 1 {
+        return Err(SeqError::new(
+            "Bad request",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The pipeline directory {} is invalid and is probalbly supposed to compromise the system.",
+                pipeline_directory
+            ),
+            "Invalid pipeline ID.",
+        ));
+    }
+    if PathBuf::from(&attachment_name).iter().count() != 1 {
+        return Err(SeqError::new(
+            "Bad request",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The attachment name {} is invalid and is probalbly supposed to compromise the system.",
+                attachment_name
+            ),
+            "Invalid attachment name.",
+        ));
+    }
+
+    let path = app_config.pipeline_attachment_path(pipeline_directory, attachment_name);
+
+    if !path.exists() {
+        return Err(SeqError::new(
+            "Not found",
+            SeqErrorType::NotFoundError,
+            format!("Attachment at path {} does not exist.", path.display()),
+            "File not found.",
+        ));
+    }
+
+    Ok(NamedFile::open(&path)?)
 }
 
 fn temp_file_to_data_file<P: AsRef<Path>, Q: AsRef<Path>>(

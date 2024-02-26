@@ -210,6 +210,58 @@ async fn test_delete_experiment_files_by_path() {
 }
 
 #[actix_web::test]
+async fn test_delete_experiment_files_by_path_super() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let id = 42;
+    let new_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: None,
+        mail: None,
+        pipeline_id: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let experiment_path = app_config.experiment_input_path(id.to_string());
+    std::fs::create_dir_all(&experiment_path).unwrap();
+    std::fs::create_dir_all(experiment_path.parent().unwrap().join("1")).unwrap();
+    
+    let file_in_super_directory = "../test_file_1.txt";
+    std::fs::write(experiment_path.join(file_in_super_directory), "test_content").unwrap();
+    // Assert that all files and folder exist.
+    assert!(experiment_path.join(file_in_super_directory).exists());
+
+    // Delete a folder without content.
+    let terminal_folder_path = FilePath {
+        path_components: vec!["..".to_string(), "1".to_string()],
+    };
+    let req = test::TestRequest::delete()
+        .uri(&format!("/api/files/experiments/{}", id))
+        .set_json(terminal_folder_path)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert!(experiment_path.join("../1").exists());
+    // Delete a single file.
+    let terminal_file_path = FilePath {
+        path_components: vec!["..".to_string(), "test_file_1.txt".to_string()],
+    };
+    let req = test::TestRequest::delete()
+        .uri(&format!("/api/files/experiments/{}", id))
+        .set_json(terminal_file_path)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert!(experiment_path.join("../test_file_1.txt").exists());
+}
+
+#[actix_web::test]
 async fn test_delete_experiment_files_by_path_all() {
     let context = TestContext::new();
     let mut connection = context.get_connection();
@@ -361,6 +413,43 @@ async fn test_post_experiment_add_file_root_folder() {
         std::fs::read_to_string(experiment_path.join("test_file.txt")).unwrap(),
         "test content".to_string()
     );
+}
+
+#[actix_web::test]
+async fn test_post_experiment_add_file_super() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let id = 42;
+    let new_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: None,
+        mail: None,
+        pipeline_id: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let experiment_path = app_config.experiment_input_path(id.to_string());
+    let payload_file = "../testing_resources/requests/file_upload/multipart_file_super";
+    let payload = std::fs::read(payload_file).unwrap();
+    let content_type: mime::Mime =
+        "multipart/form-data; boundary=---------------------------5851692324164894962235391524"
+            .parse()
+            .unwrap();
+    assert!(!experiment_path.join("test_file.txt").exists());
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/files/experiments/{}", id))
+        .insert_header(ContentType(content_type))
+        .set_payload(payload)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert!(!experiment_path.join("test_file.txt").exists());
 }
 
 #[actix_web::test]
@@ -532,6 +621,39 @@ async fn test_post_experiment_add_folder_root() {
     assert_eq!(resp.status(), StatusCode::CREATED);
     assert!(experiment_path.join("1").exists());
     assert!(experiment_path.join("1").is_dir());
+}
+
+#[actix_web::test]
+async fn test_post_experiment_add_folder_super() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let id = 42;
+    let new_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: None,
+        mail: None,
+        pipeline_id: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let experiment_path = app_config.experiment_input_path(id.to_string());
+    let folder_path = FilePath {
+        path_components: vec!["..".to_string(), "1".to_string()],
+    };
+    assert!(!experiment_path.join("../1").exists());
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/folders/experiments/{}", id))
+        .set_json(folder_path)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert!(!experiment_path.join("../1").exists());
 }
 
 #[actix_web::test]

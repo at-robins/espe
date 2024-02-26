@@ -1,0 +1,104 @@
+{
+  "id": "wiedemann_scrna_pipeline",
+  "name": "Wiedemann single cell RNA-Seq pipeline",
+  "description": "<espe-import>pipeline_description.html</espe-import>",
+    "steps": [
+    {
+      "id": "preprocessing",
+      "name": "Preprocessing",
+      "description": "<espe-import>step_preprocessing_description.html</espe-import>",
+      "container": "preprocessing",
+      "dependencies": [],
+      "variables": []
+    },
+    {
+      "id": "ambient_rna_removal",
+      "name": "Ambient RNA removal",
+      "description": "<p>Detects and removes ambient RNA and removes non-informative genes.</p><p><b>References</b><ol><li>Young, M.D., Behjati, S. (2020). SoupX removes ambient RNA contamination from droplet-based single-cell RNA sequencing data, GigaScience, Volume 9, Issue 12, December 2020, giaa151bioRxiv, 303727, <a href=\"https://doi.org/10.1093/gigascience/giaa151\">https://doi.org/10.1093/gigascience/giaa151</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "container": "ambient_rna",
+      "dependencies": ["preprocessing"],
+      "variables": [
+        {
+          "id": "SKIP",
+          "name": "Skip ambient RNA removal",
+          "description": "Skip adjusting the feature counts for ambient RNA / background. This might be desirable for pre-filtered samples or fixed scRNA-Seq data, where the low ambient RNA content leads to bad inference of the contamination fraction. Non-informative genes are still filtered out.",
+          "category": {
+            "tag": "Boolean"
+          }
+        }
+      ]
+    },
+    {
+      "id": "doublet_detection",
+      "name": "Doublet detection",
+      "description": "<p>Detects and marks cell doublets.</p><p><b>References</b><ol><li>Germain P, Lun A, Garcia Meixide C, Macnair W, Robinson M (2022). Doublet identification in single-cell sequencing data using scDblFinder. f1000research. <a href=\"https://doi.org/10.12688/f1000research.73600.2\">doi:10.12688/f1000research.73600.2</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "container": "doublet_detection",
+      "dependencies": ["ambient_rna_removal"],
+      "variables": []
+    },
+    {
+      "id": "doublet_removal",
+      "name": "Doublet removal",
+      "description": "<p>Removes detected doublets. Doublets are not removed from unbatched data, which is used downstream for QC purposes.</p><p><b>References</b><ol><li>Germain P, Lun A, Garcia Meixide C, Macnair W, Robinson M (2022). Doublet identification in single-cell sequencing data using scDblFinder. f1000research. <a href=\"https://doi.org/10.12688/f1000research.73600.2\">doi:10.12688/f1000research.73600.2</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "container": "doublet_removal",
+      "dependencies": ["doublet_detection"],
+      "variables": []
+    },
+    {
+      "id": "integration",
+      "name": "Integration",
+      "description": "<p>Integrates different samples of the same type with each other.</p><p><b>References</b><ol><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "container": "integration",
+      "dependencies": ["doublet_removal"],
+      "variables": []
+    },
+    {
+      "id": "normalisation",
+      "name": "Normalisation",
+      "description": "<p>Normalises batched and unbatched data using different methods for downstream analysis.</p><p><b>References</b><ol><li>RA Dorfman. A note on the !d-method for finding variance formulae. Biometric Bulletin, 1938.</li><li>Germain, PL., Sonrel, A. & Robinson, M.D. pipeComp, a general framework for the evaluation of computational pipelines, reveals performant single cell RNA-seq preprocessing tools. Genome Biol 21, 227 (2020). <a href=\"https://doi.org/10.1186/s13059-020-02136-7\">https://doi.org/10.1186/s13059-020-02136-7</a></li><li>Lun ATL, McCarthy DJ, Marioni JC (2016). A step-by-step workflow for low-level analysis of single-cell RNA-seq data with Bioconductor. F1000Res., 5, 2122. <a href=\"doi:10.12688/f1000research.9501.2\">doi:10.12688/f1000research.9501.2</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "container": "normalisation",
+      "dependencies": ["doublet_detection", "integration"],
+      "variables": []
+    },
+    {
+      "id": "clustering_qc_batched",
+      "name": "Batched QC clustering",
+      "description": "<p>Selects relevant features for downstream analysis.</p><p><b>References</b><ol><li>Street K, Townes F, Risso D, Hicks S (2023). scry: Small-Count Analysis Methods for High-Dimensional Data. doi:10.18129/B9.bioc.scry, R package version 1.14.0, <a href=\"https://bioconductor.org/packages/scry\">https://bioconductor.org/packages/scry</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "container": "clustering_qc_batched",
+      "dependencies": ["normalisation"],
+      "variables": []
+    },
+    {
+      "id": "feature_selection",
+      "name": "Feature selection",
+      "description": "<p>Selects relevant features for downstream analysis.</p><p><b>References</b><ol><li>Street K, Townes F, Risso D, Hicks S (2023). scry: Small-Count Analysis Methods for High-Dimensional Data. doi:10.18129/B9.bioc.scry, R package version 1.14.0, <a href=\"https://bioconductor.org/packages/scry\">https://bioconductor.org/packages/scry</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "container": "feature_selection",
+      "dependencies": ["normalisation"],
+      "variables": []
+    },
+    {
+      "id": "clustering_qc_unbatched",
+      "name": "Unbatched QC clustering",
+      "description": "<p>Clusters unbatched samples for quality control.</p><p><b>References</b><ol><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "container": "clustering_qc_unbatched",
+      "dependencies": ["feature_selection"],
+      "variables": []
+    },
+    {
+      "id": "batch_correction",
+      "name": "Batch correction",
+      "description": "<espe-import>step_batch_correction_description.html</espe-import>",
+      "container": "batch_correction",
+      "dependencies": ["feature_selection"],
+      "variables": []
+    },
+    {
+      "id": "clustering_qc_batched_corrected",
+      "name": "Batched corrected QC clustering",
+      "description": "<espe-import>step_clustering_qc_batched_corrected_description.html</espe-import>",
+      "container": "clustering_qc_batched_corrected",
+      "dependencies": ["batch_correction"],
+      "variables": []
+    }
+  ]
+}

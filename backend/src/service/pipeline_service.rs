@@ -159,12 +159,15 @@ pub fn load_pipelines(
         for pipeline_def_file in pipeline_definition_files {
             let pipeline_def: PipelineBlueprint =
                 serde_json::from_reader(std::fs::File::open(&pipeline_def_file)?)?;
-            pipelines.push(ContextualisedPipelineBlueprint::new(
-                pipeline_def,
-                pipeline_def_file
-                    .parent()
-                    .expect("This unwrap of the parent path must work since we just appended the definition file."),
-            ));
+            let mut contextualised_pipeline = ContextualisedPipelineBlueprint::new(
+                    pipeline_def,
+                    pipeline_def_file
+                        .parent()
+                        .expect("This unwrap of the parent path must work since we just appended the definition file."),
+                );
+            // Loads potential data that is not directly present in the pipeline definition.
+            contextualised_pipeline.resolve_imports()?;
+            pipelines.push(contextualised_pipeline);
         }
         Ok(pipelines)
     } else {

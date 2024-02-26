@@ -22,7 +22,7 @@
                 {
                     "id": "global",
                     "name": "Global",
-                    "description": "A global data reference.",
+                    "description": "    <espe-import>\tglobal.html  </espe-import>\n",
                     "category": {
                         "tag": "Global"
                     },
@@ -31,7 +31,7 @@
                 {
                     "id": "number",
                     "name": "Number",
-                    "description": "A number field.",
+                    "description": "<espe-import>number.html</espe-import>",
                     "category": {
                         "tag": "Number"
                     }

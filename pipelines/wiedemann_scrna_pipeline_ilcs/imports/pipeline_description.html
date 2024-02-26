@@ -1,0 +1,42 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: 0.05rem;
+    border-radius: 0.2rem;
+  }
+</style>
+<p>
+  This pipeline processes pre-processed single cell RNA-Seq data specifically
+  from pre-sorted group 1 ILCs. It is meant for internal usage and very
+  specific.
+</p>
+<p>
+  <b>Input specifications</b>
+  <br />
+  Each sample needs to be provided as a separate folder containing a
+  pre-processed <code>filtered_feature_bc_matrix.h5ad</code> file. Additionally,
+  the following comma delimeted and UTF-8 encoded CSV files are required at the
+  experiment's root directory:
+</p>
+<ul>
+  <li>
+    <code>sample_comparison.csv</code>: This file defines which samples are
+    compared to each other. An example can be downloaded
+    <a href="/api/pipelines/attachments/wiedemann_scrna_pipeline_ilcs/sample_comparison.csv">here</a>.
+  </li>
+  <li>
+    <code>sample_clustering.csv</code>: This file defines which samples to pool
+    for clustering. Each row represents all samples of a common clustering
+    pool.The first column is the ID of the specified sample pool, while the remaining columns specify the samples that
+    consitute the pool. An example can be downloaded
+    <a href="/api/pipelines/attachments/wiedemann_scrna_pipeline_ilcs/sample_clustering.csv">here</a>.
+  </li>
+</ul>
+<br />
+<p>
+  <b>System requirements</b><br />
+  64 GB of RAM are recommended for pipeline execution.<br />
+  Please also make sure you have sufficient storage space.
+</p>

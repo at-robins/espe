@@ -1,0 +1,21 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: .05rem;
+    border-radius: .2rem;
+  }
+</style>
+<p>Calculates the overlap of differentially expressed genes between clusters.</p>
+<p>
+  <b>Output</b><br />
+  For each clustering group a <code>overlapping_dge.csv</code> is produced containing the following columns:
+<ul>
+  <li><code>Gene</code>: the respective gene name</li>
+  <li><code>Regulation</code>: the respective regulation of the gene (up or down)</li>
+  <li><code>Overlap</code>: in how many clusters the gene showed the respective regulation</li>
+  <li><code>Clusters</code>: a semi-colon separated list of the clusters the gene has been identified as differentially
+    expressed with the respective regulation</li>
+</ul>
+</p>
