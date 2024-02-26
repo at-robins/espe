@@ -10,13 +10,22 @@
 <p>Performs gene set overrepresentation analysis for cluster specific genes.</p>
 <p>
   <b>Output</b><br />
-  For each clustering group and each cluster <code>ora_table.csv</code> is produced containing the following columns:
+  For each clustering group and each cluster 3 tabels are produced: <code>ora_table_all.csv</code> with all genes,
+  <code>ora_table_up-regulated.csv</code> with only up-regulated genes, and <code>ora_table_all.csv</code> with only
+  down-regulated genes. The tables all contain the following columns:
+</p>
 <ul>
   <li><code>Term</code>: the ID of the respective pathway</li>
+  <li>Set size<code></code>: the total number of genes in the pathway</li>
+  <li><code>Overlap ratio</code>: the percentage of pathway related genes present in the DGE data</li>
+  <li><code>p-value</code>: the p-value</li>
+  <li><code>FDR p-value</code>: the FDR adjusted p-value</li>
+  <li><code>Odds ratio</code>: </li>
+  <li><code>Combined score</code>: </li>
+  <li><code>Features</code>: the differentially expressed genes that overlap with the pathway</li>
 </ul>
 <br />
 Additionally a barplot <code>ora_barplot_fdr.svg</code> is created showing the top pathways sorted by FDR.
-</p>
 <p><b>References</b></p>
 <ol>
   <li>
