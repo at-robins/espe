@@ -37,7 +37,10 @@
           <q-card-section
             v-if="
               selectedPipeline &&
-              selectedPipeline.steps.some((step) => step.variables.length > 0)
+              (selectedPipeline.global_variables.length > 0 ||
+                selectedPipeline.steps.some(
+                  (step) => step.variables.length > 0
+                ))
             "
           >
             <entity-pipeline-variables

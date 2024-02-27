@@ -2,6 +2,7 @@ export type PipelineBlueprint = {
   id: string;
   name: string;
   description: string;
+  global_variables: PipelineStepBlueprintVariable[];
   steps: PipelineStepBlueprint[];
 };
 
@@ -37,6 +38,12 @@ export type PipelineStepBlueprintVariableOption = {
 export type PipelineStepVariableUpload = {
   pipelineId: string;
   pipelineStepId: string;
+  variableId: string;
+  variableValue: string | null | undefined;
+};
+
+export type PipelineGlobalVariableUpload = {
+  pipelineId: string;
   variableId: string;
   variableValue: string | null | undefined;
 };
@@ -110,6 +117,17 @@ export function contentAsOptions(
  *
  * @param step the step to check for requirements
  */
-export function hasRequiredVariable(step: PipelineStepBlueprint): boolean {
+export function hasRequiredStepVariable(step: PipelineStepBlueprint): boolean {
   return step.variables.some((stepVar) => stepVar.required);
+}
+
+/**
+ * Returns `true` if any of the global pipeline variables is required.
+ *
+ * @param pipeline the pipeline to check for requirements
+ */
+export function hasRequiredGlobalVariable(
+  pipeline: PipelineBlueprint
+): boolean {
+  return pipeline.global_variables.some((globalVar) => globalVar.required);
 }

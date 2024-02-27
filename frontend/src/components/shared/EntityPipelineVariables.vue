@@ -7,6 +7,57 @@
     </div>
     <q-separator vertical class="q-ml-md q-mr-md" />
     <div class="col">
+      <div v-if="pipeline.global_variables.length > 0" class="row">
+        <div class="col">
+          <q-expansion-item expand-separator>
+            <template v-slot:header>
+              <q-item-section avatar>
+                <q-icon
+                  :name="
+                    hasRequiredGlobalVariable(pipeline)
+                      ? matPriorityHigh
+                      : undefined
+                  "
+                  :color="
+                    hasRequiredGlobalVariable(pipeline) ? 'warning' : 'primary'
+                  "
+                />
+                <q-tooltip v-if="hasRequiredGlobalVariable(pipeline)">
+                  This pipeline contains variables that must be specified for to
+                  enusre proper execution.
+                </q-tooltip>
+              </q-item-section>
+              <q-item-section>
+                <b> Global variables </b>
+              </q-item-section>
+            </template>
+            <div
+              v-for="(
+                pipelineVariable, variableIndex
+              ) in pipeline.global_variables"
+              :key="pipeline.id + pipelineVariable.id"
+            >
+              <div class="q-ma-md row">
+                <entity-pipeline-variable
+                  :pipeline-variable="pipelineVariable"
+                  :global-options="loadedGlobalRepos"
+                  @update:model-value="
+                    uploadVariableGlobal(
+                      pipeline.id,
+                      pipelineVariable.id,
+                      $event
+                    )
+                  "
+                />
+              </div>
+              <q-separator
+                v-if="variableIndex < pipeline.global_variables.length - 1"
+                inset
+              />
+            </div>
+          </q-expansion-item>
+        </div>
+      </div>
       <div
         v-for="pipelineStep in pipeline.steps"
         :key="pipelineStep.id"
@@ -18,15 +69,17 @@
               <q-item-section avatar>
                 <q-icon
                   :name="
-                    hasRequiredVariable(pipelineStep)
+                    hasRequiredStepVariable(pipelineStep)
                       ? matPriorityHigh
                       : undefined
                   "
                   :color="
-                    hasRequiredVariable(pipelineStep) ? 'warning' : 'primary'
+                    hasRequiredStepVariable(pipelineStep)
+                      ? 'warning'
+                      : 'primary'
                   "
                 />
-                <q-tooltip v-if="hasRequiredVariable(pipelineStep)">
+                <q-tooltip v-if="hasRequiredStepVariable(pipelineStep)">
                   This step contains variables that must be specified for the
                   pipeline to work.
                 </q-tooltip>
@@ -48,7 +101,7 @@
                   :pipeline-variable="pipelineVariable"
                   :global-options="loadedGlobalRepos"
                   @update:model-value="
-                    uploadVariable(
+                    uploadVariableStep(
                       pipeline.id,
                       pipelineStep.id,
                       pipelineVariable.id,
@@ -76,8 +129,10 @@
 import { ref, type PropType, type Ref, onMounted } from "vue";
 import { symOutlinedVariables } from "@quasar/extras/material-symbols-outlined";
 import {
-  hasRequiredVariable,
+  hasRequiredStepVariable,
+  hasRequiredGlobalVariable,
   type PipelineBlueprint,
+  type PipelineGlobalVariableUpload,
   type PipelineStepVariableUpload,
 } from "@/scripts/pipeline-blueprint";
 import EntityPipelineVariable from "@/components/shared/EntityPipelineVariable.vue";
@@ -124,7 +179,7 @@ function loadGlobalDataDetails() {
     });
 }
 
-function uploadVariable(
+function uploadVariableStep(
   pipelineId: string,
   pipelineStepId: string,
   variableId: string,
@@ -144,7 +199,35 @@ function uploadVariable(
   };
   axios
     .post(
-      "/api/" + props.endpointType + "/" + props.entityId + "/variable",
+      "/api/" + props.endpointType + "/" + props.entityId + "/variable/step",
+      formData,
+      config
+    )
+    .catch((error) => {
+      loadingError.value = error.response.data;
+      showLoadingError.value = true;
+    });
+}
+
+function uploadVariableGlobal(
+  pipelineId: string,
+  variableId: string,
+  variableValue: string | null
+) {
+  const variableUpload: PipelineGlobalVariableUpload = {
+    pipelineId,
+    variableId,
+    variableValue,
+  };
+  const formData = JSON.stringify(variableUpload);
+  const config = {
+    headers: {
+      "Content-Type": "application/json",
+    },
+  };
+  axios
+    .post(
+      "/api/" + props.endpointType + "/" + props.entityId + "/variable/global",
       formData,
       config
     )
