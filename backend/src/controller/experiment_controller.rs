@@ -11,6 +11,7 @@ use crate::{
         db::{
             experiment::{Experiment, NewExperiment},
             experiment_execution::{ExecutionStatus, ExperimentExecution, NewExperimentExecution},
+            pipeline_global_variable::PipelineGlobalVariable,
             pipeline_step_variable::{NewPipelineStepVariable, PipelineStepVariable},
         },
         exchange::{
@@ -366,36 +367,17 @@ pub async fn post_execute_experiment(
     if let Some(pipeline_id) = Experiment::get(experiment_id, &mut connection)?.pipeline_id {
         if let Some(pipeline) = pipelines.get(&pipeline_id) {
             let pipeline = pipeline.pipeline();
-            let experiment_variables = PipelineStepVariable::get_values_by_experiment_and_pipeline(
-                experiment_id,
-                pipeline_id,
-                &mut connection,
-            )?;
+            // Checks if the required variables are set.
+            PipelineGlobalVariable::validate_global_variables(pipeline, experiment_id, &mut connection)?;
             let mut execution_steps: Vec<NewExperimentExecution> =
-                Vec::with_capacity(pipeline.steps().len());
+            Vec::with_capacity(pipeline.steps().len());
             for step in pipeline.steps() {
+                PipelineStepVariable::validate_step_variables(step, experiment_id, &pipeline_id, &mut connection)?;
                 execution_steps.push(NewExperimentExecution::new(
                     experiment_id,
                     pipeline.id(),
                     step.id(),
                 ));
-                for variable in step.variables() {
-                    if variable.required().unwrap_or(false) {
-                        // Error if required variables are not set.
-                        if !experiment_variables.contains_key(&format!(
-                            "{}{}",
-                            step.id(),
-                            variable.id()
-                        )) {
-                            return Err(SeqError::new(
-                                "Invalid run",
-                                SeqErrorType::BadRequestError,
-                                format!("The experiment {} is missing the required variable with pipeline id {} step id {} and variable id {}.", experiment_id, pipeline.id(), step.id(), variable.id()),
-                                "The requested run parameters are invalid.",
-                            ));
-                        }
-                    }
-                }
             }
             connection.immediate_transaction(|connection| {
                 diesel::insert_into(crate::schema::experiment_execution::table)
@@ -475,29 +457,8 @@ pub async fn post_execute_experiment_step(
                     ));
                 }
                 // Checks if the required variables are set.
-                let experiment_variables =
-                    PipelineStepVariable::get_values_by_experiment_and_pipeline(
-                        experiment_id,
-                        &pipeline_id,
-                        &mut connection,
-                    )?;
-                for variable in step.variables() {
-                    if variable.required().unwrap_or(false) {
-                        // Error if required variables are not set.
-                        if !experiment_variables.contains_key(&format!(
-                            "{}{}",
-                            step.id(),
-                            variable.id()
-                        )) {
-                            return Err(SeqError::new(
-                                    "Invalid run",
-                                    SeqErrorType::BadRequestError,
-                                    format!("The experiment {} is missing the required variable with pipeline id {} step id {} and variable id {}.", experiment_id, pipeline.id(), step.id(), variable.id()),
-                                    "The requested run parameters are invalid.",
-                                ));
-                        }
-                    }
-                }
+                PipelineGlobalVariable::validate_global_variables(pipeline, experiment_id, &mut connection)?;
+                PipelineStepVariable::validate_step_variables(step, experiment_id, &pipeline_id, &mut connection)?;
                 // Submit execution step.
                 if let Some(existing_execution) =
                     executions.iter().find(|s| s.pipeline_step_id == step_id)

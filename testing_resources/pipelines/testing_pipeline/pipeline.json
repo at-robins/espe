@@ -9,7 +9,8 @@
             "description": "A global number field.",
             "category": {
                 "tag": "Number"
-            }
+            },
+            "required": true
         }
     ],
     "steps": [

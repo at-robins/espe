@@ -1,6 +1,10 @@
-use std::collections::HashMap;
+use std::{borrow::Borrow, collections::HashMap};
 
-use crate::schema::pipeline_step_variable::{self};
+use crate::{
+    application::error::{SeqError, SeqErrorType},
+    model::internal::pipeline_blueprint::PipelineStepBlueprint,
+    schema::pipeline_step_variable,
+};
 use chrono::{NaiveDateTime, Utc};
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, OptionalExtension,
@@ -102,6 +106,43 @@ impl PipelineStepVariable {
             }
         }
         Ok(variable_map)
+    }
+
+    /// Returns an error if required pipeline step variables have not been set.
+    ///
+    /// # Parameters
+    ///
+    /// * `step` - the step to validate variables for
+    /// * `experiment_id` - the ID of the experiment the step belongs to
+    /// * `pipeline_id` - the ID of the pipeline the step belongs to
+    /// * `connection` - the database connection
+    pub fn validate_step_variables<S: Borrow<PipelineStepBlueprint>, T: Into<String>>(
+        step: S,
+        experiment_id: i32,
+        pipeline_id: T,
+        connection: &mut SqliteConnection,
+    ) -> Result<(), SeqError> {
+        let pipeline_id: String = pipeline_id.into();
+        let experiment_variables =
+            Self::get_values_by_experiment_and_pipeline(experiment_id, &pipeline_id, connection)?;
+        for variable in step.borrow().variables() {
+            if variable.required().unwrap_or(false) {
+                // Error if required variables are not set.
+                if !experiment_variables.contains_key(&format!(
+                    "{}{}",
+                    step.borrow().id(),
+                    variable.id()
+                )) {
+                    return Err(SeqError::new(
+                                    "Invalid run",
+                                    SeqErrorType::BadRequestError,
+                                    format!("The experiment {} is missing the required variable with pipeline id {}, step id {} and variable id {}.", experiment_id, &pipeline_id, step.borrow().id(), variable.id()),
+                                    "The requested run parameters are invalid.",
+                                ));
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -281,7 +322,7 @@ mod tests {
             .unwrap()
         );
     }
-    
+
     #[test]
     fn test_get() {
         // Use a reference to the context, so the context is not dropped early

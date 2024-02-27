@@ -1,6 +1,10 @@
-use std::collections::HashMap;
+use std::{borrow::Borrow, collections::HashMap};
 
-use crate::schema::pipeline_global_variable::{self};
+use crate::{
+    application::error::{SeqError, SeqErrorType},
+    model::internal::pipeline_blueprint::PipelineBlueprint,
+    schema::pipeline_global_variable,
+};
 use chrono::{NaiveDateTime, Utc};
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, OptionalExtension,
@@ -98,6 +102,37 @@ impl PipelineGlobalVariable {
             }
         }
         Ok(variable_map)
+    }
+
+    /// Returns an error if required pipeline step variables have not been set.
+    ///
+    /// # Parameters
+    ///
+    /// * `step` - the step to validate variables for
+    /// * `experiment_id` - the ID of the experiment the step belongs to
+    /// * `connection` - the database connection
+    pub fn validate_global_variables<T: Borrow<PipelineBlueprint>>(
+        pipeline: T,
+        experiment_id: i32,
+        connection: &mut SqliteConnection,
+    ) -> Result<(), SeqError> {
+        let pipeline: &PipelineBlueprint = pipeline.borrow();
+        let experiment_variables =
+            Self::get_values_by_experiment_and_pipeline(experiment_id, pipeline.id(), connection)?;
+        for variable in pipeline.global_variables() {
+            if variable.required().unwrap_or(false) {
+                // Error if required variables are not set.
+                if !experiment_variables.contains_key(variable.id()) {
+                    return Err(SeqError::new(
+                                    "Invalid run",
+                                    SeqErrorType::BadRequestError,
+                                    format!("The experiment {} is missing the required global variable with pipeline id {} and variable id {}.", experiment_id, pipeline.id(), variable.id()),
+                                    "The requested run parameters are invalid.",
+                                ));
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -310,14 +345,9 @@ mod tests {
             .execute(&mut connection)
             .unwrap();
         assert_eq!(
-            &PipelineGlobalVariable::get(
-                experiment_id,
-                pipeline_id,
-                variable_id,
-                &mut connection
-            )
-            .unwrap()
-            .unwrap(),
+            &PipelineGlobalVariable::get(experiment_id, pipeline_id, variable_id, &mut connection)
+                .unwrap()
+                .unwrap(),
             &pipeline_variable
         );
         // Clearing the variable value.
@@ -333,14 +363,9 @@ mod tests {
         .execute(&mut connection)
         .unwrap();
         assert_eq!(
-            &PipelineGlobalVariable::get(
-                experiment_id,
-                pipeline_id,
-                variable_id,
-                &mut connection
-            )
-            .unwrap()
-            .unwrap(),
+            &PipelineGlobalVariable::get(experiment_id, pipeline_id, variable_id, &mut connection)
+                .unwrap()
+                .unwrap(),
             &pipeline_variable
         );
     }
