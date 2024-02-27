@@ -5,6 +5,7 @@ use crate::{
     model::{
         db::{
             experiment::Experiment,
+            pipeline_global_variable::NewPipelineGlobalVariable,
             pipeline_step_variable::{NewPipelineStepVariable, PipelineStepVariable},
         },
         internal::pipeline_blueprint::PipelineStepVariableCategory,
@@ -251,6 +252,12 @@ async fn test_get_experiment_pipelines() {
     assert_eq!(pipeline.id(), "testing_pipeline");
     assert_eq!(pipeline.name(), "Testing pipeline");
     assert_eq!(pipeline.description(), "This pipeline is for testing purposes.");
+    assert_eq!(pipeline.global_variables().len(), 1);
+    assert_eq!(pipeline.global_variables()[0].id(), "global_number");
+    assert_eq!(pipeline.global_variables()[0].name(), "Global number");
+    assert_eq!(pipeline.global_variables()[0].description(), "A global number field.");
+    assert_eq!(pipeline.global_variables()[0].category(), &PipelineStepVariableCategory::Number);
+    assert_eq!(pipeline.global_variables()[0].required(), &Some(true));
     assert_eq!(pipeline.steps().len(), 1);
     let step = &pipeline.steps()[0];
     assert_eq!(step.id(), "fastqc");
@@ -595,7 +602,7 @@ async fn test_patch_experiment_mail_invalid() {
 }
 
 #[actix_web::test]
-async fn test_post_experiment_pipeline_variable() {
+async fn test_post_experiment_pipeline_step_variable() {
     // Use a reference to the context, so the context is not dropped early
     // and messes up test context folder deletion.
     let mut db_context = TestContext::new();
@@ -657,7 +664,7 @@ async fn test_post_experiment_pipeline_variable() {
         .unwrap();
         assert!(!var_exists);
         let req = test::TestRequest::post()
-            .uri(&format!("/api/experiments/{}/variable", id))
+            .uri(&format!("/api/experiments/{}/variable/step", id))
             .set_json(&variable_upload)
             .to_request();
         let resp = test::call_service(&app, req).await;
@@ -709,7 +716,7 @@ async fn test_post_experiment_pipeline_variable() {
         .unwrap();
         assert!(var_exists);
         let req = test::TestRequest::post()
-            .uri(&format!("/api/experiments/{}/variable", id))
+            .uri(&format!("/api/experiments/{}/variable/step", id))
             .set_json(&variable_upload)
             .to_request();
         let resp = test::call_service(&app, req).await;
@@ -761,7 +768,7 @@ async fn test_post_experiment_pipeline_variable() {
         .unwrap();
         assert!(var_exists);
         let req = test::TestRequest::post()
-            .uri(&format!("/api/experiments/{}/variable", id))
+            .uri(&format!("/api/experiments/{}/variable/step", id))
             .set_json(&variable_upload)
             .to_request();
         let resp = test::call_service(&app, req).await;
@@ -785,7 +792,7 @@ async fn test_post_experiment_pipeline_variable() {
 }
 
 #[actix_web::test]
-async fn test_post_experiment_pipeline_variable_invalid_experiment_id() {
+async fn test_post_experiment_pipeline_step_variable_invalid_experiment_id() {
     // Use a reference to the context, so the context is not dropped early
     // and messes up test context folder deletion.
     let mut db_context = TestContext::new();
@@ -812,7 +819,7 @@ async fn test_post_experiment_pipeline_variable_invalid_experiment_id() {
         variable_value: Some("abc".to_string()),
     };
     let req = test::TestRequest::post()
-        .uri(&format!("/api/experiments/{}/variable", id + 1))
+        .uri(&format!("/api/experiments/{}/variable/step", id + 1))
         .set_json(&variable_upload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -820,7 +827,7 @@ async fn test_post_experiment_pipeline_variable_invalid_experiment_id() {
 }
 
 #[actix_web::test]
-async fn test_post_experiment_pipeline_variable_invalid_pipeline_id() {
+async fn test_post_experiment_pipeline_step_variable_invalid_pipeline_id() {
     // Use a reference to the context, so the context is not dropped early
     // and messes up test context folder deletion.
     let mut db_context = TestContext::new();
@@ -847,7 +854,7 @@ async fn test_post_experiment_pipeline_variable_invalid_pipeline_id() {
         variable_value: Some("abc".to_string()),
     };
     let req = test::TestRequest::post()
-        .uri(&format!("/api/experiments/{}/variable", id))
+        .uri(&format!("/api/experiments/{}/variable/step", id))
         .set_json(&variable_upload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -855,7 +862,7 @@ async fn test_post_experiment_pipeline_variable_invalid_pipeline_id() {
 }
 
 #[actix_web::test]
-async fn test_post_experiment_pipeline_variable_invalid_pipeline_step_id() {
+async fn test_post_experiment_pipeline_step_variable_invalid_pipeline_step_id() {
     // Use a reference to the context, so the context is not dropped early
     // and messes up test context folder deletion.
     let mut db_context = TestContext::new();
@@ -882,7 +889,7 @@ async fn test_post_experiment_pipeline_variable_invalid_pipeline_step_id() {
         variable_value: Some("abc".to_string()),
     };
     let req = test::TestRequest::post()
-        .uri(&format!("/api/experiments/{}/variable", id))
+        .uri(&format!("/api/experiments/{}/variable/step", id))
         .set_json(&variable_upload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -890,7 +897,7 @@ async fn test_post_experiment_pipeline_variable_invalid_pipeline_step_id() {
 }
 
 #[actix_web::test]
-async fn test_post_experiment_pipeline_variable_invalid_variable_id() {
+async fn test_post_experiment_pipeline_step_variable_invalid_variable_id() {
     // Use a reference to the context, so the context is not dropped early
     // and messes up test context folder deletion.
     let mut db_context = TestContext::new();
@@ -917,7 +924,264 @@ async fn test_post_experiment_pipeline_variable_invalid_variable_id() {
         variable_value: Some("abc".to_string()),
     };
     let req = test::TestRequest::post()
-        .uri(&format!("/api/experiments/{}/variable", id))
+        .uri(&format!("/api/experiments/{}/variable/step", id))
+        .set_json(&variable_upload)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_post_experiment_pipeline_global_variable() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let id = 42;
+    let new_experiment_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some("Dummy ID".to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+
+    // Insert new variable.
+    {
+        let variable_upload = PipelineGlobalVariableUpload {
+            pipeline_id: "testing_pipeline".to_string(),
+            variable_id: "global_number".to_string(),
+            variable_value: Some("42".to_string()),
+        };
+        let var_exists: bool = diesel::select(diesel::dsl::exists(
+            crate::schema::pipeline_global_variable::table.filter(
+                crate::schema::pipeline_global_variable::experiment_id
+                    .eq(id)
+                    .and(
+                        crate::schema::pipeline_global_variable::pipeline_id
+                            .eq(&variable_upload.pipeline_id),
+                    )
+                    .and(
+                        crate::schema::pipeline_global_variable::variable_id
+                            .eq(&variable_upload.variable_id),
+                    ),
+            ),
+        ))
+        .get_result(&mut connection)
+        .unwrap();
+        assert!(!var_exists);
+        let req = test::TestRequest::post()
+            .uri(&format!("/api/experiments/{}/variable/global", id))
+            .set_json(&variable_upload)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let variable_value = PipelineGlobalVariable::get_by_experiment_and_pipeline(
+            id,
+            &variable_upload.pipeline_id,
+            &mut connection,
+        )
+        .unwrap()
+        .iter()
+        .find(|variable| &variable.variable_id == &variable_upload.variable_id)
+        .unwrap()
+        .variable_value
+        .clone();
+        assert_eq!(variable_value, variable_upload.variable_value);
+    }
+
+    // Update the variable value.
+    {
+        let variable_upload = PipelineGlobalVariableUpload {
+            pipeline_id: "testing_pipeline".to_string(),
+            variable_id: "global_number".to_string(),
+            variable_value: Some("123".to_string()),
+        };
+        let var_exists: bool = diesel::select(diesel::dsl::exists(
+            crate::schema::pipeline_global_variable::table.filter(
+                crate::schema::pipeline_global_variable::experiment_id
+                    .eq(id)
+                    .and(
+                        crate::schema::pipeline_global_variable::pipeline_id
+                            .eq(&variable_upload.pipeline_id),
+                    )
+                    .and(
+                        crate::schema::pipeline_global_variable::variable_id
+                            .eq(&variable_upload.variable_id),
+                    ),
+            ),
+        ))
+        .get_result(&mut connection)
+        .unwrap();
+        assert!(var_exists);
+        let req = test::TestRequest::post()
+            .uri(&format!("/api/experiments/{}/variable/global", id))
+            .set_json(&variable_upload)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let variable_value = PipelineGlobalVariable::get_by_experiment_and_pipeline(
+            id,
+            &variable_upload.pipeline_id,
+            &mut connection,
+        )
+        .unwrap()
+        .iter()
+        .find(|variable| &variable.variable_id == &variable_upload.variable_id)
+        .unwrap()
+        .variable_value
+        .clone();
+        assert_eq!(variable_value, variable_upload.variable_value);
+    }
+
+    // Clear the variable.
+    {
+        let variable_upload = PipelineGlobalVariableUpload {
+            pipeline_id: "testing_pipeline".to_string(),
+            variable_id: "global_number".to_string(),
+            variable_value: None,
+        };
+        let var_exists: bool = diesel::select(diesel::dsl::exists(
+            crate::schema::pipeline_global_variable::table.filter(
+                crate::schema::pipeline_global_variable::experiment_id
+                    .eq(id)
+                    .and(
+                        crate::schema::pipeline_global_variable::pipeline_id
+                            .eq(&variable_upload.pipeline_id),
+                    )
+                    .and(
+                        crate::schema::pipeline_global_variable::variable_id
+                            .eq(&variable_upload.variable_id),
+                    ),
+            ),
+        ))
+        .get_result(&mut connection)
+        .unwrap();
+        assert!(var_exists);
+        let req = test::TestRequest::post()
+            .uri(&format!("/api/experiments/{}/variable/global", id))
+            .set_json(&variable_upload)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let variable_value = PipelineGlobalVariable::get_by_experiment_and_pipeline(
+            id,
+            &variable_upload.pipeline_id,
+            &mut connection,
+        )
+        .unwrap()
+        .iter()
+        .find(|variable| &variable.variable_id == &variable_upload.variable_id)
+        .unwrap()
+        .variable_value
+        .clone();
+        assert_eq!(variable_value, variable_upload.variable_value);
+    }
+}
+
+#[actix_web::test]
+async fn test_post_experiment_pipeline_global_variable_invalid_experiment_id() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let id = 42;
+    let new_experiment_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some("Dummy ID".to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let variable_upload = PipelineGlobalVariableUpload {
+        pipeline_id: "testing_pipeline".to_string(),
+        variable_id: "global_number".to_string(),
+        variable_value: Some("42".to_string()),
+    };
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}/variable/global", id + 1))
+        .set_json(&variable_upload)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_post_experiment_pipeline_global_variable_invalid_pipeline_id() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let id = 42;
+    let new_experiment_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some("Dummy ID".to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let variable_upload = PipelineGlobalVariableUpload {
+        pipeline_id: "invalid_pipeline".to_string(),
+        variable_id: "global_number".to_string(),
+        variable_value: Some("42".to_string()),
+    };
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}/variable/global", id))
+        .set_json(&variable_upload)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_post_experiment_pipeline_global_variable_invalid_variable_id() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let id = 42;
+    let new_experiment_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some("Dummy ID".to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let variable_upload = PipelineGlobalVariableUpload {
+        pipeline_id: "testing_pipeline".to_string(),
+        variable_id: "invalid_variable".to_string(),
+        variable_value: Some("42".to_string()),
+    };
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}/variable/global", id))
         .set_json(&variable_upload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -946,7 +1210,17 @@ async fn test_post_execute_experiment() {
         .values(&new_experiment_record)
         .execute(&mut connection)
         .unwrap();
-    let required_variable = NewPipelineStepVariable::new(
+    let required_global_variable = NewPipelineGlobalVariable::new(
+        experiment_id,
+        pipeline_id,
+        "global_number",
+        Some("42".to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_global_variable::table)
+        .values(&required_global_variable)
+        .execute(&mut connection)
+        .unwrap();
+    let required_step_variable = NewPipelineStepVariable::new(
         experiment_id,
         pipeline_id,
         "fastqc",
@@ -954,7 +1228,7 @@ async fn test_post_execute_experiment() {
         Some("false".to_string()),
     );
     diesel::insert_into(crate::schema::pipeline_step_variable::table)
-        .values(&required_variable)
+        .values(&required_step_variable)
         .execute(&mut connection)
         .unwrap();
     assert!(ExperimentExecution::get_by_experiment(experiment_id, &mut connection)
@@ -995,7 +1269,17 @@ async fn test_post_execute_experiment_unset_pipeline() {
         .values(&new_experiment_record)
         .execute(&mut connection)
         .unwrap();
-    let required_variable = NewPipelineStepVariable::new(
+    let required_global_variable = NewPipelineGlobalVariable::new(
+        experiment_id,
+        pipeline_id,
+        "global_number",
+        Some("42".to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_global_variable::table)
+        .values(&required_global_variable)
+        .execute(&mut connection)
+        .unwrap();
+    let required_step_variable = NewPipelineStepVariable::new(
         experiment_id,
         pipeline_id,
         "fastqc",
@@ -1003,7 +1287,7 @@ async fn test_post_execute_experiment_unset_pipeline() {
         Some("false".to_string()),
     );
     diesel::insert_into(crate::schema::pipeline_step_variable::table)
-        .values(&required_variable)
+        .values(&required_step_variable)
         .execute(&mut connection)
         .unwrap();
     let req = test::TestRequest::post()
@@ -1035,7 +1319,17 @@ async fn test_post_execute_experiment_invalid_pipeline() {
         .values(&new_experiment_record)
         .execute(&mut connection)
         .unwrap();
-    let required_variable = NewPipelineStepVariable::new(
+    let required_global_variable = NewPipelineGlobalVariable::new(
+        experiment_id,
+        pipeline_id,
+        "global_number",
+        Some("42".to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_global_variable::table)
+        .values(&required_global_variable)
+        .execute(&mut connection)
+        .unwrap();
+    let required_step_variable = NewPipelineStepVariable::new(
         experiment_id,
         pipeline_id,
         "fastqc",
@@ -1043,7 +1337,7 @@ async fn test_post_execute_experiment_invalid_pipeline() {
         Some("false".to_string()),
     );
     diesel::insert_into(crate::schema::pipeline_step_variable::table)
-        .values(&required_variable)
+        .values(&required_step_variable)
         .execute(&mut connection)
         .unwrap();
     let req = test::TestRequest::post()
@@ -1053,9 +1347,8 @@ async fn test_post_execute_experiment_invalid_pipeline() {
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
 
-
 #[actix_web::test]
-async fn test_post_execute_experiment_unset_required_variable() {
+async fn test_post_execute_experiment_unset_required_step_variable() {
     // Use a reference to the context, so the context is not dropped early
     // and messes up test context folder deletion.
     let mut db_context = TestContext::new();
@@ -1076,6 +1369,16 @@ async fn test_post_execute_experiment_unset_required_variable() {
         .values(&new_experiment_record)
         .execute(&mut connection)
         .unwrap();
+    let required_global_variable = NewPipelineGlobalVariable::new(
+        experiment_id,
+        pipeline_id,
+        "global_number",
+        Some("42".to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_global_variable::table)
+        .values(&required_global_variable)
+        .execute(&mut connection)
+        .unwrap();
     let req = test::TestRequest::post()
         .uri(&format!("/api/experiments/{}", experiment_id))
         .to_request();
@@ -1083,6 +1386,45 @@ async fn test_post_execute_experiment_unset_required_variable() {
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
 
+#[actix_web::test]
+async fn test_post_execute_experiment_unset_required_global_variable() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id: i32 = 42;
+    let pipeline_id = "testing_pipeline";
+    let new_experiment_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let required_step_variable = NewPipelineStepVariable::new(
+        experiment_id,
+        pipeline_id,
+        "fastqc",
+        "bool",
+        Some("false".to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&required_step_variable)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
 
 #[actix_web::test]
 async fn test_post_execute_experiment_already_running() {
@@ -1106,7 +1448,17 @@ async fn test_post_execute_experiment_already_running() {
         .values(&new_experiment_record)
         .execute(&mut connection)
         .unwrap();
-    let required_variable = NewPipelineStepVariable::new(
+    let required_global_variable = NewPipelineGlobalVariable::new(
+        experiment_id,
+        pipeline_id,
+        "global_number",
+        Some("42".to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_global_variable::table)
+        .values(&required_global_variable)
+        .execute(&mut connection)
+        .unwrap();
+    let required_step_variable = NewPipelineStepVariable::new(
         experiment_id,
         pipeline_id,
         "fastqc",
@@ -1114,7 +1466,7 @@ async fn test_post_execute_experiment_already_running() {
         Some("false".to_string()),
     );
     diesel::insert_into(crate::schema::pipeline_step_variable::table)
-        .values(&required_variable)
+        .values(&required_step_variable)
         .execute(&mut connection)
         .unwrap();
     // First execution should run normally.

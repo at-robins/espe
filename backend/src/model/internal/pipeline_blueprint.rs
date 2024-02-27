@@ -50,6 +50,9 @@ pub struct PipelineBlueprint {
     /// The [`PipelineStepBlueprint`] that make up the pipeline.
     #[getset(get = "pub")]
     steps: Vec<PipelineStepBlueprint>,
+    /// The global variables that can be specified for the pipeline.
+    #[getset(get = "pub")]
+    global_variables: Vec<PipelineStepVariable>,
 }
 
 /// The definition of a pipeline in the context of its containing directory.
@@ -92,6 +95,16 @@ impl ContextualisedPipelineBlueprint {
                 Self::load_description_import(self.pipeline.description(), &imports_path)?
             {
                 self.pipeline.description = import_content;
+            }
+            // Resolve global variable description imports.
+            for global_variable_index in 0..self.pipeline().global_variables().len() {
+                if let Some(import_content) = Self::load_description_import(
+                    self.pipeline().global_variables()[global_variable_index].description(),
+                    &imports_path,
+                )? {
+                    self.pipeline.global_variables[global_variable_index].description =
+                        import_content;
+                }
             }
             // Resolve pipeline step description imports.
             for step_index in 0..self.pipeline().steps().len() {

@@ -109,8 +109,8 @@ pub fn build_pipeline_step<P: AsRef<Path>, T: AsRef<str>>(
 /// * `variables` - the variables that were specified for step execution
 /// * `experiment_id` - the ID of the experiment
 /// * `app_cofig` - the app [`Configuration`]
-pub fn run_pipeline_step<T: AsRef<str>>(
-    pipeline_id: T,
+pub fn run_pipeline_step(
+    pipeline: &ExperimentPipelineBlueprint,
     step: &ExperimentPipelineStepBlueprint,
     experiment_id: i32,
     app_config: web::Data<Configuration>,
@@ -130,7 +130,7 @@ pub fn run_pipeline_step<T: AsRef<str>>(
     let mut arguments: Vec<OsString> = vec![
         "run".into(),
         "--name".into(),
-        format_container_name(&pipeline_id, step.id()).into(),
+        format_container_name(pipeline.id(), step.id()).into(),
         "--rm".into(),
     ];
 
@@ -155,8 +155,9 @@ pub fn run_pipeline_step<T: AsRef<str>>(
     }
     // Set global mounts.
     let mut mount_map_globals = serde_json::Map::new();
-    for (global_var_id, global_var_value) in step.variables()
+    for (global_var_id, global_var_value) in pipeline.global_variables()
         .iter()
+        .chain(step.variables().iter())
         .filter(|var_instance| var_instance.is_global_data_reference())
         // Filter out variables without values.
         .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), value)))
@@ -165,11 +166,7 @@ pub fn run_pipeline_step<T: AsRef<str>>(
         mount_map_globals
             .insert(global_var_id.to_string(), serde_json::Value::String(target.clone()));
         let global_data_path = app_config.global_data_path(global_var_value);
-        arguments.extend(pipeline_step_mount(
-            &global_data_path,
-            target,
-            true,
-        ));
+        arguments.extend(pipeline_step_mount(&global_data_path, target, true));
         // Create global data directory in case the reposiory is empty.
         std::fs::create_dir_all(&global_data_path)?;
     }
@@ -186,8 +183,9 @@ pub fn run_pipeline_step<T: AsRef<str>>(
     arguments.push(format!("{}={}", CONTAINER_ENV_MOUNT, mount_paths.to_string()).into());
 
     // Set other variables.
-    step.variables()
+    pipeline.global_variables()
         .iter()
+        .chain(step.variables().iter())
         .filter(|var_instance| !var_instance.is_global_data_reference())
         // Filter out variables without values.
         .filter_map(|var_instance| var_instance.value().as_ref().map(|value| (var_instance.id(), value)))
@@ -196,12 +194,12 @@ pub fn run_pipeline_step<T: AsRef<str>>(
                 arguments.push("--env".into());
                 arguments.push(format!("{}={}", other_var_id, other_var_value).into());
             } else {
-                log::warn!("Pipeline {} step {} tried to overwrite the reserved environment variable {} with value {}.", pipeline_id.as_ref(), step.id(), other_var_id, other_var_value);
+                log::warn!("Pipeline {} step {} tried to overwrite the reserved environment variable {} with value {}.", pipeline.id(), step.id(), other_var_id, other_var_value);
             }
         });
 
     // Set container to run.
-    arguments.push(format_container_name(&pipeline_id, step.id()).into());
+    arguments.push(format_container_name(pipeline.id(), step.id()).into());
 
     // Create log directory.
     let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
@@ -209,7 +207,7 @@ pub fn run_pipeline_step<T: AsRef<str>>(
     // Open stdout log file.
     let log_path_stdout = app_config.experiment_log_path(
         experiment_id.to_string(),
-        &pipeline_id,
+        pipeline.id(),
         step.id(),
         LogProcessType::Run,
         LogOutputType::StdOut,
@@ -223,7 +221,7 @@ pub fn run_pipeline_step<T: AsRef<str>>(
     // Open stderr log file.
     let log_path_stderr = app_config.experiment_log_path(
         experiment_id.to_string(),
-        &pipeline_id,
+        pipeline.id(),
         step.id(),
         LogProcessType::Run,
         LogOutputType::StdErr,
@@ -721,11 +719,13 @@ impl ContainerHandler {
         let step = self.get_executed_step()?;
         if let Some(pipeline) = self.loaded_pipelines.get(&step.pipeline_id) {
             let mut connection = self.database_manager.database_connection()?;
-            let values = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
+            let values_global = crate::model::db::pipeline_global_variable::PipelineGlobalVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
+            let values_step = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
             // The stati of the pipeline steps should be None at this point so an empty map is supplied instead of loading them from the database.
             let pipeline = ExperimentPipelineBlueprint::from_internal(
                 pipeline.pipeline(),
-                values,
+                values_global,
+                values_step,
                 HashMap::new(),
             );
             if let Some(step_blueprint) = pipeline
@@ -735,7 +735,7 @@ impl ContainerHandler {
             {
                 log::info!("Running {:?}", &step);
                 self.run_process = Some(run_pipeline_step(
-                    &step.pipeline_id,
+                    &pipeline,
                     step_blueprint,
                     step.experiment_id,
                     web::Data::clone(&self.config),

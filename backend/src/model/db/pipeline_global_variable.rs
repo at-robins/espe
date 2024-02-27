@@ -2,8 +2,8 @@ use std::{borrow::Borrow, collections::HashMap};
 
 use crate::{
     application::error::{SeqError, SeqErrorType},
-    model::internal::pipeline_blueprint::PipelineStepBlueprint,
-    schema::pipeline_step_variable,
+    model::internal::pipeline_blueprint::PipelineBlueprint,
+    schema::pipeline_global_variable,
 };
 use chrono::{NaiveDateTime, Utc};
 use diesel::{
@@ -14,45 +14,42 @@ use getset::Getters;
 
 #[derive(Identifiable, Queryable, Insertable, Selectable, PartialEq, Debug)]
 #[diesel(belongs_to(Experiment, foreign_key = experiment_id))]
-#[diesel(table_name = pipeline_step_variable)]
-/// A queryable pipeline step variable database entry.
-pub struct PipelineStepVariable {
+#[diesel(table_name = pipeline_global_variable)]
+/// A queryable global pipeline variable database entry.
+pub struct PipelineGlobalVariable {
     pub id: i32,
     pub experiment_id: i32,
     pub pipeline_id: String,
-    pub pipeline_step_id: String,
     pub variable_id: String,
     pub variable_value: Option<String>,
     pub creation_time: NaiveDateTime,
 }
 
-impl PipelineStepVariable {
+impl PipelineGlobalVariable {
     /// Returns the variable with the specified IDs if present in the database.
     ///
     /// # Parameters
     ///
     /// * `experiment_id` - the ID of the experiment the variable belongs to
     /// * `pipeline_id` - the ID of the pipeline the variable belongs to
-    /// * `pipeline_step_id` - the ID of the pipeline step the variable belongs to
     /// * `variable_id` - the ID of the variable
     /// * `connection` - the database connection
-    pub fn get<T: Into<String>, S: Into<String>, R: Into<String>>(
+    pub fn get<T: Into<String>, R: Into<String>>(
         experiment_id: i32,
         pipeline_id: T,
-        pipeline_step_id: S,
         variable_id: R,
         connection: &mut SqliteConnection,
-    ) -> Result<Option<PipelineStepVariable>, diesel::result::Error> {
-        crate::schema::pipeline_step_variable::table
+    ) -> Result<Option<PipelineGlobalVariable>, diesel::result::Error> {
+        crate::schema::pipeline_global_variable::table
             .filter(
-                crate::schema::pipeline_step_variable::experiment_id
+                crate::schema::pipeline_global_variable::experiment_id
                     .eq(experiment_id)
-                    .and(crate::schema::pipeline_step_variable::pipeline_id.eq(pipeline_id.into()))
                     .and(
-                        crate::schema::pipeline_step_variable::pipeline_step_id
-                            .eq(pipeline_step_id.into()),
+                        crate::schema::pipeline_global_variable::pipeline_id.eq(pipeline_id.into()),
                     )
-                    .and(crate::schema::pipeline_step_variable::variable_id.eq(variable_id.into())),
+                    .and(
+                        crate::schema::pipeline_global_variable::variable_id.eq(variable_id.into()),
+                    ),
             )
             .first(connection)
             .optional()
@@ -69,20 +66,22 @@ impl PipelineStepVariable {
         experiment_id: i32,
         pipeline_id: T,
         connection: &mut SqliteConnection,
-    ) -> Result<Vec<PipelineStepVariable>, diesel::result::Error> {
-        crate::schema::pipeline_step_variable::table
+    ) -> Result<Vec<PipelineGlobalVariable>, diesel::result::Error> {
+        crate::schema::pipeline_global_variable::table
             .filter(
-                crate::schema::pipeline_step_variable::experiment_id
+                crate::schema::pipeline_global_variable::experiment_id
                     .eq(experiment_id)
-                    .and(crate::schema::pipeline_step_variable::pipeline_id.eq(pipeline_id.into())),
+                    .and(
+                        crate::schema::pipeline_global_variable::pipeline_id.eq(pipeline_id.into()),
+                    ),
             )
-            .select(PipelineStepVariable::as_select())
+            .select(PipelineGlobalVariable::as_select())
             .load(connection)
     }
 
     /// Returns all variable values belonging to the specified experiment and pipeline.
-    /// The keys of the returned map is a concatenation of pipeline step ID and variable ID.
-    /// The values of the map are the string representation of the variable value.
+    /// The keys of the returned map are the variable IDs.
+    /// The values of the map are the string representations of the variable values.
     ///
     /// # Parameters
     ///
@@ -99,10 +98,7 @@ impl PipelineStepVariable {
         let mut variable_map = HashMap::with_capacity(ps_variables.len());
         for ps_variable in ps_variables {
             if let Some(ps_value) = ps_variable.variable_value {
-                variable_map.insert(
-                    format!("{}{}", ps_variable.pipeline_step_id, ps_variable.variable_id),
-                    ps_value,
-                );
+                variable_map.insert(ps_variable.variable_id, ps_value);
             }
         }
         Ok(variable_map)
@@ -114,29 +110,23 @@ impl PipelineStepVariable {
     ///
     /// * `step` - the step to validate variables for
     /// * `experiment_id` - the ID of the experiment the step belongs to
-    /// * `pipeline_id` - the ID of the pipeline the step belongs to
     /// * `connection` - the database connection
-    pub fn validate_step_variables<S: Borrow<PipelineStepBlueprint>, T: Into<String>>(
-        step: S,
+    pub fn validate_global_variables<T: Borrow<PipelineBlueprint>>(
+        pipeline: T,
         experiment_id: i32,
-        pipeline_id: T,
         connection: &mut SqliteConnection,
     ) -> Result<(), SeqError> {
-        let pipeline_id: String = pipeline_id.into();
+        let pipeline: &PipelineBlueprint = pipeline.borrow();
         let experiment_variables =
-            Self::get_values_by_experiment_and_pipeline(experiment_id, &pipeline_id, connection)?;
-        for variable in step.borrow().variables() {
+            Self::get_values_by_experiment_and_pipeline(experiment_id, pipeline.id(), connection)?;
+        for variable in pipeline.global_variables() {
             if variable.required().unwrap_or(false) {
                 // Error if required variables are not set.
-                if !experiment_variables.contains_key(&format!(
-                    "{}{}",
-                    step.borrow().id(),
-                    variable.id()
-                )) {
+                if !experiment_variables.contains_key(variable.id()) {
                     return Err(SeqError::new(
                                     "Invalid run",
                                     SeqErrorType::BadRequestError,
-                                    format!("The experiment {} is missing the required variable with pipeline id {}, step id {} and variable id {}.", experiment_id, &pipeline_id, step.borrow().id(), variable.id()),
+                                    format!("The experiment {} is missing the required global variable with pipeline id {} and variable id {}.", experiment_id, pipeline.id(), variable.id()),
                                     "The requested run parameters are invalid.",
                                 ));
                 }
@@ -147,15 +137,13 @@ impl PipelineStepVariable {
 }
 
 #[derive(Insertable, PartialEq, Debug, Getters)]
-#[diesel(table_name = pipeline_step_variable)]
-/// A new pipeline step variable database record.
-pub struct NewPipelineStepVariable {
+#[diesel(table_name = pipeline_global_variable)]
+/// A new global pipeline variable database record.
+pub struct NewPipelineGlobalVariable {
     #[getset(get = "pub")]
     pub experiment_id: i32,
     #[getset(get = "pub")]
     pub pipeline_id: String,
-    #[getset(get = "pub")]
-    pub pipeline_step_id: String,
     #[getset(get = "pub")]
     pub variable_id: String,
     #[getset(get = "pub")]
@@ -164,27 +152,24 @@ pub struct NewPipelineStepVariable {
     pub creation_time: NaiveDateTime,
 }
 
-impl NewPipelineStepVariable {
-    /// Creates a new pipeline step variable record for insertion into the database.
+impl NewPipelineGlobalVariable {
+    /// Creates a new global pipeline variable record for insertion into the database.
     ///
     /// # Parameters
     ///
     /// * `experiment_id` - the ID of the experiment the variable belongs to
     /// * `pipeline_id` - the ID of the pipeline the variable belongs to
-    /// * `pipeline_step_id` - the ID of the pipeline step the variable belongs to
     /// * `variable_id` - the id of the variable
     /// * `variable_value` - the value of the variable
-    pub fn new<Q: Into<String>, R: Into<String>, S: Into<String>, T: Into<Option<String>>>(
+    pub fn new<Q: Into<String>, S: Into<String>, T: Into<Option<String>>>(
         experiment_id: i32,
         pipeline_id: Q,
-        pipeline_step_id: R,
         variable_id: S,
         variable_value: T,
     ) -> Self {
         Self {
             experiment_id,
             pipeline_id: pipeline_id.into(),
-            pipeline_step_id: pipeline_step_id.into(),
             variable_id: variable_id.into(),
             variable_value: variable_value.into(),
             creation_time: Utc::now().naive_utc(),
@@ -219,7 +204,7 @@ mod tests {
             .unwrap();
         // Dummy variable setup.
         let pipeline_id = "Dummy pipeline";
-        assert!(PipelineStepVariable::get_by_experiment_and_pipeline(
+        assert!(PipelineGlobalVariable::get_by_experiment_and_pipeline(
             experiment_id,
             pipeline_id,
             &mut connection
@@ -227,24 +212,23 @@ mod tests {
         .unwrap()
         .is_empty());
         let number_of_records = 42;
-        let new_records: Vec<PipelineStepVariable> = (0..number_of_records)
-            .map(|id| PipelineStepVariable {
+        let new_records: Vec<PipelineGlobalVariable> = (0..number_of_records)
+            .map(|id| PipelineGlobalVariable {
                 id,
                 experiment_id,
                 pipeline_id: pipeline_id.to_string(),
-                pipeline_step_id: id.to_string(),
                 variable_id: id.to_string(),
                 variable_value: Some(id.to_string()),
                 creation_time: chrono::Utc::now().naive_local(),
             })
             .collect();
-        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        diesel::insert_into(crate::schema::pipeline_global_variable::table)
             .values(&new_records)
             .execute(&mut connection)
             .unwrap();
         assert_eq!(
             new_records,
-            PipelineStepVariable::get_by_experiment_and_pipeline(
+            PipelineGlobalVariable::get_by_experiment_and_pipeline(
                 experiment_id,
                 pipeline_id,
                 &mut connection
@@ -256,7 +240,7 @@ mod tests {
             .filter(crate::schema::experiment::id.eq(experiment_id))
             .execute(&mut connection)
             .unwrap();
-        assert!(PipelineStepVariable::get_by_experiment_and_pipeline(
+        assert!(PipelineGlobalVariable::get_by_experiment_and_pipeline(
             experiment_id,
             pipeline_id,
             &mut connection
@@ -285,7 +269,7 @@ mod tests {
             .unwrap();
         // Dummy variable setup.
         let pipeline_id = "Dummy pipeline";
-        assert!(PipelineStepVariable::get_by_experiment_and_pipeline(
+        assert!(PipelineGlobalVariable::get_by_experiment_and_pipeline(
             experiment_id,
             pipeline_id,
             &mut connection
@@ -294,27 +278,26 @@ mod tests {
         .is_empty());
         let number_of_records = 42;
         let mut expected_map = HashMap::new();
-        let new_records: Vec<PipelineStepVariable> = (0..number_of_records)
+        let new_records: Vec<PipelineGlobalVariable> = (0..number_of_records)
             .map(|id| {
-                expected_map.insert(format!("{}{}", id, id), id.to_string());
-                PipelineStepVariable {
+                expected_map.insert(id.to_string(), id.to_string());
+                PipelineGlobalVariable {
                     id,
                     experiment_id,
                     pipeline_id: pipeline_id.to_string(),
-                    pipeline_step_id: id.to_string(),
                     variable_id: id.to_string(),
                     variable_value: Some(id.to_string()),
                     creation_time: chrono::Utc::now().naive_local(),
                 }
             })
             .collect();
-        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        diesel::insert_into(crate::schema::pipeline_global_variable::table)
             .values(&new_records)
             .execute(&mut connection)
             .unwrap();
         assert_eq!(
             expected_map,
-            PipelineStepVariable::get_values_by_experiment_and_pipeline(
+            PipelineGlobalVariable::get_values_by_experiment_and_pipeline(
                 experiment_id,
                 pipeline_id,
                 &mut connection
@@ -339,65 +322,50 @@ mod tests {
         // Dummy variable setup.
         let pipeline_variable_row_id: i32 = 42;
         let pipeline_id = "Dummy pipeline";
-        let pipeline_step_id = "Dummy step";
         let variable_id = "Dummy variable";
-        let mut pipeline_variable = PipelineStepVariable {
+        let mut pipeline_variable = PipelineGlobalVariable {
             id: pipeline_variable_row_id,
             experiment_id,
             pipeline_id: pipeline_id.to_string(),
-            pipeline_step_id: pipeline_step_id.to_string(),
             variable_id: variable_id.to_string(),
             variable_value: Some("Dummy value".to_string()),
             creation_time: chrono::Utc::now().naive_local(),
         };
-        assert!(PipelineStepVariable::get(
+        assert!(PipelineGlobalVariable::get(
             experiment_id,
             pipeline_id,
-            pipeline_step_id,
             variable_id,
             &mut connection
         )
         .unwrap()
         .is_none());
         // Setting the variable
-        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        diesel::insert_into(crate::schema::pipeline_global_variable::table)
             .values(&pipeline_variable)
             .execute(&mut connection)
             .unwrap();
         assert_eq!(
-            &PipelineStepVariable::get(
-                experiment_id,
-                pipeline_id,
-                pipeline_step_id,
-                variable_id,
-                &mut connection
-            )
-            .unwrap()
-            .unwrap(),
+            &PipelineGlobalVariable::get(experiment_id, pipeline_id, variable_id, &mut connection)
+                .unwrap()
+                .unwrap(),
             &pipeline_variable
         );
         // Clearing the variable value.
         pipeline_variable.variable_value = None;
         diesel::update(
-            crate::schema::pipeline_step_variable::table
-                .filter(crate::schema::pipeline_step_variable::id.eq(pipeline_variable.id)),
+            crate::schema::pipeline_global_variable::table
+                .filter(crate::schema::pipeline_global_variable::id.eq(pipeline_variable.id)),
         )
         .set(
-            crate::schema::pipeline_step_variable::variable_value
+            crate::schema::pipeline_global_variable::variable_value
                 .eq(pipeline_variable.variable_value.clone()),
         )
         .execute(&mut connection)
         .unwrap();
         assert_eq!(
-            &PipelineStepVariable::get(
-                experiment_id,
-                pipeline_id,
-                pipeline_step_id,
-                variable_id,
-                &mut connection
-            )
-            .unwrap()
-            .unwrap(),
+            &PipelineGlobalVariable::get(experiment_id, pipeline_id, variable_id, &mut connection)
+                .unwrap()
+                .unwrap(),
             &pipeline_variable
         );
     }

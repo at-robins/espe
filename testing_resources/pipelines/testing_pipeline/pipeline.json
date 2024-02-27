@@ -2,6 +2,17 @@
     "id": "testing_pipeline",
     "name": "Testing pipeline",
     "description": "This pipeline is for testing purposes.",
+    "global_variables": [
+        {
+            "id": "global_number",
+            "name": "Global number",
+            "description": "<espe-import>\tglobal_number.html</espe-import>",
+            "category": {
+                "tag": "Number"
+            },
+            "required": true
+        }
+    ],
     "steps": [
         {
             "id": "fastqc",

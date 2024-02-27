@@ -19,6 +19,9 @@ pub struct ExperimentPipelineBlueprint {
     /// A description of the pipeline.
     #[getset(get = "pub")]
     description: String,
+    /// The global variables that can be specified for the pipeline.
+    #[getset(get = "pub")]
+    global_variables: Vec<ExperimentPipelineStepVariable>,
     /// The [`PipelineStepBlueprint`] that make up the pipeline.
     #[getset(get = "pub")]
     steps: Vec<ExperimentPipelineStepBlueprint>,
@@ -31,30 +34,49 @@ impl ExperimentPipelineBlueprint {
     /// # Parameters
     ///
     /// * `pipeline` - the pipeline to convert
-    /// * `values` - a map of variable values, where the keys are a concatenation of the
+    /// * `values_global` - a map of global variable values, where the keys are the variable ID
+    /// * `values_step` - a map of step variable values, , where the keys are a concatenation of the
     /// pipeline step ID and variable ID
     /// * `stati` - a map of stati, where the keys are the pipeline step ID
     pub fn from_internal<
         PipelineType: Borrow<PipelineBlueprint>,
-        ValueMapType: Borrow<HashMap<String, String>>,
+        ValueGlobalMapType: Borrow<HashMap<String, String>>,
+        ValueStepMapType: Borrow<HashMap<String, String>>,
         StatusMapType: Borrow<HashMap<String, String>>,
     >(
         pipeline: PipelineType,
-        values: ValueMapType,
+        values_global: ValueGlobalMapType,
+        values_step: ValueStepMapType,
         stati: StatusMapType,
     ) -> Self {
+        let global_variables = pipeline
+            .borrow()
+            .global_variables()
+            .iter()
+            .map(|v| {
+                ExperimentPipelineStepVariable::from_internal(
+                    v,
+                    values_global.borrow().get(v.id()).map(|s| s.clone()),
+                )
+            })
+            .collect();
         let steps = pipeline
             .borrow()
             .steps()
             .iter()
             .map(|s| {
-                ExperimentPipelineStepBlueprint::from_internal(s, values.borrow(), stati.borrow())
+                ExperimentPipelineStepBlueprint::from_internal(
+                    s,
+                    values_step.borrow(),
+                    stati.borrow(),
+                )
             })
             .collect();
         Self {
             id: pipeline.borrow().id().clone(),
             name: pipeline.borrow().name().clone(),
             description: pipeline.borrow().description().clone(),
+            global_variables,
             steps,
         }
     }
@@ -360,6 +382,17 @@ mod tests {
                 \"id\": \"testing_pipeline\",
                 \"name\": \"Testing pipeline\",
                 \"description\": \"This pipeline is for testing purposes.\",
+                \"global_variables\": [
+                    {
+                        \"id\": \"global_bool\",
+                        \"name\": \"Global boolean\",
+                        \"description\": \"A global boolean checkbox.\",
+                        \"category\": {
+                            \"tag\": \"Boolean\"
+                        },
+                        \"required\": true
+                    }
+                ],
                 \"steps\": [
                     {
                         \"id\": \"fastqc1\",
@@ -420,22 +453,41 @@ mod tests {
             ",
         )
         .unwrap();
-        let mut values = HashMap::new();
 
-        values.insert("fastqc1global".to_string(), "01".to_string());
-        values.insert("fastqc1bool".to_string(), "00".to_string());
-        values.insert("fastqc2bool".to_string(), "10".to_string());
-        values.insert("fastqc2global".to_string(), "11".to_string());
+        let mut values_global = HashMap::new();
+        values_global.insert("global_bool".to_string(), "true".to_string());
+
+        let mut values_step = HashMap::new();
+        values_step.insert("fastqc1global".to_string(), "01".to_string());
+        values_step.insert("fastqc1bool".to_string(), "00".to_string());
+        values_step.insert("fastqc2bool".to_string(), "10".to_string());
+        values_step.insert("fastqc2global".to_string(), "11".to_string());
 
         let mut stati = HashMap::new();
         stati.insert("fastqc2".to_string(), PipelineStepStatus::Failed.to_string());
 
-        let experiment_pipeline =
-            ExperimentPipelineBlueprint::from_internal(&pipeline, values, stati);
+        let experiment_pipeline = ExperimentPipelineBlueprint::from_internal(
+            &pipeline,
+            values_global,
+            values_step,
+            stati,
+        );
         assert_eq!(experiment_pipeline.id(), pipeline.id());
         assert_eq!(experiment_pipeline.name(), pipeline.name());
         assert_eq!(experiment_pipeline.description(), pipeline.description());
+        assert_eq!(experiment_pipeline.global_variables().len(), pipeline.global_variables().len());
         assert_eq!(experiment_pipeline.steps().len(), pipeline.steps().len());
+
+        let experiment_globals = experiment_pipeline.global_variables();
+        let pipeline_globals = pipeline.global_variables();
+        for j in 0..experiment_globals.len() {
+            assert_eq!(experiment_globals[j].id(), pipeline_globals[j].id());
+            assert_eq!(experiment_globals[j].name(), pipeline_globals[j].name());
+            assert_eq!(experiment_globals[j].description(), pipeline_globals[j].description());
+            assert_eq!(experiment_globals[j].category(), pipeline_globals[j].category());
+            assert_eq!(experiment_globals[j].required(), pipeline_globals[j].required());
+            assert_eq!(experiment_globals[j].value(), &Some("true".to_string()));
+        }
 
         let experiment_steps = experiment_pipeline.steps();
         let pipeline_steps = pipeline.steps();

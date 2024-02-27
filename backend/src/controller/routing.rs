@@ -11,7 +11,7 @@ use super::{
         patch_experiment_comment, patch_experiment_mail, patch_experiment_name,
         patch_experiment_pipeline, post_execute_experiment, post_execute_experiment_step,
         post_experiment_execution_abort, post_experiment_execution_reset,
-        post_experiment_pipeline_variable,
+        post_experiment_pipeline_global_variable, post_experiment_pipeline_step_variable,
     },
     file_controller::{
         delete_files_by_path, get_experiment_download_step_results, get_files,
@@ -70,7 +70,8 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/experiments/{id}/reset", web::post().to(post_experiment_execution_reset))
     .route("/api/experiments/{id}/run", web::get().to(get_experiment_pipeline_run))
     .route("/api/experiments/{id}/status", web::get().to(get_experiment_execution_status))
-    .route("/api/experiments/{id}/variable", web::post().to(post_experiment_pipeline_variable))
+    .route("/api/experiments/{id}/variable/global", web::post().to(post_experiment_pipeline_global_variable))
+    .route("/api/experiments/{id}/variable/step", web::post().to(post_experiment_pipeline_step_variable))
     // Global data repositories
     .route("/api/globals", web::get().to(list_global_data))
     .route("/api/globals", web::post().to(create_global_data))
