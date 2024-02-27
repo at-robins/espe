@@ -9,3 +9,11 @@ pub struct PipelineStepVariableUpload {
     pub variable_value: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineGlobalVariableUpload {
+    pub pipeline_id: String,
+    pub variable_id: String,
+    pub variable_value: Option<String>,
+}
+

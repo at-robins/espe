@@ -11,13 +11,13 @@ use crate::{
         db::{
             experiment::{Experiment, NewExperiment},
             experiment_execution::{ExecutionStatus, ExperimentExecution, NewExperimentExecution},
-            pipeline_global_variable::PipelineGlobalVariable,
+            pipeline_global_variable::{NewPipelineGlobalVariable, PipelineGlobalVariable},
             pipeline_step_variable::{NewPipelineStepVariable, PipelineStepVariable},
         },
         exchange::{
             experiment_details::ExperimentDetails,
             experiment_pipeline::ExperimentPipelineBlueprint,
-            pipeline_variable_upload::PipelineStepVariableUpload,
+            pipeline_variable_upload::{PipelineGlobalVariableUpload, PipelineStepVariableUpload},
         },
     },
     service::{
@@ -287,7 +287,7 @@ pub async fn get_experiment_pipeline_run(
     Ok(web::Json(experiment_pipeline))
 }
 
-pub async fn post_experiment_pipeline_variable(
+pub async fn post_experiment_pipeline_step_variable(
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
     experiment_id: web::Path<i32>,
@@ -295,7 +295,7 @@ pub async fn post_experiment_pipeline_variable(
 ) -> Result<HttpResponse, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
     let new_variable: PipelineStepVariableUpload = new_variable.into_inner();
-    if !pipelines.has_variable(
+    if !pipelines.has_step_variable(
         &new_variable.pipeline_id,
         &new_variable.pipeline_step_id,
         &new_variable.variable_id,
@@ -304,7 +304,7 @@ pub async fn post_experiment_pipeline_variable(
             "Not Found",
             SeqErrorType::NotFoundError,
             format!(
-                "No pipeline variable with corresponding properties is currently loaded, thus variable {:?} cannot be inserted.",
+                "No pipeline step variable with corresponding properties is currently loaded, thus variable {:?} cannot be inserted.",
                 new_variable
             ),
             "The variable is invalid.",
@@ -340,6 +340,63 @@ pub async fn post_experiment_pipeline_variable(
                 new_variable.variable_value,
             );
             diesel::insert_into(crate::schema::pipeline_step_variable::table)
+                .values(&new_variable)
+                .execute(connection)
+        }
+    })?;
+    Ok(HttpResponse::Ok().finish())
+}
+
+pub async fn post_experiment_pipeline_global_variable(
+    database_manager: web::Data<DatabaseManager>,
+    pipelines: web::Data<LoadedPipelines>,
+    experiment_id: web::Path<i32>,
+    new_variable: web::Json<PipelineGlobalVariableUpload>,
+) -> Result<HttpResponse, SeqError> {
+    let experiment_id: i32 = experiment_id.into_inner();
+    let new_variable: PipelineGlobalVariableUpload = new_variable.into_inner();
+    if !pipelines.has_global_variable(
+        &new_variable.pipeline_id,
+        &new_variable.variable_id,
+    ) {
+        return Err(SeqError::new(
+            "Not Found",
+            SeqErrorType::NotFoundError,
+            format!(
+                "No global pipeline variable with corresponding properties is currently loaded, thus variable {:?} cannot be inserted.",
+                new_variable
+            ),
+            "The variable is invalid.",
+        ));
+    }
+    let mut connection = database_manager.database_connection()?;
+    Experiment::exists_err(experiment_id, &mut connection)?;
+    connection.immediate_transaction(|connection| {
+        if let Some(existing_variable) = PipelineGlobalVariable::get(
+            experiment_id,
+            &new_variable.pipeline_id,
+            &new_variable.variable_id,
+            connection,
+        )? {
+            // Update if the variable already exists.
+            diesel::update(
+                crate::schema::pipeline_global_variable::table
+                    .filter(crate::schema::pipeline_global_variable::id.eq(existing_variable.id)),
+            )
+            .set(
+                crate::schema::pipeline_global_variable::variable_value
+                    .eq(new_variable.variable_value),
+            )
+            .execute(connection)
+        } else {
+            // Insert if the variable does not exist.
+            let new_variable = NewPipelineGlobalVariable::new(
+                experiment_id,
+                new_variable.pipeline_id,
+                new_variable.variable_id,
+                new_variable.variable_value,
+            );
+            diesel::insert_into(crate::schema::pipeline_global_variable::table)
                 .values(&new_variable)
                 .execute(connection)
         }
