@@ -96,6 +96,16 @@ impl ContextualisedPipelineBlueprint {
             {
                 self.pipeline.description = import_content;
             }
+            // Resolve global variable description imports.
+            for global_variable_index in 0..self.pipeline().global_variables().len() {
+                if let Some(import_content) = Self::load_description_import(
+                    self.pipeline().global_variables()[global_variable_index].description(),
+                    &imports_path,
+                )? {
+                    self.pipeline.global_variables[global_variable_index].description =
+                        import_content;
+                }
+            }
             // Resolve pipeline step description imports.
             for step_index in 0..self.pipeline().steps().len() {
                 if let Some(import_content) = Self::load_description_import(
