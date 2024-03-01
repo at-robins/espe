@@ -355,10 +355,7 @@ pub async fn post_experiment_pipeline_global_variable(
 ) -> Result<HttpResponse, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
     let new_variable: PipelineGlobalVariableUpload = new_variable.into_inner();
-    if !pipelines.has_global_variable(
-        &new_variable.pipeline_id,
-        &new_variable.variable_id,
-    ) {
+    if !pipelines.has_global_variable(&new_variable.pipeline_id, &new_variable.variable_id) {
         return Err(SeqError::new(
             "Not Found",
             SeqErrorType::NotFoundError,
@@ -425,11 +422,20 @@ pub async fn post_execute_experiment(
         if let Some(pipeline) = pipelines.get(&pipeline_id) {
             let pipeline = pipeline.pipeline();
             // Checks if the required variables are set.
-            PipelineGlobalVariable::validate_global_variables(pipeline, experiment_id, &mut connection)?;
+            PipelineGlobalVariable::validate_global_variables(
+                pipeline,
+                experiment_id,
+                &mut connection,
+            )?;
             let mut execution_steps: Vec<NewExperimentExecution> =
-            Vec::with_capacity(pipeline.steps().len());
+                Vec::with_capacity(pipeline.steps().len());
             for step in pipeline.steps() {
-                PipelineStepVariable::validate_step_variables(step, experiment_id, &pipeline_id, &mut connection)?;
+                PipelineStepVariable::validate_step_variables(
+                    step,
+                    experiment_id,
+                    &pipeline_id,
+                    &mut connection,
+                )?;
                 execution_steps.push(NewExperimentExecution::new(
                     experiment_id,
                     pipeline.id(),
@@ -498,7 +504,11 @@ pub async fn post_execute_experiment_step(
                         .collect();
                 let satisfied_dependencies: Vec<&String> = executions
                     .iter()
-                    .filter(|s| s.execution_status == ExecutionStatus::Finished.to_string())
+                    .filter(|s| {
+                        s.execution_status == ExecutionStatus::Finished.to_string()
+                            || s.execution_status == ExecutionStatus::Running.to_string()
+                            || s.execution_status == ExecutionStatus::Waiting.to_string()
+                    })
                     .map(|s| &s.pipeline_step_id)
                     .collect();
                 let are_dependencies_satisfied: bool = step
@@ -514,8 +524,17 @@ pub async fn post_execute_experiment_step(
                     ));
                 }
                 // Checks if the required variables are set.
-                PipelineGlobalVariable::validate_global_variables(pipeline, experiment_id, &mut connection)?;
-                PipelineStepVariable::validate_step_variables(step, experiment_id, &pipeline_id, &mut connection)?;
+                PipelineGlobalVariable::validate_global_variables(
+                    pipeline,
+                    experiment_id,
+                    &mut connection,
+                )?;
+                PipelineStepVariable::validate_step_variables(
+                    step,
+                    experiment_id,
+                    &pipeline_id,
+                    &mut connection,
+                )?;
                 // Submit execution step.
                 if let Some(existing_execution) =
                     executions.iter().find(|s| s.pipeline_step_id == step_id)
