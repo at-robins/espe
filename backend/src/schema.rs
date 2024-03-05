@@ -32,6 +32,16 @@ table! {
 }
 
 table! {
+    pipeline_build_register (id) {
+        id -> Integer,
+        pipeline_id -> Text,
+        pipeline_step_id -> Text,
+        pipeline_version -> Text,
+        creation_time -> Timestamp,
+    }
+}
+
+table! {
     pipeline_global_variable (id) {
         id -> Integer,
         experiment_id -> Integer,
@@ -62,6 +72,7 @@ allow_tables_to_appear_in_same_query!(
     experiment,
     experiment_execution,
     global_data,
+    pipeline_build_register,
     pipeline_global_variable,
     pipeline_step_variable,
 );
