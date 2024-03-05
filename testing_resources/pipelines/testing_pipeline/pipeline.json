@@ -1,6 +1,7 @@
 {
     "id": "testing_pipeline",
     "name": "Testing pipeline",
+    "version": "1.0.0",
     "description": "This pipeline is for testing purposes.",
     "global_variables": [
         {

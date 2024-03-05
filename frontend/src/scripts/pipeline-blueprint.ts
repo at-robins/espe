@@ -1,6 +1,7 @@
 export type PipelineBlueprint = {
   id: string;
   name: string;
+  version: string;
   description: string;
   global_variables: PipelineStepBlueprintVariable[];
   steps: PipelineStepBlueprint[];

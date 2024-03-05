@@ -16,6 +16,9 @@ pub struct ExperimentPipelineBlueprint {
     /// The name for display.
     #[getset(get = "pub")]
     name: String,
+    /// The version of the pipeline.
+    #[getset(get = "pub")]
+    version: String,
     /// A description of the pipeline.
     #[getset(get = "pub")]
     description: String,
@@ -75,6 +78,7 @@ impl ExperimentPipelineBlueprint {
         Self {
             id: pipeline.borrow().id().clone(),
             name: pipeline.borrow().name().clone(),
+            version: pipeline.borrow().version().clone(),
             description: pipeline.borrow().description().clone(),
             global_variables,
             steps,
@@ -381,6 +385,7 @@ mod tests {
             {
                 \"id\": \"testing_pipeline\",
                 \"name\": \"Testing pipeline\",
+                \"version\": \"1.0.0\",
                 \"description\": \"This pipeline is for testing purposes.\",
                 \"global_variables\": [
                     {
@@ -474,6 +479,7 @@ mod tests {
         );
         assert_eq!(experiment_pipeline.id(), pipeline.id());
         assert_eq!(experiment_pipeline.name(), pipeline.name());
+        assert_eq!(experiment_pipeline.version(), pipeline.version());
         assert_eq!(experiment_pipeline.description(), pipeline.description());
         assert_eq!(experiment_pipeline.global_variables().len(), pipeline.global_variables().len());
         assert_eq!(experiment_pipeline.steps().len(), pipeline.steps().len());

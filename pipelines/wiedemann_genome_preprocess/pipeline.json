@@ -1,6 +1,7 @@
 {
   "id": "wiedemann_genome_preprocess",
   "name": "Wiedemann reference genome preprocessing pipeline",
+  "version": "0.1.0",
   "description": "<p>This pipeline preprocesses a reference genome for usage as a data repository for other pipelines.</p><p><b>Input specifications</b><br />The input is expected to be a gzipped FASTA file (<var>.fa.gz</var>) located at the root.</p>",
   "global_variables": [],
   "steps": [

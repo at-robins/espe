@@ -44,6 +44,9 @@ pub struct PipelineBlueprint {
     /// The name for display.
     #[getset(get = "pub")]
     name: String,
+    /// The version of the pipeline.
+    #[getset(get = "pub")]
+    version: String,
     /// A description of the pipeline.
     #[getset(get = "pub")]
     description: String,
