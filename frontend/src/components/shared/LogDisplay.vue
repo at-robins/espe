@@ -3,7 +3,10 @@
     <div class="text-h6 q-ma-md">{{ header }}</div>
     <q-separator />
     <div v-if="body === null || body === undefined" class="q-pa-md">
-      No logs are currently present.
+      No logs found.
+    </div>
+    <div v-else-if="body.trim().length === 0" class="q-pa-md">
+      The logs are empty.
     </div>
     <div
       v-else

@@ -2,26 +2,26 @@
   <div class="no-wrap">
     <q-tabs v-model="tab" narrow-indicator dense inline-label align="justify">
       <q-tab
-        class="text-purple"
-        name="build"
-        :icon="symOutlinedBuildCircle"
-        label="Container build process"
-      />
-      <q-tab
         class="text-orange"
         name="run"
         :icon="symOutlinedRunCircle"
         label="Step run process"
       />
+      <q-tab
+        class="text-purple"
+        name="build"
+        :icon="symOutlinedBuildCircle"
+        label="Container build process"
+      />
     </q-tabs>
 
     <q-tab-panels v-model="tab" animated>
-      <q-tab-panel name="build">
-        <split-log-display v-if="logs" :log="logs.build" />
-      </q-tab-panel>
-
       <q-tab-panel name="run">
         <split-log-display v-if="logs" :log="logs.run" />
+      </q-tab-panel>
+
+      <q-tab-panel name="build">
+        <split-log-display v-if="logs" :log="logs.build" />
       </q-tab-panel>
     </q-tab-panels>
   </div>
@@ -48,7 +48,7 @@ const router = useRouter();
 const this_route = router.currentRoute.value.fullPath;
 const pollingTimer: Ref<number | null> = ref(null);
 const logs: Ref<ExperimentStepLogs | null> = ref(null);
-const tab = ref("build");
+const tab = ref("run");
 
 const props = defineProps({
   experimentId: { type: String, required: true },

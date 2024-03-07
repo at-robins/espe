@@ -5,6 +5,7 @@ use std::{
     path::Path,
     process::{Child, Command, Output, Stdio},
     sync::Arc,
+    thread,
 };
 
 use actix_web::web;
@@ -33,6 +34,8 @@ use super::pipeline_service::LoadedPipelines;
 
 /// The container environment variable specifying all mounts.
 const CONTAINER_ENV_MOUNT: &str = "MOUNT_PATHS";
+/// The timeout for checking if a container exists.
+const CONTAINER_QUERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Builds the specifc pipeline step container at the specified context.
 ///
@@ -299,13 +302,73 @@ fn should_build<
     pipeline_version: PipelineVersionType,
     connection: &mut SqliteConnection,
 ) -> Result<bool, SeqError> {
-    todo!();
-    Ok(!PipelineBuildRegister::is_built(
-        pipeline_id,
-        pipeline_step_id,
-        pipeline_version,
+    let pipeline_id = pipeline_id.into();
+    let pipeline_step_id = pipeline_step_id.into();
+    let pipeline_version = pipeline_version.into();
+    // If the container is registered in the database,
+    // check if it exists.
+    if PipelineBuildRegister::is_built(
+        &pipeline_id,
+        &pipeline_step_id,
+        &pipeline_version,
         connection,
-    )?)
+    )? {
+        log::info!("Container image {} for pipeline {} step {} version {} is present in the database. Checking physical image.", 
+                    format_container_name(&pipeline_id, &pipeline_step_id), 
+                    &pipeline_id, 
+                    &pipeline_step_id, 
+                    &pipeline_version
+                );
+        let image_arg: OsString = "image".into();
+        let inspect_arg: OsString = "inspect".into();
+        let name_arg: OsString = format_container_name(&pipeline_id, &pipeline_step_id).into();
+        let mut child = Command::new("docker")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .args([
+                image_arg.as_os_str(),
+                inspect_arg.as_os_str(),
+                name_arg.as_os_str(),
+            ])
+            .spawn()?;
+        let start = std::time::Instant::now();
+        // Blocking here and waiting for the command to finish is fine, as this should
+        // typically be very fast and the subsequent execution time is way longer than
+        // the maximum timeout.
+        while std::time::Instant::now() - start <= CONTAINER_QUERY_TIMEOUT
+            && child.try_wait()?.is_none()
+        {
+            thread::sleep(std::time::Duration::from_millis(100))
+        }
+        match child.try_wait()? {
+            Some(status) => {
+                if status.success() {
+                    // Re-building the container can only be skipped if
+                    // its entered into the database and if the
+                    // image physically exists.
+                    return Ok(false);
+                } else {
+                    log::warn!("Database inconsistency. Container image {} for pipeline {} step {} version {} is present in the database, but not as physical image.", 
+                        format_container_name(&pipeline_id, &pipeline_step_id), 
+                        &pipeline_id, 
+                        &pipeline_step_id, 
+                        &pipeline_version
+                    );
+                }
+            },
+            // Kills the process if still running.
+            None => {
+                log::warn!("Checking existance of container image {} for pipeline {} step {} version {} timed out. The process is killed.", 
+                    format_container_name(&pipeline_id, &pipeline_step_id), 
+                    &pipeline_id, 
+                    &pipeline_step_id, 
+                    &pipeline_version
+                );
+                child.kill()?;
+            },
+        }
+    }
+    Ok(true)
 }
 
 pub struct ContainerHandler {
