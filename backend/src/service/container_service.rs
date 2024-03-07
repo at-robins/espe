@@ -4,11 +4,13 @@ use std::{
     io::{BufWriter, Write},
     path::Path,
     process::{Child, Command, Output, Stdio},
+    sync::Arc,
+    thread,
 };
 
 use actix_web::web;
 use chrono::NaiveDateTime;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SqliteConnection};
 
 use crate::{
     application::{
@@ -17,11 +19,14 @@ use crate::{
         error::{SeqError, SeqErrorType},
     },
     model::{
-        db::experiment_execution::{ExecutionStatus, ExperimentExecution},
+        db::{
+            experiment_execution::{ExecutionStatus, ExperimentExecution},
+            pipeline_build_register::PipelineBuildRegister,
+        },
         exchange::experiment_pipeline::{
             ExperimentPipelineBlueprint, ExperimentPipelineStepBlueprint,
         },
-        internal::pipeline_blueprint::PipelineStepBlueprint,
+        internal::pipeline_blueprint::{ContextualisedPipelineBlueprint, PipelineStepBlueprint},
     },
 };
 
@@ -29,6 +34,8 @@ use super::pipeline_service::LoadedPipelines;
 
 /// The container environment variable specifying all mounts.
 const CONTAINER_ENV_MOUNT: &str = "MOUNT_PATHS";
+/// The timeout for checking if a container exists.
+const CONTAINER_QUERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Builds the specifc pipeline step container at the specified context.
 ///
@@ -277,6 +284,93 @@ fn format_container_name<T: AsRef<str>, R: AsRef<str>>(
     Configuration::hash_string(name)
 }
 
+/// Returns `true` if the container should be built / re-built.
+///
+/// # Parameters
+///
+/// * `pipeline_id` - the ID of the pipeline
+/// * `pipeline_step_id` - the ID of the pipeline step
+/// * `pipeline_version` - the version of the pipeline
+/// * `connection` - the database connection
+fn should_build<
+    PipelineIdIdType: Into<String>,
+    PipelineStepIdIdType: Into<String>,
+    PipelineVersionType: Into<String>,
+>(
+    pipeline_id: PipelineIdIdType,
+    pipeline_step_id: PipelineStepIdIdType,
+    pipeline_version: PipelineVersionType,
+    connection: &mut SqliteConnection,
+) -> Result<bool, SeqError> {
+    let pipeline_id = pipeline_id.into();
+    let pipeline_step_id = pipeline_step_id.into();
+    let pipeline_version = pipeline_version.into();
+    // If the container is registered in the database,
+    // check if it exists.
+    if PipelineBuildRegister::is_built(
+        &pipeline_id,
+        &pipeline_step_id,
+        &pipeline_version,
+        connection,
+    )? {
+        log::info!("Container image {} for pipeline {} step {} version {} is present in the database. Checking physical image.", 
+                    format_container_name(&pipeline_id, &pipeline_step_id), 
+                    &pipeline_id, 
+                    &pipeline_step_id, 
+                    &pipeline_version
+                );
+        let image_arg: OsString = "image".into();
+        let inspect_arg: OsString = "inspect".into();
+        let name_arg: OsString = format_container_name(&pipeline_id, &pipeline_step_id).into();
+        let mut child = Command::new("docker")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .args([
+                image_arg.as_os_str(),
+                inspect_arg.as_os_str(),
+                name_arg.as_os_str(),
+            ])
+            .spawn()?;
+        let start = std::time::Instant::now();
+        // Blocking here and waiting for the command to finish is fine, as this should
+        // typically be very fast and the subsequent execution time is way longer than
+        // the maximum timeout.
+        while std::time::Instant::now() - start <= CONTAINER_QUERY_TIMEOUT
+            && child.try_wait()?.is_none()
+        {
+            thread::sleep(std::time::Duration::from_millis(100))
+        }
+        match child.try_wait()? {
+            Some(status) => {
+                if status.success() {
+                    // Re-building the container can only be skipped if
+                    // its entered into the database and if the
+                    // image physically exists.
+                    return Ok(false);
+                } else {
+                    log::warn!("Database inconsistency. Container image {} for pipeline {} step {} version {} is present in the database, but not as physical image.", 
+                        format_container_name(&pipeline_id, &pipeline_step_id), 
+                        &pipeline_id, 
+                        &pipeline_step_id, 
+                        &pipeline_version
+                    );
+                }
+            },
+            // Kills the process if still running.
+            None => {
+                log::warn!("Checking existance of container image {} for pipeline {} step {} version {} timed out. The process is killed.", 
+                    format_container_name(&pipeline_id, &pipeline_step_id), 
+                    &pipeline_id, 
+                    &pipeline_step_id, 
+                    &pipeline_version
+                );
+                child.kill()?;
+            },
+        }
+    }
+    Ok(true)
+}
+
 pub struct ContainerHandler {
     config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
@@ -496,6 +590,23 @@ impl ContainerHandler {
         })
     }
 
+    /// Returns the current [`ContextualisedPipelineBlueprint`] or an error
+    /// if no [`ExperimentExecution`] is set or the pipeline cannot be found.
+    fn get_pipeline_blueprint(&self) -> Result<Arc<ContextualisedPipelineBlueprint>, SeqError> {
+        let step = self.get_executed_step()?;
+        self.loaded_pipelines.get(&step.pipeline_id).ok_or_else(|| {
+            SeqError::new(
+                "Invalid container state",
+                SeqErrorType::InternalServerError,
+                format!(
+                    "The pipeline including exectued pipeline step {:?} is not loaded.",
+                    &self.executed_step
+                ),
+                "The pipeline is not defined.",
+            )
+        })
+    }
+
     /// Logs the output and returns an error if the exit status was unsuccessful.
     ///
     /// # Parameters
@@ -613,6 +724,8 @@ impl ContainerHandler {
             return Ok(true);
         }
         let step_db_id: i32 = self.get_executed_step()?.id;
+        let pipeline_id: String = self.get_executed_step()?.pipeline_id.to_string();
+        let pipeline_step_id: String = self.get_executed_step()?.pipeline_step_id.to_string();
         // Check for run processes.
         match Self::get_process_status(&mut self.run_process)? {
             ProcessStatus::Finished => {
@@ -646,29 +759,56 @@ impl ContainerHandler {
                 }
             },
             // Checks for build processes if the run process has not yet been started.
-            ProcessStatus::NotStarted => match Self::get_process_status(&mut self.build_process)? {
-                ProcessStatus::Finished => {
-                    if let Some(build) = self.build_process.take() {
-                        // Handle output.
-                        self.parse_output(build.wait_with_output()?, LogProcessType::Build)?;
-                        // Start the subsequent run process.
-                        self.start_run_process()?;
-                        Ok(false)
-                    } else {
-                        Err(SeqError::new(
+            ProcessStatus::NotStarted => {
+                let mut connection = self.database_manager.database_connection()?;
+                let pipeline_version = self
+                    .get_pipeline_blueprint()?
+                    .pipeline()
+                    .version()
+                    .to_string();
+                match Self::get_process_status(&mut self.build_process)? {
+                    ProcessStatus::Finished => {
+                        if let Some(build) = self.build_process.take() {
+                            // Handle output.
+                            self.parse_output(build.wait_with_output()?, LogProcessType::Build)?;
+                            // Start the subsequent run process.
+                            self.start_run_process()?;
+                            // Saves the successful build to the database.
+                            PipelineBuildRegister::set_built(
+                                pipeline_id,
+                                pipeline_step_id,
+                                pipeline_version,
+                                &mut connection,
+                            )?;
+                            Ok(false)
+                        } else {
+                            Err(SeqError::new(
                             "Invalid container state",
                             SeqErrorType::InternalServerError,
                             format!("The build process status of {:?} indicated a finsihed process, but none was found.", &self.executed_step),
                             "The execution state is invalid.",
                         ))
-                    }
-                },
-                // Starts the build process if not yet done.
-                ProcessStatus::NotStarted => {
-                    self.start_build_process()?;
-                    Ok(false)
-                },
-                ProcessStatus::Running => Ok(false),
+                        }
+                    },
+                    // Starts the build process if not yet done.
+                    ProcessStatus::NotStarted => {
+                        // Starts the build process if a (re-)build should be carried.
+                        // Otherwise directly starts the run process.
+                        if should_build(
+                            &pipeline_id,
+                            &pipeline_step_id,
+                            &pipeline_version,
+                            &mut connection,
+                        )? {
+                            self.start_build_process()?;
+                        } else {
+                            log::info!("The container for pipeline {} step {} version {} has already been built. Skipping build step.",&pipeline_id, &pipeline_step_id, pipeline_version);
+                            self.start_run_process()?;
+                        }
+                        Ok(false)
+                    },
+                    ProcessStatus::Running => Ok(false),
+                }
             },
             ProcessStatus::Running => Ok(false),
         }
@@ -677,39 +817,28 @@ impl ContainerHandler {
     /// Starts the build process.
     fn start_build_process(&mut self) -> Result<(), SeqError> {
         let step = self.get_executed_step()?;
-        if let Some(pipeline) = self.loaded_pipelines.get(&step.pipeline_id) {
-            if let Some(step_blueprint) = pipeline
-                .pipeline()
-                .steps()
-                .iter()
-                .find(|s| s.id() == &step.pipeline_step_id)
-            {
-                log::info!("Building {:?}", &step);
-                self.build_process = Some(build_pipeline_step(
-                    step_blueprint,
-                    &step.pipeline_id,
-                    pipeline.context(),
-                    step.experiment_id,
-                    web::Data::clone(&self.config),
-                )?);
-                Ok(())
-            } else {
-                Err(SeqError::new(
-                    "Invalid container state",
-                    SeqErrorType::InternalServerError,
-                    format!("The exectued pipeline step {:?} is not loaded.", &self.executed_step),
-                    "The pipeline step is not defined.",
-                ))
-            }
+        let pipeline = self.get_pipeline_blueprint()?;
+        if let Some(step_blueprint) = pipeline
+            .pipeline()
+            .steps()
+            .iter()
+            .find(|s| s.id() == &step.pipeline_step_id)
+        {
+            log::info!("Building {:?}", &step);
+            self.build_process = Some(build_pipeline_step(
+                step_blueprint,
+                &step.pipeline_id,
+                pipeline.context(),
+                step.experiment_id,
+                web::Data::clone(&self.config),
+            )?);
+            Ok(())
         } else {
             Err(SeqError::new(
                 "Invalid container state",
                 SeqErrorType::InternalServerError,
-                format!(
-                    "The pipeline including exectued pipeline step {:?} is not loaded.",
-                    &self.executed_step
-                ),
-                "The pipeline is not defined.",
+                format!("The exectued pipeline step {:?} is not loaded.", &self.executed_step),
+                "The pipeline step is not defined.",
             ))
         }
     }
@@ -717,47 +846,36 @@ impl ContainerHandler {
     /// Starts the run process.
     fn start_run_process(&mut self) -> Result<(), SeqError> {
         let step = self.get_executed_step()?;
-        if let Some(pipeline) = self.loaded_pipelines.get(&step.pipeline_id) {
-            let mut connection = self.database_manager.database_connection()?;
-            let values_global = crate::model::db::pipeline_global_variable::PipelineGlobalVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
-            let values_step = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
-            // The stati of the pipeline steps should be None at this point so an empty map is supplied instead of loading them from the database.
-            let pipeline = ExperimentPipelineBlueprint::from_internal(
-                pipeline.pipeline(),
-                values_global,
-                values_step,
-                HashMap::new(),
-            );
-            if let Some(step_blueprint) = pipeline
-                .steps()
-                .iter()
-                .find(|s| s.id() == &step.pipeline_step_id)
-            {
-                log::info!("Running {:?}", &step);
-                self.run_process = Some(run_pipeline_step(
-                    &pipeline,
-                    step_blueprint,
-                    step.experiment_id,
-                    web::Data::clone(&self.config),
-                )?);
-                Ok(())
-            } else {
-                Err(SeqError::new(
-                    "Invalid container state",
-                    SeqErrorType::InternalServerError,
-                    format!("The exectued pipeline step {:?} is not loaded.", &self.executed_step),
-                    "The pipeline step is not defined.",
-                ))
-            }
+        let pipeline = self.get_pipeline_blueprint()?;
+        let mut connection = self.database_manager.database_connection()?;
+        let values_global = crate::model::db::pipeline_global_variable::PipelineGlobalVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
+        let values_step = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(step.experiment_id, pipeline.pipeline().id(), &mut connection)?;
+        // The stati of the pipeline steps should be None at this point so an empty map is supplied instead of loading them from the database.
+        let pipeline = ExperimentPipelineBlueprint::from_internal(
+            pipeline.pipeline(),
+            values_global,
+            values_step,
+            HashMap::new(),
+        );
+        if let Some(step_blueprint) = pipeline
+            .steps()
+            .iter()
+            .find(|s| s.id() == &step.pipeline_step_id)
+        {
+            log::info!("Running {:?}", &step);
+            self.run_process = Some(run_pipeline_step(
+                &pipeline,
+                step_blueprint,
+                step.experiment_id,
+                web::Data::clone(&self.config),
+            )?);
+            Ok(())
         } else {
             Err(SeqError::new(
                 "Invalid container state",
                 SeqErrorType::InternalServerError,
-                format!(
-                    "The pipeline including exectued pipeline step {:?} is not loaded.",
-                    &self.executed_step
-                ),
-                "The pipeline is not defined.",
+                format!("The exectued pipeline step {:?} is not loaded.", &self.executed_step),
+                "The pipeline step is not defined.",
             ))
         }
     }

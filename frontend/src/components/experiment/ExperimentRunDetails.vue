@@ -367,7 +367,12 @@ function canBeStarted(step: PipelineStepBlueprint | null): boolean {
     return false;
   }
   const satisfied_dependencies = pipeline.value.steps
-    .filter((s) => s.status === PipelineStepStatus.Finished)
+    .filter(
+      (s) =>
+        s.status === PipelineStepStatus.Finished ||
+        s.status === PipelineStepStatus.Running ||
+        s.status === PipelineStepStatus.Waiting
+    )
     .map((s) => s.id);
   const isDependecySatisfied = step.dependencies.every((dependency) =>
     satisfied_dependencies.includes(dependency)
