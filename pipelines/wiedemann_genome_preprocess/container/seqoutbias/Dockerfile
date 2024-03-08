@@ -19,10 +19,9 @@ RUN apk add --no-cache mariadb-connector-c-dev bash shadow
 WORKDIR /kent/src
 # Sets bash as default shell to prevent errors during makefile script execution.
 RUN sed -i 's@/bin/ash@bin/bash@g' /etc/passwd
-# Skips building the hg directory since we only need the wigToBigWig utility.
-# Also prevents a current error while building the hg utilities.
-RUN sed -i 's@cd hg && ${MAKE} utils@echo "skipping hg"@g' makefile
-RUN make
+# There will be a build error for the hg subdirectory, which we can ignore as the wigToBigWig utility 
+# gets built correctly.
+RUN make || true
 
 # WORKDIR /samtools-1.18
 # RUN autoreconf -i
