@@ -8,7 +8,7 @@ import multiprocessing
 import os
 import sys
 
-BASE_COMMAND = "/bowtie2/bowtie2-build"
+BASE_COMMAND = "bowtie2-build"
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 
 # Setup.

@@ -1,4 +1,5 @@
-FROM python:3.11.6-alpine3.18
-RUN apk -U upgrade && apk add --no-cache unzip wget
+FROM python:3.9.18-bookworm
+RUN apt-get update && apt-get upgrade -y
+RUN apt-get install -y unzip wget
 COPY run.py /run.py
 ENTRYPOINT ["python", "run.py"]

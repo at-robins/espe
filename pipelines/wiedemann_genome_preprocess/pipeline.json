@@ -1,9 +1,25 @@
 {
   "id": "wiedemann_genome_preprocess",
   "name": "Wiedemann reference genome preprocessing pipeline",
-  "version": "0.1.12",
+  "version": "0.1.14",
   "description": "<espe-import>pipeline_description.html</espe-import>",
-  "global_variables": [],
+  "global_variables": [
+    {
+      "id": "GLOBAL_ORGANISM",
+      "name": "Organism",
+      "description": "Specify which source organism to download and preprocess the genome for.",
+      "required": true,
+      "category": {
+        "tag": "Option",
+        "content": [
+          {
+            "name": "Mus musculus (GRCm38.p6)",
+            "value": "mouse"
+          }
+        ]
+      }
+    }
+  ],
   "steps": [
     {
       "id": "get_genome",
