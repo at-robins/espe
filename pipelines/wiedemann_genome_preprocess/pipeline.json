@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_genome_preprocess",
   "name": "Wiedemann reference genome preprocessing pipeline",
-  "version": "0.1.14",
+  "version": "0.1.24",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {
@@ -57,7 +57,7 @@
     {
       "id": "seqoutbias_preprocessing",
       "name": "SeqOutBias preprocessing",
-      "description": "<p>Uses SeqOutBias to generate tallymer files for .</p><p><b>References</b><br />Langmead B, Salzberg S. Fast gapped-read alignment with Bowtie 2. Nature Methods. 2012, 9:357-359.</p>",
+      "description": "<espe-import>step_seqout_description.html</espe-import>",
       "container": "seqoutbias",
       "dependencies": ["get_genome"],
       "variables": []
