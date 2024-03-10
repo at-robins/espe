@@ -38,7 +38,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                     MOUNT_PATHS["output"],
                     file_base_input_path.removeprefix(INPUT_FOLDER + "/")
                 )
-                full_command = (f"/bowtie2/bowtie2 {options_bowtie} "
+                full_command = (f"bowtie2 {options_bowtie} "
                 f"--met-file {file_base_output_path}_metrics.txt "
                 f"-1 {file_base_input_path}{INPUT_SUFFIX_FORWARD} "
                 f"-2 {file_base_input_path}{INPUT_SUFFIX_REVERSE} | "
