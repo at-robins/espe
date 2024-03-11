@@ -8,7 +8,7 @@ import os
 import sys
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = MOUNT_PATHS["dependencies"]["alignment_filtering"]
+INPUT_FOLDER = MOUNT_PATHS["dependencies"]["duplicate_removal"]
 
 threads = math.floor(multiprocessing.cpu_count() * 0.8)
 if threads < 1:
