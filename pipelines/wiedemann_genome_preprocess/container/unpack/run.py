@@ -57,6 +57,12 @@ os.rename(
     os.path.join(MOUNT_PATHS["output"], "annotations.gff"),
 )
 
+logging.info("Compressing files...")
+command_zip = f"gzip -k {os.path.join(MOUNT_PATHS['output'], 'genome.fa')}"
+exit_code_zip = os.waitstatus_to_exitcode(os.system(command_zip))
+if exit_code_zip != 0:
+    sys.exit(exit_code_zip)
+
 logging.info("Cleaning up temporary files...")
 shutil.rmtree(TEMPORARY_OUTPUT_PATH)
 logging.info("Done.")

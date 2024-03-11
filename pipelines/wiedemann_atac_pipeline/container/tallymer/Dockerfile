@@ -6,11 +6,13 @@ RUN apt-get install -y samtools genometools build-essential
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain=1.73.0 -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Installs wigToBigWig
+# Installs wigToBigWig, bigWigToBedGraph and bigWigMerge.
 RUN mkdir /tmp_downloads && git -C /tmp_downloads clone git://genome-source.soe.ucsc.edu/kent.git
 WORKDIR /tmp_downloads/kent/src
 RUN make utils
-RUN find /root/bin -name "wigToBigWig" | xargs cp -t /usr/bin
+RUN find /root/bin -name "wigToBigWig" | xargs cp -t /usr/bin && \
+    find /root/bin -name "bigWigToBedGraph" | xargs cp -t /usr/bin && \
+    find /root/bin -name "bigWigMerge" | xargs cp -t /usr/bin
 
 # Installs seqOutBias.
 RUN git -C /tmp_downloads clone https://github.com/guertinlab/seqOutBias.git && git -C /tmp_downloads/seqOutBias checkout 1446ebc
@@ -21,5 +23,5 @@ RUN cargo build --release && cp /tmp_downloads/seqOutBias/target/release/seqOutB
 WORKDIR /
 RUN rm -r /tmp_downloads
 
-COPY run_seqout.py /run.py
+COPY run_tallymer.py /run.py
 ENTRYPOINT ["python", "run.py"]
