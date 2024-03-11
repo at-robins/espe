@@ -268,6 +268,14 @@
       "container": "seqoutbias",
       "dependencies": [],
       "variables": ["tallymer", "splitting"]
+    },
+    {
+      "id": "blacklist_removal",
+      "name": "Removing blacklisted regions",
+      "description": "<espe-import>step_blacklist_removal_description.html</espe-import>",
+      "container": "blacklist_removal",
+      "dependencies": [],
+      "variables": ["seqoutbias"]
     }
   ]
 }
