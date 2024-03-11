@@ -1,8 +1,8 @@
 {
   "id": "wiedemann_atac_paired_end",
   "name": "Wiedemann ATAC paired end pipeline",
-  "version": "0.1.1",
-  "description": "<p>This pipeline processes paired end ATAC data.</p><p><b>Input specifications</b><br />The input is expected as gzipped FASTQ files (<var>.fq.gz</var> / <var>.fastq.gz</var>) and might be organised in sub-folders. Paired reads must always reside in the same folder and end with <var>_1</var> or <var>_2</var> respectively.</p><p><b>System requirements</b><br />64 GB of RAM are recommended for pipeline execution.</p>",
+  "version": "0.1.7",
+  "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {
       "id": "GLOBAL_ORGANISM",
@@ -13,11 +13,11 @@
         "tag": "Option",
         "content": [
           {
-            "name": "Human",
+            "name": "Homo sapiens",
             "value": "human"
           },
           {
-            "name": "Mouse",
+            "name": "Mus musculus",
             "value": "mouse"
           }
         ]
@@ -173,6 +173,14 @@
       ]
     },
     {
+      "id": "qc_alignment",
+      "name": "Alignment QC",
+      "description": "<espe-import>step_qc_alignment_description.html</espe-import>",
+      "container": "qc_alignment",
+      "dependencies": ["alignment"],
+      "variables": []
+    },
+    {
       "id": "alignment_filtering",
       "name": "Post alignment filtering",
       "description": "<p>Filters low quality and misaligned reads.</p><p><b>References</b><ol><li>HTSlib: C library for reading/writing high-throughput sequencing data. James K Bonfield, John Marshall, Petr Danecek, Heng Li, Valeriu Ohan, Andrew Whitwham, Thomas Keane, Robert M Davies. GigaScience, Volume 10, Issue 2, February 2021, giab007, <a href=\"https://doi.org/10.1093/gigascience/giab007\">https://doi.org/10.1093/gigascience/giab007</a></li><li>Twelve years of SAMtools and BCFtools. Petr Danecek, James K Bonfield, Jennifer Liddle, John Marshall, Valeriu Ohan, Martin O Pollard, Andrew Whitwham, Thomas Keane, Shane A McCarthy, Robert M Davies, Heng Li. GigaScience, Volume 10, Issue 2, February 2021, giab008, <a href=\"https://doi.org/10.1093/gigascience/giab008\">https://doi.org/10.1093/gigascience/giab008</a></li></ol></p>",
@@ -204,6 +212,14 @@
           }
         }
       ]
+    },
+    {
+      "id": "qc_alignment_filtering",
+      "name": "Alignment filtering QC",
+      "description": "<espe-import>step_qc_alignment_description.html</espe-import>",
+      "container": "qc_alignment",
+      "dependencies": ["alignment_filtering"],
+      "variables": []
     },
     {
       "id": "splitting",
