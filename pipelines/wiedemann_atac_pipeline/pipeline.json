@@ -260,6 +260,14 @@
       "container": "tallymer",
       "dependencies": [],
       "variables": []
+    },
+    {
+      "id": "seqoutbias",
+      "name": "Sequencing bias correction",
+      "description": "<espe-import>step_seqoutbias_description.html</espe-import>",
+      "container": "seqoutbias",
+      "dependencies": [],
+      "variables": ["tallymer", "splitting"]
     }
   ]
 }
