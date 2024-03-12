@@ -292,6 +292,14 @@
       "container": "peak_calling",
       "dependencies": ["blacklist_removal"],
       "variables": []
+    },
+    {
+      "id": "peak_merging",
+      "name": "Peak merging",
+      "description": "<espe-import>step_peak_merging_description.html</espe-import>",
+      "container": "peak_merging",
+      "dependencies": ["peak_calling"],
+      "variables": []
     }
   ]
 }
