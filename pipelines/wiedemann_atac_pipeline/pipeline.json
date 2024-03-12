@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_atac_paired_end",
   "name": "Wiedemann ATAC paired end pipeline",
-  "version": "0.1.11",
+  "version": "0.1.14",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {
@@ -262,20 +262,28 @@
       "variables": []
     },
     {
+      "id": "seqtable",
+      "name": "SeqTable",
+      "description": "<espe-import>step_tallymer_description.html</espe-import>",
+      "container": "seqtable",
+      "dependencies": ["tallymer"],
+      "variables": []
+    },
+    {
       "id": "seqoutbias",
       "name": "Sequencing bias correction",
       "description": "<espe-import>step_seqoutbias_description.html</espe-import>",
       "container": "seqoutbias",
-      "dependencies": [],
-      "variables": ["tallymer", "splitting"]
+      "dependencies": ["tallymer", "seqtable", "splitting"],
+      "variables": []
     },
     {
       "id": "blacklist_removal",
       "name": "Removing blacklisted regions",
       "description": "<espe-import>step_blacklist_removal_description.html</espe-import>",
       "container": "blacklist_removal",
-      "dependencies": [],
-      "variables": ["seqoutbias"]
+      "dependencies": ["seqoutbias"],
+      "variables": []
     }
   ]
 }

@@ -44,21 +44,21 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 (
                     f"seqOutBias {GENOME_PATH} {bam_path_plus} "
                     f"--bw={bw_path_plus} "
-                    f"--skip-bed ---shift-counts --kmer-mask {STRAND_MASK_PLUS} "
+                    f"--skip-bed --shift-counts --kmer-mask {STRAND_MASK_PLUS} "
                     f"--read-size={READ_SIZE} --tallymer={TALLYMER_PATH}"
                 ),
                 (
                     f"seqOutBias {GENOME_PATH} {bam_path_minus} "
                     f"--bw={bw_path_minus} "
-                    f"--skip-bed ---shift-counts --kmer-mask {STRAND_MASK_MINUS} "
+                    f"--skip-bed --shift-counts --kmer-mask {STRAND_MASK_MINUS} "
                     f"--read-size={READ_SIZE} --tallymer={TALLYMER_PATH}"
                 ),
-                f"bigWigMerge {bw_path_plus} {bw_path_plus} {file_base_output_path}.bedGraph",
+                f"bigWigMerge {bw_path_plus} {bw_path_minus} {file_base_output_path}.bedGraph",
                 # Cleans up temporary data.
                 f"rm {bam_path_plus} {bam_path_minus}",
             ]
             for full_command in full_commands:
-                print(f"Running command: {full_command}")
+                print(f"Running command: {full_command}", flush=True)
                 os.makedirs(os.path.dirname(file_base_output_path), exist_ok=True)
                 subprocess.run(
                     full_command,
