@@ -17,6 +17,12 @@ READ_SIZE = os.environ.get("READ_LENGTH")
 TALLYMER_PATH = os.path.join(
     MOUNT_PATHS["dependencies"]["tallymer"], f"genome.tal_{READ_SIZE}.gtTxt.gz"
 )
+SEQTABLE_PATH_PLUS = os.path.join(
+    MOUNT_PATHS["dependencies"]["seqtable"], "seqtable_plus.tbl"
+)
+SEQTABLE_PATH_MINUS = os.path.join(
+    MOUNT_PATHS["dependencies"]["seqtable"], "seqtable_minus.tbl"
+)
 BAM_SUFFIX = ".bam"
 BW_SUFFIX = ".bigWig"
 
@@ -43,13 +49,13 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 f"samtools view -@ {threads} -bh -f 16 {file_base_path}{BAM_SUFFIX} -o {bam_path_minus}",
                 (
                     f"seqOutBias {GENOME_PATH} {bam_path_plus} "
-                    f"--bw={bw_path_plus} "
+                    f"--bw={bw_path_plus} --out={SEQTABLE_PATH_PLUS} "
                     f"--skip-bed --shift-counts --kmer-mask {STRAND_MASK_PLUS} "
                     f"--read-size={READ_SIZE} --tallymer={TALLYMER_PATH}"
                 ),
                 (
                     f"seqOutBias {GENOME_PATH} {bam_path_minus} "
-                    f"--bw={bw_path_minus} "
+                    f"--bw={bw_path_minus} --out={SEQTABLE_PATH_MINUS} "
                     f"--skip-bed --shift-counts --kmer-mask {STRAND_MASK_MINUS} "
                     f"--read-size={READ_SIZE} --tallymer={TALLYMER_PATH}"
                 ),
