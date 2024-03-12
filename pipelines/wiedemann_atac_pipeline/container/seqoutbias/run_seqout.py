@@ -40,22 +40,28 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 MOUNT_PATHS["output"],
                 file_base_path.removeprefix(INPUT_FOLDER + "/"),
             )
+            base_output_directory = os.path.join(
+                MOUNT_PATHS["output"],
+                root.removeprefix(INPUT_FOLDER + "/"),
+            )
             bam_path_plus = f"{file_base_output_path}_plus{BAM_SUFFIX}"
             bam_path_minus = f"{file_base_output_path}_minus{BAM_SUFFIX}"
-            bw_path_plus = f"{file_base_output_path}_plus{BW_SUFFIX}"
-            bw_path_minus = f"{file_base_output_path}_minus{BW_SUFFIX}"
+            bw_name_plus = f"{file_base_name}_plus{BW_SUFFIX}"
+            bw_name_minus = f"{file_base_name}_minus{BW_SUFFIX}"
+            bw_path_plus = os.path.join(base_output_directory, bw_name_plus)
+            bw_path_minus = os.path.join(base_output_directory, bw_name_minus)
             full_commands = [
                 f"samtools view -@ {threads} -bh -F 16 {file_base_path}{BAM_SUFFIX} -o {bam_path_plus}",
                 f"samtools view -@ {threads} -bh -f 16 {file_base_path}{BAM_SUFFIX} -o {bam_path_minus}",
                 (
                     f"seqOutBias {GENOME_PATH} {bam_path_plus} "
-                    f"--bw={bw_path_plus} --out={SEQTABLE_PATH_PLUS} "
+                    f"--bw={bw_name_plus} --out={SEQTABLE_PATH_PLUS} "
                     f"--skip-bed --shift-counts --kmer-mask {STRAND_MASK_PLUS} "
                     f"--read-size={READ_SIZE} --tallymer={TALLYMER_PATH}"
                 ),
                 (
                     f"seqOutBias {GENOME_PATH} {bam_path_minus} "
-                    f"--bw={bw_path_minus} --out={SEQTABLE_PATH_MINUS} "
+                    f"--bw={bw_name_minus} --out={SEQTABLE_PATH_MINUS} "
                     f"--skip-bed --shift-counts --kmer-mask {STRAND_MASK_MINUS} "
                     f"--read-size={READ_SIZE} --tallymer={TALLYMER_PATH}"
                 ),
@@ -68,6 +74,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 os.makedirs(os.path.dirname(file_base_output_path), exist_ok=True)
                 subprocess.run(
                     full_command,
+                    cwd=base_output_directory,
                     shell=True,
                     check=True,
                 )
