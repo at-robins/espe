@@ -54,15 +54,15 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 f"samtools view -@ {threads} -bh -F 16 {file_base_path}{BAM_SUFFIX} -o {bam_path_plus}",
                 f"samtools view -@ {threads} -bh -f 16 {file_base_path}{BAM_SUFFIX} -o {bam_path_minus}",
                 (
-                    f"seqOutBias {GENOME_PATH} {bam_path_plus} --custom-shift=4,-5 "
+                    f"seqOutBias {GENOME_PATH} {bam_path_plus} "
                     f"--bw={bw_name_plus} --out={SEQTABLE_PATH_PLUS} "
-                    f"--skip-bed --shift-counts --kmer-mask {STRAND_MASK_PLUS} "
+                    f"--skip-bed --custom-shift=4,-5 --kmer-mask {STRAND_MASK_PLUS} "
                     f"--read-size={READ_SIZE} --tallymer={TALLYMER_PATH}"
                 ),
                 (
-                    f"seqOutBias {GENOME_PATH} {bam_path_minus} --custom-shift=4,-5 "
+                    f"seqOutBias {GENOME_PATH} {bam_path_minus} "
                     f"--bw={bw_name_minus} --out={SEQTABLE_PATH_MINUS} "
-                    f"--skip-bed --shift-counts --kmer-mask {STRAND_MASK_MINUS} "
+                    f"--skip-bed --custom-shift=4,-5 --kmer-mask {STRAND_MASK_MINUS} "
                     f"--read-size={READ_SIZE} --tallymer={TALLYMER_PATH}"
                 ),
                 f"bigWigMerge {bw_path_plus} {bw_path_minus} {file_base_output_path}.bedGraph",
