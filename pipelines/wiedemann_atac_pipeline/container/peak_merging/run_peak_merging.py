@@ -27,8 +27,8 @@ def copy_into(in_file, out_file):
     """
     Copies the contents of the input file into the output file.
     """
-    with open(out_file, "wb") as o_f:
-        with open(in_file, "rb") as i_f:
+    with open(out_file, mode="at", encoding="utf-8") as o_f:
+        with open(in_file, mode="rt", encoding="utf-8") as i_f:
             shutil.copyfileobj(i_f, o_f)
 
 
@@ -43,7 +43,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
             print(f"Processing file {os.path.join(root, file)}...")
             copy_into(in_file=input_file, out_file=broad_combined_path)
 
-print(f"Sorting files...", flush=True)
+print("Sorting files...", flush=True)
 subprocess.run(
     (
         f"sort -k1,1V -k2,2n {narrow_combined_path} "
@@ -64,7 +64,7 @@ subprocess.run(
     shell=True,
     check=True,
 )
-print(f"Merging files...", flush=True)
+print("Merging files...", flush=True)
 subprocess.run(
     f"bedtools merge -i {narrow_sorted_path} > {narrow_merged_path}",
     cwd=MOUNT_PATHS["output"],

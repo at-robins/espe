@@ -3,16 +3,16 @@
 
 import json
 import os
-import sys
+import subprocess
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["blacklist_removal"]
 CHROM_SIZES_PATH = os.path.join(MOUNT_PATHS["globals"]["GENOME"], "genome.chrom.sizes")
 
-options = "-f BEDPE -q 0.01 -B -g `awk '{SUM+=$2}END{print SUM}' {CHROM_SIZES_PATH}`"
+options = f"-f BEDPE -q 0.01 -B -g `awk '{{SUM+=$2}}END{{print SUM}}' {CHROM_SIZES_PATH}`"
 
 # Iterates over all sample directories and processes them conserving the directory structure.
-FILE_EXTENSION = ".bedGraph"
+FILE_EXTENSION = ".bed"
 INPUT_SUFFIX_FORWARD = f"_nucleosomefree{FILE_EXTENSION}"
 for root, dirs, files in os.walk(INPUT_FOLDER):
     for file in files:

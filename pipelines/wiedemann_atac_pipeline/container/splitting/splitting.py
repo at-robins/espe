@@ -35,25 +35,25 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                         f"samtools view -@ {threads} -h {file_base_path}{BAM_SUFFIX} "
                         "| awk '{if (($9 < 100 && $9 > -100 && $9 != 0) || $1 ~ /^@/) {print $0}}' "
                         f"| samtools sort -@ {threads} "
-                        f"-O bam -o {file_base_output_path}_nucelosomefree.bam -"
+                        f"-O bam -o {file_base_output_path}_nucleosomefree.bam -"
                     ),
                     (
                         f"samtools view -@ {threads} -h {file_base_path}{BAM_SUFFIX} "
                         "| awk '{if ((($9 <= 247 && $9 >= 180) || ($9 >= -247 && $9 <= -180)) || $1 ~ /^@/) {print $0}}' "
                         f"| samtools sort -@ {threads} "
-                        f"-O bam -o {file_base_output_path}_mononucelosomal.bam -"
+                        f"-O bam -o {file_base_output_path}_mononucleosomal.bam -"
                     ),
                     (
                         f"samtools view -@ {threads} -h {file_base_path}{BAM_SUFFIX} "
                         "| awk '{if ((($9 <= 473 && $9 >= 315) || ($9 >= -473 && $9 <= -315)) || $1 ~ /^@/) {print $0}}' "
                         f"| samtools sort -@ {threads} "
-                        f"-O bam -o {file_base_output_path}_dinucelosomal.bam -"
+                        f"-O bam -o {file_base_output_path}_dinucleosomal.bam -"
                     ),
                     (
                         f"samtools view -@ {threads} -h {file_base_path}{BAM_SUFFIX} "
                         "| awk '{if ((($9 <= 615 && $9 >= 558) || ($9 >= -615 && $9 <= -558)) || $1 ~ /^@/) {print $0}}' "
                         f"| samtools sort -@ {threads} "
-                        f"-O bam -o {file_base_output_path}_trinucelosomal.bam -"
+                        f"-O bam -o {file_base_output_path}_trinucleosomal.bam -"
                     ),
                 ]
                 for full_command in full_commands:
