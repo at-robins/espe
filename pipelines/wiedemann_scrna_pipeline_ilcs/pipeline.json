@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_scrna_pipeline_ilcs",
   "name": "Wiedemann single cell RNA-Seq pipeline for group 1 ILC analysis",
-  "version": "0.1.0",
+  "version": "0.1.19",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [],
   "steps": [
@@ -83,6 +83,34 @@
       "description": "<espe-import>step_clustered_ora_description.html</espe-import>",
       "container": "clustered_ora",
       "dependencies": ["clustered_dge_overlap"],
+      "variables": []
+    },
+    {
+      "id": "cluster_resolution_data",
+      "name": "Sample clusters",
+      "description": "<espe-import>step_cluster_resolution_data_description.html</espe-import>",
+      "container": "cluster_resolution_data",
+      "dependencies": ["clustering_cell_type"],
+      "variables": []
+    },
+    {
+      "id": "cluster_relation_tree",
+      "name": "Compute cluster relation tree",
+      "description": "<espe-import>step_cluster_relation_tree_description.html</espe-import>",
+      "container": "cluster_relation_tree",
+      "dependencies": ["cluster_resolution_data"],
+      "variables": []
+    },
+    {
+      "id": "cluster_relation_dge",
+      "name": "Cluster relation tree DGE",
+      "description": "<espe-import>step_cluster_relation_tree_description.html</espe-import>",
+      "container": "cluster_relation_dge",
+      "dependencies": [
+        "clustering_cell_type",
+        "cluster_resolution_data",
+        "cluster_relation_tree"
+      ],
       "variables": []
     }
   ]
