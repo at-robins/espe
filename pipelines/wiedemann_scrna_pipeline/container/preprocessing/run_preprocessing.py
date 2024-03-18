@@ -135,6 +135,8 @@ def process_data(file_path, output_folder_path, metrics_writer):
     )
 
     print("\tWriting filtered data to file...")
+    # Backup the raw counts in a separate layer.
+    adata.layers["counts"] = adata.X
     adata.write(f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip")
 
     print("\tPlotting filtered data...")

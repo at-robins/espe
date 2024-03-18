@@ -146,9 +146,9 @@ def process_data(
             soupx_groups,
             output_folder_path,
         )
-        adata_filtered.layers["counts"] = adata_filtered.X
-        adata_filtered.layers["soupX_counts"] = soupx_output.T
-        adata_filtered.X = adata_filtered.layers["soupX_counts"]
+        adata_filtered.layers["uncorrected_counts"] = adata_filtered.layers["counts"]
+        adata_filtered.layers["counts"] = soupx_output.T
+        adata_filtered.X = adata_filtered.layers["counts"]
     n_cells_before_filter = adata_filtered.n_vars
     print(f"\tTotal number of features before filtering: {n_cells_before_filter}")
     sc.pp.filter_genes(adata_filtered, min_cells=20)

@@ -113,11 +113,6 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
             n_pcs = 30
         sc.pp.neighbors(adata_pool, n_pcs=n_pcs)
         sc.tl.umap(adata_pool)
-        # output_cluster_data(
-        #     adata_pool,
-        #     f"{sample_id}",
-        #     output_folder_path,
-        # )
         sc.tl.leiden(adata_pool, key_added=CLUSTER_KEY, resolution=1.0)
 
         print("\tPlotting data...")
@@ -128,7 +123,7 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
                 REPLICATE_KEY,
                 SAMPLE_TYPE_KEY,
             ],
-            legend_loc="on data",
+            wspace=1,
             show=False,
             return_fig=True,
         )
@@ -158,45 +153,6 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
             return_fig=True,
         )
         fig.savefig(f"{output_folder_path}/marker_genes.svg")
-
-
-RESOLUTIONS_PER_ITERATION = 201
-STARTING_RESOLUTION_MIN = 0.0
-STARTING_RESOLUTION_MAX = 4.0
-
-
-def output_cluster_data(adata: anndata.AnnData, sample_name: str, output_folder_path):
-    """
-    Performs clustering at different resolutions and outputs the resulting data.
-    """
-    print("Optimising resolution...")
-    min_resolution = STARTING_RESOLUTION_MIN
-    max_resolution = STARTING_RESOLUTION_MAX
-    # Copies AnnData here once instead of in the actual loop where
-    # needed to mitigate an associated memory leak.
-    adata_tmp = adata.copy()
-    cluster_data_path = os.path.join(
-        output_folder_path, f"{pathvalidate.sanitize_filename(sample_name)}.csv"
-    )
-    with open(cluster_data_path, mode="w", newline="", encoding="utf-8") as csvfile:
-        metrics_writer = csv.writer(
-            csvfile,
-            dialect="unix",
-            delimiter=",",
-            quotechar='"',
-            quoting=csv.QUOTE_MINIMAL,
-        )
-
-        step_increase = (max_resolution - min_resolution) / (
-            RESOLUTIONS_PER_ITERATION - 1
-        )
-        resolutions = [
-            min_resolution + step_increase * i for i in range(RESOLUTIONS_PER_ITERATION)
-        ]
-        for resolution in resolutions:
-            print(f"\tTesting resolution {resolution}")
-            sc.tl.leiden(adata_tmp, key_added="leiden_tmp", resolution=resolution)
-            metrics_writer.writerow([resolution, *adata_tmp.obs["leiden_tmp"].values])
 
 
 print("Parsing information for sample clustering...")

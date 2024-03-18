@@ -145,6 +145,7 @@ def load_counts(counts_path, tree, output_folder):
     fig.savefig(os.path.join(output_folder, "umap.svg"))
     plt.close(fig)
 
+    adata.X = adata.layers["counts"]
     return adata
 
 
@@ -210,6 +211,20 @@ def dge_for_split(
         tmp_n_cells_reference,
     ) = aggregate_pseudobulk_data(adata=adata, mask=reference_cluster_mask)
 
+    if len(tmp_pseudobulk_test) < 2:
+        print(
+            f"\tThe test sample has only {len(tmp_pseudobulk_test)} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
+        )
+        shutil.rmtree(output_path)
+        return
+
+    if len(tmp_pseudobulk_reference) < 2:
+        print(
+            f"\tThe reference sample has only {len(tmp_pseudobulk_reference)} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
+        )
+        shutil.rmtree(output_folder_path)
+        return
+
     pseudobulk_data = pd.concat(
         [tmp_pseudobulk_test, tmp_pseudobulk_reference],
         ignore_index=False,
@@ -246,19 +261,6 @@ def dge_for_split(
         KEY_PSEUDOBULK_REPLICATE
     ].astype("category")
 
-    # if pseudobulk_adata[reference_cluster_mask].n_obs < 2:
-    #     print(
-    #         f"\t{sample_type_reference} has only {pseudobulk_adata[reference_cluster_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
-    #     )
-    #     shutil.rmtree(output_folder_path)
-    #     return
-
-    # if pseudobulk_adata[test_cluster_mask].n_obs < 2:
-    #     print(
-    #         f"\t{sample_type_test} has only {pseudobulk_adata[test_cluster_mask].n_obs} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
-    #     )
-    #     shutil.rmtree(output_folder_path)
-    #     return
     output_path_full = os.path.join(
         output_path,
         pathvalidate.sanitize_filename(str(number_of_clusters)),

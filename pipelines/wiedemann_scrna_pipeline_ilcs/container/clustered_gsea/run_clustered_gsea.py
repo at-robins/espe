@@ -20,13 +20,8 @@ from pathlib import Path
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 FOLDER_COMPARISON_CLUSTER = "cluster_comparison"
-INPUT_FOLDER = (
-    os.path.join(
-        MOUNT_PATHS["dependencies"]["clustered_differential_gene_expression"],
-        FOLDER_COMPARISON_CLUSTER,
-    )
-    + "/"
-)
+INPUT_FOLDER = MOUNT_PATHS["dependencies"]["cluster_relation_dge"] + "/"
+
 GMT_PATH_HUMAN = "/gmts/reactome_human.gmt"
 GMT_PATH_MOUSE = "/gmts/reactome_mouse.gmt"
 KEY_PATHWAY_DB_GENESET = "geneset"
@@ -75,7 +70,7 @@ def parse_dge_csv(dge_csv_path, output_folder) -> pd.DataFrame:
 
 print("Loading pathway database...")
 organism_env = os.environ.get("GLOBAL_ORGANISM")
-if organism_env is not None and skip_env == "human":
+if organism_env is not None and organism_env == "human":
     print("\tUsing human data...", flush=True)
     pathway_database = parse_gmt(GMT_PATH_HUMAN)
 else:
