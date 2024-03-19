@@ -20,8 +20,13 @@ from pathlib import Path
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 FOLDER_COMPARISON_CLUSTER = "cluster_comparison"
-INPUT_FOLDER = MOUNT_PATHS["dependencies"]["cluster_relation_dge"] + "/"
-
+INPUT_FOLDER = (
+    os.path.join(
+        MOUNT_PATHS["dependencies"]["clustered_differential_gene_expression"],
+        FOLDER_COMPARISON_CLUSTER,
+    )
+    + "/"
+)
 GMT_PATH_HUMAN = "/gmts/reactome_human.gmt"
 GMT_PATH_MOUSE = "/gmts/reactome_mouse.gmt"
 KEY_PATHWAY_DB_GENESET = "geneset"
@@ -31,6 +36,7 @@ FILTER_PATHWAY_DB_MAX = 500
 KEY_CLUSTERING_GROUP = "clustering_group"
 KEY_CLUSTER = "cluster"
 KEY_DGE_FILE = "dge_file"
+PLOT_PATHWAYS_MAX = 30
 
 
 def parse_gmt(pth: Path) -> pd.DataFrame:
@@ -39,7 +45,7 @@ def parse_gmt(pth: Path) -> pd.DataFrame:
     """
     pathways = {}
 
-    with Path(pth).open("r") as f:
+    with Path(pth).open("r", encoding="utf-8") as f:
         for line in f:
             name, _, *genes = line.strip().split("\t")
             pathways[name] = genes
@@ -62,7 +68,7 @@ def parse_dge_csv(dge_csv_path, output_folder) -> pd.DataFrame:
         f_scores = []
         for row in dge_reader:
             genes.append(row[""])
-            f_scores.append(float(row["F"]))
+            f_scores.append(float(row["F"]) * np.sign(float(row["logFC"])))
         df = pd.DataFrame(data={"scores": f_scores}, index=genes)
         df.sort_values(by=["scores"], inplace=True, ascending=False)
         return df
@@ -139,22 +145,12 @@ for clustering_group, group_info in dge_input.items():
         gsea_results = (
             pd.concat({"score": scores.T, "norm": norm.T, "pval": pvals.T}, axis=1)
             .droplevel(level=1, axis=1)
-            .sort_values("pval")
-        )
-        gsea_results.to_csv(
-            os.path.join(output_path, "gsea_table.csv"), sep=",", encoding="utf-8"
-        )
-
-        print("\tPlotting data...")
-        gsea_results_filtered = (
-            gsea_results[gsea_results["pval"] <= 0.05]
-            .head(20)
             .assign(
-                **{"-log10(pval)": lambda x: -np.log10(x["pval"])},
+                **{"abs_norm": lambda x: np.abs(x["norm"])},
                 **{
                     "regulation": lambda x: pd.Categorical(
                         map(
-                            lambda z: "down-regulated" if z < 0.0 else "up-regulated",
+                            lambda z: ("down-regulated" if z < 0.0 else "up-regulated"),
                             np.sign(x["score"]),
                         ),
                         categories=["down-regulated", "up-regulated"],
@@ -162,23 +158,43 @@ for clustering_group, group_info in dge_input.items():
                     )
                 },
             )
+            .sort_values(["pval", "abs_norm"])
         )
-        fig, ax = plt.subplots(figsize=(15, 5))
-        colour_palette = sns.color_palette(["#7497F5", "#EA7B60"])
-        sns.barplot(
-            data=gsea_results_filtered,
-            x="-log10(pval)",
-            y=gsea_results_filtered.index,
-            hue="regulation",
-            orient="h",
-            palette=colour_palette,
-            saturation=1.0,
-            ax=ax,
+        gsea_results.to_csv(
+            os.path.join(output_path, "gsea_table.csv"),
+            sep=",",
+            encoding="utf-8",
         )
-        ax.set(xlabel="-log₁₀(p-value)", ylabel=None)
-        legend = ax.get_legend()
-        legend.set_title("Regulation")
-        sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
-        fig.tight_layout()
-        fig.savefig(os.path.join(output_path, "gsea_barplot_pval.svg"))
-        plt.close(fig)
+
+        print("\tPlotting data...")
+        gsea_results_filtered = (
+            gsea_results[gsea_results["pval"] <= 0.05]
+            .head(30)
+            .sort_values("norm", ascending=False)
+        )
+
+        if len(gsea_results_filtered) == 0:
+            print("\tNo significantly altered pathways. Skipping sample...")
+        else:
+            height = 7.5 * (len(gsea_results_filtered) / PLOT_PATHWAYS_MAX)
+            width = 15 * (max(map(len, gsea_results_filtered.index.values)) / 80)
+            fig, ax = plt.subplots(figsize=(15, height))
+            colour_palette = sns.color_palette(["#7497F5", "#EA7B60"])
+            sns.barplot(
+                data=gsea_results_filtered,
+                x="abs_norm",
+                y=gsea_results_filtered.index,
+                hue="regulation",
+                dodge=False,
+                orient="h",
+                palette=colour_palette,
+                saturation=1.0,
+                ax=ax,
+            )
+            ax.set(xlabel="absolute NES", ylabel=None)
+            legend = ax.get_legend()
+            legend.set_title("Regulation")
+            sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+            fig.tight_layout()
+            fig.savefig(os.path.join(output_path, "gsea_barplot.svg"))
+            plt.close(fig)

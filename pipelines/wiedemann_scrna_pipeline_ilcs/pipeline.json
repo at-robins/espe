@@ -1,9 +1,29 @@
 {
   "id": "wiedemann_scrna_pipeline_ilcs",
   "name": "Wiedemann single cell RNA-Seq pipeline for group 1 ILC analysis",
-  "version": "0.1.19",
+  "version": "0.1.37",
   "description": "<espe-import>pipeline_description.html</espe-import>",
-  "global_variables": [],
+  "global_variables": [
+    {
+      "id": "GLOBAL_ORGANISM",
+      "name": "Organism",
+      "description": "Specify which source organism the samples come from.",
+      "required": true,
+      "category": {
+        "tag": "Option",
+        "content": [
+          {
+            "name": "Mus musculus",
+            "value": "mouse"
+          },
+          {
+            "name": "Homo sapiens",
+            "value": "human"
+          }
+        ]
+      }
+    }
+  ],
   "steps": [
     {
       "id": "clustering_cell_type",
@@ -111,6 +131,14 @@
         "cluster_resolution_data",
         "cluster_relation_tree"
       ],
+      "variables": []
+    },
+    {
+      "id": "cluster_relation_gsea",
+      "name": "Cluster relation tree GSEA",
+      "description": "<espe-import>step_cluster_relation_tree_description.html</espe-import>",
+      "container": "cluster_relation_gsea",
+      "dependencies": ["cluster_relation_dge"],
       "variables": []
     }
   ]
