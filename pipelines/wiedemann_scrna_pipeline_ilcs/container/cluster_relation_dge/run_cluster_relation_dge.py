@@ -215,14 +215,12 @@ def dge_for_split(
         print(
             f"\tThe test sample has only {len(tmp_pseudobulk_test)} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
         )
-        shutil.rmtree(output_path)
         return
 
     if len(tmp_pseudobulk_reference) < 2:
         print(
             f"\tThe reference sample has only {len(tmp_pseudobulk_reference)} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
         )
-        shutil.rmtree(output_folder_path)
         return
 
     pseudobulk_data = pd.concat(
