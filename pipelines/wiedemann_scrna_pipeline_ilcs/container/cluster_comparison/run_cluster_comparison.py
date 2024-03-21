@@ -9,6 +9,7 @@ import numpy as np
 import os
 import pandas as pd
 import pathvalidate
+import pertpy as pt
 import scanpy as sc
 import seaborn as sns
 
@@ -54,51 +55,72 @@ def process_data(file_path_input, output_folder_path):
     print(f"Processing file {file_path_input}", flush=True)
     print("\tReading data...")
     adata = anndata.read_h5ad(file_path_input)
-    batches = adata.obs[REPLICATE_KEY].cat.categories
-    samples = adata.obs[SAMPLE_TYPE_KEY].cat.categories
-    clusters = adata.obs[CLUSTER_KEY].cat.categories
-
-    stat_data = {"batch": [], "sample": [], "cluster": [], "value": []}
-    for cluster in clusters:
-        print(f"\tCalculating statistics for cluster {cluster}...", flush=True)
-        for batch in batches:
-            adata_batch_subset = adata[adata.obs[REPLICATE_KEY] == batch]
-            adata_cluster_subset = adata_batch_subset[
-                adata_batch_subset.obs[CLUSTER_KEY] == cluster
-            ]
-            stat_data["batch"].append(batch)
-            stat_data["sample"].append(
-                adata_batch_subset.obs[SAMPLE_TYPE_KEY].cat.categories[0]
-            )
-            stat_data["cluster"].append(cluster)
-            stat_data["value"].append(
-                adata_cluster_subset.n_obs / adata_batch_subset.n_obs
-            )
-
-    stat_data_frame = pd.DataFrame(data=stat_data)
-    print("\tPlotting data...")
-    ordering = adata.obs[SAMPLE_TYPE_KEY].cat.categories.to_numpy()
-    sorted(ordering, key=str.casefold)
+    milo = pt.tl.Milo()
+    mdata = milo.load(adata)
+    milo.make_nhoods(mdata, prop=0.1)
+    print(adata.obsm["nhoods"])
+    nhood_size = adata.obsm["nhoods"].toarray().sum(0)
+    fig, ax = plt.subplots()
+    ax.hist(nhood_size, bins=20)
+    ax.set(xlabel="# cells in neighbourhood", ylabel="# neighbouthoods")
     barplot_name = "relative_cluster_frequency.svg"
-    fig, ax = plt.subplots(figsize=(stat_data_frame.shape[0] / 4, 8))
-    sns.barplot(
-        stat_data_frame,
-        x="cluster",
-        y="value",
-        hue="sample",
-        ax=ax,
-        errorbar="se",
-        capsize=0.15,
-        hue_order=ordering,
-    )
-    ax.set_ylim(0, None)
-    ax.set(xlabel="Cluster", ylabel="Cell frequency")
-    legend = ax.get_legend()
-    legend.set_title("Samples")
-    fig.tight_layout()
     fig.savefig(
         os.path.join(output_folder_path, pathvalidate.sanitize_filename(barplot_name))
     )
+    milo.count_nhoods(mdata, sample_col=REPLICATE_KEY)
+    mean_n_cells = mdata["milo"].X.toarray().mean(0)
+    fig, ax = plt.subplots()
+    ax.plot(nhood_size, mean_n_cells, ".")
+    ax.set(xlabel="# cells in nhood", ylabel="Mean # cells per sample in nhood")
+    b_name = "b.svg"
+    fig.savefig(
+        os.path.join(output_folder_path, pathvalidate.sanitize_filename(b_name))
+    )
+    # batches = adata.obs[REPLICATE_KEY].cat.categories
+    # samples = adata.obs[SAMPLE_TYPE_KEY].cat.categories
+    # clusters = adata.obs[CLUSTER_KEY].cat.categories
+
+    # stat_data = {"batch": [], "sample": [], "cluster": [], "value": []}
+    # for cluster in clusters:
+    #     print(f"\tCalculating statistics for cluster {cluster}...", flush=True)
+    #     for batch in batches:
+    #         adata_batch_subset = adata[adata.obs[REPLICATE_KEY] == batch]
+    #         adata_cluster_subset = adata_batch_subset[
+    #             adata_batch_subset.obs[CLUSTER_KEY] == cluster
+    #         ]
+    #         stat_data["batch"].append(batch)
+    #         stat_data["sample"].append(
+    #             adata_batch_subset.obs[SAMPLE_TYPE_KEY].cat.categories[0]
+    #         )
+    #         stat_data["cluster"].append(cluster)
+    #         stat_data["value"].append(
+    #             adata_cluster_subset.n_obs / adata_batch_subset.n_obs
+    #         )
+
+    # stat_data_frame = pd.DataFrame(data=stat_data)
+    # print("\tPlotting data...")
+    # ordering = adata.obs[SAMPLE_TYPE_KEY].cat.categories.to_numpy()
+    # sorted(ordering, key=str.casefold)
+    # barplot_name = "relative_cluster_frequency.svg"
+    # fig, ax = plt.subplots(figsize=(stat_data_frame.shape[0] / 4, 8))
+    # sns.barplot(
+    #     stat_data_frame,
+    #     x="cluster",
+    #     y="value",
+    #     hue="sample",
+    #     ax=ax,
+    #     errorbar="se",
+    #     capsize=0.15,
+    #     hue_order=ordering,
+    # )
+    # ax.set_ylim(0, None)
+    # ax.set(xlabel="Cluster", ylabel="Cell frequency")
+    # legend = ax.get_legend()
+    # legend.set_title("Samples")
+    # fig.tight_layout()
+    # fig.savefig(
+    #     os.path.join(output_folder_path, pathvalidate.sanitize_filename(barplot_name))
+    # )
 
 
 

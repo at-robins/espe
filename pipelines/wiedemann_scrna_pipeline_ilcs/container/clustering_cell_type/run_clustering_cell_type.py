@@ -12,6 +12,8 @@ import pathvalidate
 import scanpy as sc
 import seaborn as sns
 
+from matplotlib import pyplot as plt
+
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["input"] + "/"
 CLUSTERING_INFO_FILE = os.path.join(MOUNT_PATHS["input"], "sample_clustering.csv")
@@ -128,6 +130,7 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
             return_fig=True,
         )
         fig.savefig(f"{output_folder_path}/umap.svg")
+        plt.close(fig)
 
         print("\tWriting data to file...")
         adata_pool.write(
@@ -153,6 +156,7 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
             return_fig=True,
         )
         fig.savefig(f"{output_folder_path}/marker_genes.svg")
+        plt.close(fig)
 
 
 print("Parsing information for sample clustering...")

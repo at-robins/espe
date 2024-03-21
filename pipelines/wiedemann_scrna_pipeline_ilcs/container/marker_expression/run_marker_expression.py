@@ -11,6 +11,8 @@ import scanpy as sc
 import seaborn as sns
 import sys
 
+from matplotlib import pyplot as plt
+
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["clustering_cell_type"] + "/"
 MARKER_FILE = os.path.join(MOUNT_PATHS["input"], "markers.csv")
@@ -66,11 +68,12 @@ def process_data(file_path_input, output_folder_path):
     fig = sc.pl.umap(
         adata,
         color=[CLUSTER_KEY, REPLICATE_KEY, SAMPLE_TYPE_KEY, *genes],
-        legend_loc="on data",
+        wspace=1,
         show=False,
         return_fig=True,
     )
     fig.savefig(f"{output_folder_path}/marker_expression.svg")
+    plt.close(fig)
 
 
 if not os.path.isfile(MARKER_FILE):
