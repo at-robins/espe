@@ -7,25 +7,14 @@
     border-radius: 0.2rem;
   }
 </style>
-<p>Clusters separated samples at a default resolution.</p>
+<p>Clusters samples with different resolutions to reveal sub-populations.</p>
 <p>
   <b>Output</b><br />
-  For each clustering group the following files are generated:
+  For each clustering group a <code>cluster_resolution_data.csv</code> file is
+  generated. The first column representing the resolution the clustering was
+  performed at and every other column represents a single cell and its repecitve
+  cluster at the specified resolution.
 </p>
-<ul>
-  <li>
-    <code>clustered.h5ad</code>: the concatenated sample data including
-    clustering information
-  </li>
-  <li>
-    <code>umap.svg</code>: a UMAP visualisation of the clustering, sample types
-    and replicates
-  </li>
-  <li>
-    <code>marker_genes.svg</code>: a dotplot showing marker genes for the
-    respective clusteres
-  </li>
-</ul>
 <p><b>References</b></p>
 <ol>
   <li>
