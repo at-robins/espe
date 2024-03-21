@@ -134,6 +134,11 @@ def load_counts(counts_path, tree, output_folder):
         adata.obs[entry_obs_name] = pd.Categorical(entry["clustering"])
         entry_obs_names.append(entry_obs_name)
 
+    print("\tSaving count data...", flush=True)
+    adata.write(
+        os.path.join(output_folder, "cluster_relation.h5ad")
+    )
+
     print("\tPlotting data...")
     fig = sc.pl.umap(
         adata,
