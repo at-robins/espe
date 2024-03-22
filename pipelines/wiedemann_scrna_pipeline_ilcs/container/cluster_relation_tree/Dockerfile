@@ -15,7 +15,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Installs the cluster stability analysis tool.
 RUN mkdir /tmp_downloads && \
     git -C /tmp_downloads clone https://github.com/at-robins/leiden-optimisation.git && \
-    git -C /tmp_downloads/leiden-optimisation checkout c50d500
+    git -C /tmp_downloads/leiden-optimisation checkout 1e2d22c
 WORKDIR /tmp_downloads/leiden-optimisation
 RUN cargo build --release && \
     cp /tmp_downloads/leiden-optimisation/target/release/leiden-optimisation /usr/bin && \

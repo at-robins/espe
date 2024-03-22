@@ -153,7 +153,7 @@ for clustering_group, group_info in dge_input.items():
                             lambda z: ("down-regulated" if z < 0.0 else "up-regulated"),
                             np.sign(x["score"]),
                         ),
-                        categories=["down-regulated", "up-regulated"],
+                        categories=["up-regulated", "down-regulated"],
                         ordered=True,
                     )
                 },
@@ -176,10 +176,10 @@ for clustering_group, group_info in dge_input.items():
         if len(gsea_results_filtered) == 0:
             print("\tNo significantly altered pathways. Skipping sample...")
         else:
-            height = 7.5 * (len(gsea_results_filtered) / PLOT_PATHWAYS_MAX)
-            width = 15 * (max(map(len, gsea_results_filtered.index.values)) / 80)
+            height = (7 * (len(gsea_results_filtered) / PLOT_PATHWAYS_MAX)) + 1
+            width = (max(map(len, gsea_results_filtered.index.values)) / 10) + 4
             fig, ax = plt.subplots(figsize=(15, height))
-            colour_palette = sns.color_palette(["#7497F5", "#EA7B60"])
+            colour_palette = sns.color_palette(["#E64B35", "#4DBBD5"])
             sns.barplot(
                 data=gsea_results_filtered,
                 x="abs_norm",
@@ -187,6 +187,7 @@ for clustering_group, group_info in dge_input.items():
                 hue="regulation",
                 dodge=False,
                 orient="h",
+                width=0.75,
                 palette=colour_palette,
                 saturation=1.0,
                 ax=ax,
