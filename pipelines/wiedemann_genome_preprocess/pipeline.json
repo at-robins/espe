@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_genome_preprocess",
   "name": "Wiedemann reference genome preprocessing pipeline",
-  "version": "0.1.26",
+  "version": "0.1.30",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {

@@ -1,6 +1,7 @@
 #!/usr/bin/python
 """This module downloads the genome files."""
 
+import csv
 import json
 import logging
 import os
@@ -15,6 +16,34 @@ GENOME_INFO_DIRECTORY = "/genome_info"
 # Setup.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 os.makedirs(TEMPORARY_OUTPUT_PATH, exist_ok=True)
+
+
+def rename_chromosomes(input_path, output_path, rename_info):
+    """
+    Renames all instances of chromoses based on the specified information and saves the
+    file to the specified output path
+    """
+    logging.info(f"Renaming {input_path} to {output_path}...")
+    with open(input_path, mode="rt", encoding="utf-8") as file_in:
+        with open(output_path, mode="wt", encoding="utf-8") as file_out:
+            for line in file_in:
+                replaced_line = line
+                for original, replacement in rename_info.items():
+                    replaced_line = replaced_line.replace(original, replacement)
+                file_out.write(replaced_line)
+
+
+logging.info("Loading chromosome information...")
+genome_info_path = os.path.join(GENOME_INFO_DIRECTORY, "info_mouse.tsv")
+genome_info = {}
+with open(genome_info_path, newline="", encoding="utf-8") as tsvfile:
+    info_reader = csv.DictReader(tsvfile, dialect="unix", delimiter="\t", quotechar='"')
+    for row in info_reader:
+        old_chrom_name = row["RefSeq seq accession"]
+        new_chrom_name = row["UCSC style name"]
+        if old_chrom_name and new_chrom_name:
+            logging.info(f"\tRenaming {old_chrom_name} to {new_chrom_name}...")
+            genome_info[old_chrom_name] = new_chrom_name
 
 logging.info("Downloading genome and annotations...")
 command_download_genome = (
@@ -44,7 +73,7 @@ genome_fasta_path_in = os.path.join(
     "GCF_000001635.26",
     "GCF_000001635.26_GRCm38.p6_genomic.fna",
 )
-genome_annotations_path_oin = os.path.join(
+genome_annotations_path_in = os.path.join(
     TEMPORARY_OUTPUT_PATH,
     "ncbi_dataset",
     "data",
@@ -53,33 +82,16 @@ genome_annotations_path_oin = os.path.join(
 )
 genome_fasta_path_out = os.path.join(MOUNT_PATHS["output"], "genome.fa")
 genome_annotations_path_out = os.path.join(MOUNT_PATHS["output"], "annotations.gff")
-
-with open("log.txt") as infile:
-    for line in infile:
-        print(line)
-
-logging.info("Renaming chromosomes...")
-genome_info_path = os - path.join(GENOME_INFO_DIRECTORY, "chromosome_names_mouse.tsv")
-with open(genome_info_path, newline="", encoding="utf-8") as tsvfile:
-    info_reader = csv.DictReader(tsvfile, dialect="unix", delimiter="\t", quotechar='"')
-    for row in info_reader:
-        old_chrom_name = row["RefSeq seq accession"]
-        new_chrom_name = row["UCSC style name"]
-        if old_chrom_name and new_chrom_name:
-            logging.info("\tRenaming {old_chrom_name} to {new_chrom_name}...")
-
-        sample_type = sample_info_map.get(row["sample type"])
-        sample_directory = row["sample directory"]
-        if sample_type is None:
-            sample_info_map[row["sample type"]] = [sample_directory]
-        else:
-            sample_type.append(sample_directory)
-
-logging.info("Compressing files...")
-command_zip = f"gzip -k {os.path.join(MOUNT_PATHS['output'], 'genome.fa')}"
-exit_code_zip = os.waitstatus_to_exitcode(os.system(command_zip))
-if exit_code_zip != 0:
-    sys.exit(exit_code_zip)
+rename_chromosomes(
+    input_path=genome_fasta_path_in,
+    output_path=genome_fasta_path_out,
+    rename_info=genome_info,
+)
+rename_chromosomes(
+    input_path=genome_annotations_path_in,
+    output_path=genome_annotations_path_out,
+    rename_info=genome_info,
+)
 
 logging.info("Cleaning up temporary files...")
 shutil.rmtree(TEMPORARY_OUTPUT_PATH)
