@@ -17,13 +17,13 @@ threads = math.floor(multiprocessing.cpu_count() * 0.8)
 if threads > 0:
     options += f" -nt {threads}"
 
-phred = os.environ.get("GLOBAL_ORGANISM")
-if phred == "mouse":
+organism = os.environ.get("GLOBAL_ORGANISM")
+if organism == "mouse":
     options += " -gd MOUSE"
-elif phred == "human":
+elif organism == "human":
     options += " -gd HUMAN"
 else:
-    print(f"Unknown organsim option: {phred}", file=sys.stderr)
+    print(f"Unknown organsim option: {organism}", file=sys.stderr)
     sys.exit(1)
 
 print("Specified options:" + options)

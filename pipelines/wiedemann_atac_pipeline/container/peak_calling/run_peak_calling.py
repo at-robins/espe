@@ -4,15 +4,22 @@
 import json
 import os
 import subprocess
+import sys
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = MOUNT_PATHS["dependencies"]["blacklist_removal"]
-CHROM_SIZES_PATH = os.path.join(MOUNT_PATHS["globals"]["GENOME"], "genome.chrom.sizes")
+INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
+GENOME_SIZE_PATH = os.path.join(
+    MOUNT_PATHS["globals"]["GENOME"], "mappable_genome_size.txt"
+)
 
-options = f"-f BEDPE -q 0.01 -B -g `awk '{{SUM+=$2}}END{{print SUM}}' {CHROM_SIZES_PATH}`"
+with open(GENOME_SIZE_PATH, mode="rt", encoding="utf-8") as g_file:
+    mappable_genome_size = g_file.read()
+    print(f"Mappable genome size: {mappable_genome_size}")
+
+options = f"-f BAMPE -q 0.01 -B -g {mappable_genome_size}`"
 
 # Iterates over all sample directories and processes them conserving the directory structure.
-FILE_EXTENSION = ".bed"
+FILE_EXTENSION = ".bam"
 INPUT_SUFFIX_FORWARD = f"_nucleosomefree{FILE_EXTENSION}"
 for root, dirs, files in os.walk(INPUT_FOLDER):
     for file in files:

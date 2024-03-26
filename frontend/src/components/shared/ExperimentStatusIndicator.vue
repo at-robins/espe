@@ -18,7 +18,7 @@
           <q-spinner-orbit color="primary" />
         </div>
         <div v-else-if="status == ExperimentExecutionStatus.Waiting">
-          <q-spinner-hourglass color="primary" />
+          <q-icon :name="matSchedule" color="primary" />
         </div>
         <q-tooltip
           >The current execution status of the experiment. Click to display
@@ -61,6 +61,7 @@ import {
   matDone,
   matError,
   matNotStarted,
+  matSchedule,
   matStop,
 } from "@quasar/extras/material-icons";
 import { ExperimentExecutionStatus } from "@/scripts/types";
