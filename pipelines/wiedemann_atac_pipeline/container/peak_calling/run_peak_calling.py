@@ -15,7 +15,7 @@ with open(GENOME_SIZE_PATH, mode="rt", encoding="utf-8") as g_file:
     mappable_genome_size = g_file.read()
     print(f"Mappable genome size: {mappable_genome_size}")
 
-options = f"-f BAMPE -q 0.05 -B -g {mappable_genome_size}"
+options = f"-f BAMPE -q 0.05 --cutoff-analysis -B -g {mappable_genome_size}"
 
 # Iterates over all sample directories and processes them conserving the directory structure.
 FILE_EXTENSION = ".bam"
