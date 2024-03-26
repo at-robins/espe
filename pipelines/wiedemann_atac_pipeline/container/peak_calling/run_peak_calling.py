@@ -15,7 +15,7 @@ with open(GENOME_SIZE_PATH, mode="rt", encoding="utf-8") as g_file:
     mappable_genome_size = g_file.read()
     print(f"Mappable genome size: {mappable_genome_size}")
 
-options = f"-f BAMPE -q 0.01 -B -g {mappable_genome_size}"
+options = f"-f BAMPE -q 0.05 -B -g {mappable_genome_size}"
 
 # Iterates over all sample directories and processes them conserving the directory structure.
 FILE_EXTENSION = ".bam"
@@ -52,7 +52,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 (
                     f"macs3 callpeak -t {input_file} "
                     f"-n {file_name}_broad --outdir {broad_output_folder} "
-                    f"--broad --broad-cutoff 0.01 "
+                    f"--broad --broad-cutoff 0.1 "
                     f"{options}"
                 ),
                 cwd=narrow_output_folder,
