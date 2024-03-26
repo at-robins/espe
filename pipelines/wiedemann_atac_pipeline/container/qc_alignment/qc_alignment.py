@@ -46,7 +46,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
             full_command = (
                 f"qualimap bamqc -bam {file_path} "
                 f"-outdir {output_path} "
-                f"{options}"
+                f"{options} --java-mem-size=4G"
             )
             print(f"Running command: {full_command}", flush=True)
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
