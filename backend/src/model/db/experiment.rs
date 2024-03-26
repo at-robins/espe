@@ -1,6 +1,11 @@
-use crate::{schema::experiment::{self}, application::error::{SeqError, SeqErrorType}};
+use crate::{
+    application::error::{SeqError, SeqErrorType},
+    schema::experiment::{self},
+};
 use chrono::{NaiveDateTime, Utc};
-use diesel::{Identifiable, Insertable, Queryable, SqliteConnection, QueryDsl, ExpressionMethods, RunQueryDsl};
+use diesel::{
+    ExpressionMethods, Identifiable, Insertable, QueryDsl, Queryable, RunQueryDsl, SqliteConnection,
+};
 use getset::Getters;
 
 #[derive(Identifiable, Queryable, Insertable, PartialEq, Debug)]

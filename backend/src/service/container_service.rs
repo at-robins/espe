@@ -314,9 +314,9 @@ fn should_build<
         connection,
     )? {
         log::info!("Container image {} for pipeline {} step {} version {} is present in the database. Checking physical image.", 
-                    format_container_name(&pipeline_id, &pipeline_step_id), 
-                    &pipeline_id, 
-                    &pipeline_step_id, 
+                    format_container_name(&pipeline_id, &pipeline_step_id),
+                    &pipeline_id,
+                    &pipeline_step_id,
                     &pipeline_version
                 );
         let image_arg: OsString = "image".into();
@@ -349,9 +349,9 @@ fn should_build<
                     return Ok(false);
                 } else {
                     log::warn!("Database inconsistency. Container image {} for pipeline {} step {} version {} is present in the database, but not as physical image.", 
-                        format_container_name(&pipeline_id, &pipeline_step_id), 
-                        &pipeline_id, 
-                        &pipeline_step_id, 
+                        format_container_name(&pipeline_id, &pipeline_step_id),
+                        &pipeline_id,
+                        &pipeline_step_id,
                         &pipeline_version
                     );
                 }
@@ -359,9 +359,9 @@ fn should_build<
             // Kills the process if still running.
             None => {
                 log::warn!("Checking existance of container image {} for pipeline {} step {} version {} timed out. The process is killed.", 
-                    format_container_name(&pipeline_id, &pipeline_step_id), 
-                    &pipeline_id, 
-                    &pipeline_step_id, 
+                    format_container_name(&pipeline_id, &pipeline_step_id),
+                    &pipeline_id,
+                    &pipeline_step_id,
                     &pipeline_version
                 );
                 child.kill()?;

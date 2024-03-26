@@ -1,3 +1,9 @@
+use std::{
+    fs::File,
+    io::Read,
+    os::unix::fs::{FileExt, MetadataExt},
+};
+
 use crate::{
     application::{
         config::{Configuration, LogOutputType, LogProcessType},
@@ -12,6 +18,11 @@ use crate::{
     },
 };
 use actix_web::web;
+
+/// The maximum size of a single log file that is transmitted.
+const MAX_TRANSMISSION_LOG_SIZE: usize = 512 * 1024;
+/// The size of log read buffers if the transmission limit is exceeded.
+const TRANSMISSION_BUFFER_SIZE: usize = MAX_TRANSMISSION_LOG_SIZE / 2;
 
 pub async fn get_experiment_step_logs(
     database_manager: web::Data<DatabaseManager>,
@@ -78,25 +89,49 @@ impl LogFileReader {
         Ok(if !path.exists() {
             None
         } else {
-            let file_content = std::fs::read(&path)?;
-            match String::from_utf8(file_content) {
-                Ok(value) => Some(value),
-                Err(err) => {
-                    // Log the error but still return the log file since most of the
-                    // content is probably still readable.
-                    log::error!(
-                        "The log file {} contains invalid UTF-8: {}\n{}",
-                        path.display(),
-                        err,
-                        err.utf8_error()
-                    );
-                    let log_content_with_error: String = format!(
-                        "[ ERROR: The log file containes invalid UTF-8. \
-                        Please check the server logs for further details. ]\n\n{}",
-                        String::from_utf8_lossy(err.as_bytes())
-                    );
-                    Some(log_content_with_error)
-                },
+            let mut file = File::open(&path)?;
+            let file_size = file.metadata()?.size();
+            if file_size > MAX_TRANSMISSION_LOG_SIZE as u64 {
+                // Trims large log files so they do not block the frontend.
+                log::warn!(
+                    "The log file {} exceeds the limit of {} bytes and is truncated",
+                    path.display(),
+                    MAX_TRANSMISSION_LOG_SIZE
+                );
+                let mut start_buffer = [0u8; TRANSMISSION_BUFFER_SIZE];
+                let mut end_buffer = [0u8; TRANSMISSION_BUFFER_SIZE];
+                file.read_exact(&mut start_buffer)?;
+                file.read_exact_at(&mut end_buffer, file_size - TRANSMISSION_BUFFER_SIZE as u64)?;
+                let trimmed_content = format!(
+                    "{}\n\n[ WARNING: The log content exceeded the size limit and has been trimmed. ]\n\n{}", 
+                    String::from_utf8_lossy(&start_buffer),
+                    String::from_utf8_lossy(&end_buffer)
+                );
+                Some(trimmed_content)
+            } else {
+                // Sends reasonably sized log files completely and handles potential errors.
+                let file_content = std::fs::read(&path)?;
+                match String::from_utf8(file_content) {
+                    Ok(value) => Some(value),
+                    Err(err) => {
+                        // Log the error but still return the log file since most of the
+                        // content is probably still readable.
+                        // Invalid UTF-8 can for example be produced by container build logs
+                        // being trimmed externally.
+                        log::error!(
+                            "The log file {} contains invalid UTF-8: {}\n{}",
+                            path.display(),
+                            err,
+                            err.utf8_error()
+                        );
+                        let log_content_with_error: String = format!(
+                            "[ ERROR: The log file containes invalid UTF-8. \
+                            Please check the server logs for further details. ]\n\n{}",
+                            String::from_utf8_lossy(err.as_bytes())
+                        );
+                        Some(log_content_with_error)
+                    },
+                }
             }
         })
     }
