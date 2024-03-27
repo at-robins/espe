@@ -1,5 +1,5 @@
 #!/usr/bin/python
-"""This module removes blacklisted regions."""
+"""This module merges peak regions."""
 
 import json
 import os
@@ -7,7 +7,7 @@ import shutil
 import subprocess
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = MOUNT_PATHS["dependencies"]["peak_calling"]
+INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
 NARROW_SUFFIX = ".narrowPeak"
 BROAD_SUFFIX = ".broadPeak"
 

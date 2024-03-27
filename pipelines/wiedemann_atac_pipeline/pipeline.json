@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_atac_paired_end",
   "name": "Wiedemann ATAC paired end pipeline",
-  "version": "0.1.36",
+  "version": "0.1.51",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {
@@ -21,15 +21,6 @@
             "value": "mouse"
           }
         ]
-      }
-    },
-    {
-      "id": "READ_LENGTH",
-      "name": "Read length",
-      "description": "The length of the sequenced reads in base pairs.",
-      "required": true,
-      "category": {
-        "tag": "Number"
       }
     },
     {
@@ -275,6 +266,14 @@
       "description": "<espe-import>step_peak_merging_description.html</espe-import>",
       "container": "peak_merging",
       "dependencies": ["peak_calling"],
+      "variables": []
+    },
+    {
+      "id": "peak_annotation",
+      "name": "Peak annotation",
+      "description": "<espe-import>step_peak_annotation_description.html</espe-import>",
+      "container": "peak_annotation",
+      "dependencies": ["peak_merging"],
       "variables": []
     }
   ]
