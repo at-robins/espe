@@ -21,7 +21,7 @@ else:
 print("Annotating peaks...", flush=True)
 for root, dirs, files in os.walk(INPUT_FOLDER):
     for file in files:
-        if file.startswith("combined_sorted."):
+        if file.startswith("merged."):
             file_path_input = os.path.join(root, file)
             directory_path_output = os.path.join(
                 MOUNT_PATHS["output"],

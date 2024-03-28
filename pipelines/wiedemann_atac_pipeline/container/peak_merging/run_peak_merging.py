@@ -1,6 +1,7 @@
 #!/usr/bin/python
 """This module merges peak regions."""
 
+import csv
 import json
 import os
 import shutil
@@ -32,6 +33,31 @@ def copy_into(in_file, out_file):
             shutil.copyfileobj(i_f, o_f)
 
 
+def fix_merged_file(out_file):
+    """
+    Adds the relevant BED columns to the merged file.
+    """
+    in_file = f"{out_file}_tmp"
+    os.rename(out_file, in_file)
+    with open(in_file, newline="", mode="rt",encoding="utf-8") as merged_in:
+        with open(out_file, newline="", mode="wt",encoding="utf-8") as merged_out:
+            merged_reader = csv.reader(merged_in, dialect="unix", delimiter="\t", quotechar='"')
+            merged_writer = csv.writer(
+                merged_out, dialect="unix", delimiter="\t", quotechar='"', quoting=csv.QUOTE_MINIMAL
+            )
+            for i, row in enumerate(merged_reader):
+                merged_writer.writerow([
+                    row[0],
+                    row[1],
+                    row[2],
+                    f"peak_{i}",
+                    row[3],
+                    ".", # The strand does not matter so we do not set one.
+                ])
+    os.remove(in_file)
+
+
+
 # Combines the peak files.
 for root, dirs, files in os.walk(INPUT_FOLDER):
     for file in files:
@@ -47,7 +73,6 @@ print("Sorting files...", flush=True)
 subprocess.run(
     (
         f"sort -k1,1V -k2,2n {narrow_combined_path} "
-        '| awk \'{print $0"\\tPeak"sprintf("%09d", NR);}\' '
         f"> {narrow_sorted_path}"
     ),
     cwd=MOUNT_PATHS["output"],
@@ -57,23 +82,27 @@ subprocess.run(
 subprocess.run(
     (
         f"sort -k1,1V -k2,2n {broad_combined_path} "
-        '| awk \'{print $0"\\tPeak"sprintf("%09d", NR);}\' '
         f"> {broad_sorted_path}"
     ),
     cwd=MOUNT_PATHS["output"],
     shell=True,
     check=True,
 )
+
 print("Merging files...", flush=True)
 subprocess.run(
-    f"bedtools merge -i {narrow_sorted_path} > {narrow_merged_path}",
+    f"bedtools merge -c 5 -o mean -i {narrow_sorted_path} > {narrow_merged_path}",
     cwd=MOUNT_PATHS["output"],
     shell=True,
     check=True,
 )
 subprocess.run(
-    f"bedtools merge -i {broad_sorted_path} > {broad_merged_path}",
+    f"bedtools merge -c 5 -o mean -i {broad_sorted_path} > {broad_merged_path}",
     cwd=MOUNT_PATHS["output"],
     shell=True,
     check=True,
 )
+
+print("Adding additional columns...", flush=True)
+fix_merged_file(narrow_merged_path)
+fix_merged_file(broad_merged_path)
