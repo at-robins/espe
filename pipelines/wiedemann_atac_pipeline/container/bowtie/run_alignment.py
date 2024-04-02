@@ -10,8 +10,8 @@ import sys
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["trimming"]
 
-# If a specific environment variable is set, appends the respective option.
-options_bowtie = ("--end-to-end --no-mixed --dovetail --very-sensitive "
+# The max fragment length of 615 bp allows to detect trinucleosomal regions.
+options_bowtie = ("--end-to-end --no-mixed --dovetail --very-sensitive -X 615 "
 f"-x {MOUNT_PATHS['globals']['GENOME']}/genome "
 f"--met 10")
 
