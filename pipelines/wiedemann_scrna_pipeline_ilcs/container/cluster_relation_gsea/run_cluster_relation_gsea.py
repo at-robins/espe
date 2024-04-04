@@ -76,6 +76,30 @@ def parse_dge_csv(dge_csv_path) -> pd.DataFrame:
         return df
 
 
+def parse_dge_csv_for_extension(dge_csv_path) -> pd.DataFrame:
+    """
+    Parses a CSV file containing differential gene expression data.
+    """
+    with open(dge_csv_path, newline="", encoding="utf-8") as csvfile:
+        dge_reader = csv.DictReader(
+            csvfile, dialect="unix", delimiter=",", quotechar='"'
+        )
+        genes = []
+        remainder = {
+            "logFC": [],
+            "PValue": [],
+            "FDR": [],
+        }
+        for row in dge_reader:
+            genes.append(row.pop(""))
+            remainder["logFC"].append(row["logFC"])
+            remainder["PValue"].append(row["PValue"])
+            remainder["FDR"].append(row["FDR"])
+        df = pd.DataFrame(data=remainder, index=genes)
+
+        return df
+
+
 def perform_enrichment_analysis(dge_path, pathway_db, output_folder, suffix):
     """
     Performs the pathway enrichment analysis.
@@ -113,6 +137,27 @@ def perform_enrichment_analysis(dge_path, pathway_db, output_folder, suffix):
     gsea_results.to_csv(
         os.path.join(
             output_folder, pathvalidate.sanitize_filename(f"gsea_{suffix}_table.csv")
+        ),
+        sep=",",
+        encoding="utf-8",
+    )
+
+    print("\tWriting per gene data...")
+    gsea_results_filtered_sets = gsea_results[gsea_results["pval"] <= 0.05].sort_values(
+        "norm", ascending=False
+    ).index.values
+    dge_lookup = parse_dge_csv_for_extension(
+        dge_csv_path=dge_path,
+    )
+    pd.merge(
+        pathway_db[pathway_db[KEY_PATHWAY_DB_GENESET].isin(gsea_results_filtered_sets)],
+        dge_lookup,
+        left_on=KEY_PATHWAY_DB_GENESYMBOL,
+        right_index=True,
+        how="left",
+    ).to_csv(
+        os.path.join(
+            output_folder, pathvalidate.sanitize_filename(f"gsea_{suffix}_genes.csv")
         ),
         sep=",",
         encoding="utf-8",
