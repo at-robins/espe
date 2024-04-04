@@ -19,7 +19,7 @@ from pathlib import Path
 
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = MOUNT_PATHS["dependencies"]["cluster_relation_dge"] + "/"
+INPUT_FOLDER = MOUNT_PATHS["dependencies"]["dummy_dge"] + "/"
 GMT_PATH_HUMAN_REACTOME = "/gmts/reactome_human.gmt"
 GMT_PATH_MOUSE_REACTOME = "/gmts/reactome_mouse.gmt"
 GMT_PATH_HUMAN_GO = "/gmts/go_human.gmt"
