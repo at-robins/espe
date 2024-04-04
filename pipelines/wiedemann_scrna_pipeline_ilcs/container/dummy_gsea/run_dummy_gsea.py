@@ -42,10 +42,18 @@ def parse_gmt(pth: Path) -> pd.DataFrame:
             name, _, *genes = line.strip().split("\t")
             pathways[name] = genes
 
-    return pd.DataFrame.from_records(
+    df = pd.DataFrame.from_records(
         chain.from_iterable(zip(repeat(k), v) for k, v in pathways.items()),
         columns=[KEY_PATHWAY_DB_GENESET, KEY_PATHWAY_DB_GENESYMBOL],
     )
+
+    # Filters the pathway database by size.
+    geneset_size = df.groupby(KEY_PATHWAY_DB_GENESET).size()
+    gsea_genesets = geneset_size.index[
+        (geneset_size > FILTER_PATHWAY_DB_MIN) & (geneset_size < FILTER_PATHWAY_DB_MAX)
+    ]
+    df = df[df[KEY_PATHWAY_DB_GENESET].isin(gsea_genesets)]
+    return df
 
 
 def parse_dge_csv(dge_csv_path) -> pd.DataFrame:
@@ -64,13 +72,6 @@ def parse_dge_csv(dge_csv_path) -> pd.DataFrame:
         df = pd.DataFrame(data={"scores": f_scores}, index=genes)
         df.sort_values(by=["scores"], inplace=True, ascending=False)
 
-        # Filters the pathway database by size.
-        geneset_size = df.groupby(KEY_PATHWAY_DB_GENESET).size()
-        gsea_genesets = geneset_size.index[
-            (geneset_size > FILTER_PATHWAY_DB_MIN)
-            & (geneset_size < FILTER_PATHWAY_DB_MAX)
-        ]
-        df = df[df[KEY_PATHWAY_DB_GENESET].isin(gsea_genesets)]
         return df
 
 
