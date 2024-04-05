@@ -26,8 +26,8 @@ print("Specified bowtie2 options:" + options_bowtie)
 print("Specified samtools options:" + options_sort)
 
 # Iterates over all sample directories and processes them conserving the directory structure.
-INPUT_SUFFIX_FORWARD = "_1_paired.fq.gz"
-INPUT_SUFFIX_REVERSE = "_2_paired.fq.gz"
+INPUT_SUFFIX_FORWARD = "1_paired.fq.gz"
+INPUT_SUFFIX_REVERSE = "2_paired.fq.gz"
 for root, dirs, files in os.walk(INPUT_FOLDER):
     if len(files) > 0:
         for file in files:
