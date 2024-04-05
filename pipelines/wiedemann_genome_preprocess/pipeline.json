@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_genome_preprocess",
   "name": "Wiedemann reference genome preprocessing pipeline",
-  "version": "0.1.33",
+  "version": "0.1.35",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {
@@ -15,6 +15,10 @@
           {
             "name": "Mus musculus (GRCm38.p6)",
             "value": "mouse"
+          },
+          {
+            "name": "Homo sapiens (GRCh38.p14)",
+            "value": "human"
           }
         ]
       }

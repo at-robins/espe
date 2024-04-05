@@ -17,7 +17,6 @@ GENOME_INFO_DIRECTORY = "/genome_info"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 os.makedirs(TEMPORARY_OUTPUT_PATH, exist_ok=True)
 
-
 def rename_chromosomes(input_path, output_path, rename_info):
     """
     Renames all instances of chromoses based on the specified information and saves the
@@ -33,8 +32,21 @@ def rename_chromosomes(input_path, output_path, rename_info):
                 file_out.write(replaced_line)
 
 
+
+organism_env = os.environ.get("GLOBAL_ORGANISM")
+if organism_env is not None and organism_env == "human":
+    print("\tUsing human data...", flush=True)
+    genome_id = "GCF_000001405.40"
+    genome_name = "GRCh38.p14"
+    info_tsv = "info_human.tsv"
+else:
+    print("\tUsing mouse data...", flush=True)
+    genome_id = "GCF_000001635.26"
+    genome_name = "GRCm38.p6"
+    info_tsv = "info_mouse.tsv"
+
 logging.info("Loading chromosome information...")
-genome_info_path = os.path.join(GENOME_INFO_DIRECTORY, "info_mouse.tsv")
+genome_info_path = os.path.join(GENOME_INFO_DIRECTORY, info_tsv)
 genome_info = {}
 with open(genome_info_path, newline="", encoding="utf-8") as tsvfile:
     info_reader = csv.DictReader(tsvfile, dialect="unix", delimiter="\t", quotechar='"')
@@ -50,7 +62,7 @@ command_download_genome = (
     "wget "
     "--no-verbose "
     f"-O {DOWNLOAD_PATH_GENOME} "
-    "https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/GCF_000001635.26/download"
+    f"https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/{genome_id}/download"
     "?include_annotation_type=GENOME_FASTA,GENOME_GFF,GENOME_GTF"
 )
 exit_code_download_genome = os.waitstatus_to_exitcode(
@@ -70,21 +82,21 @@ genome_fasta_path_in = os.path.join(
     TEMPORARY_OUTPUT_PATH,
     "ncbi_dataset",
     "data",
-    "GCF_000001635.26",
-    "GCF_000001635.26_GRCm38.p6_genomic.fna",
+    genome_id,
+    f"{genome_id}_{genome_name}_genomic.fna",
 )
 genome_annotations_gff_path_in = os.path.join(
     TEMPORARY_OUTPUT_PATH,
     "ncbi_dataset",
     "data",
-    "GCF_000001635.26",
+    genome_id,
     "genomic.gff",
 )
 genome_annotations_gtf_path_in = os.path.join(
     TEMPORARY_OUTPUT_PATH,
     "ncbi_dataset",
     "data",
-    "GCF_000001635.26",
+    genome_id,
     "genomic.gtf",
 )
 genome_fasta_path_out = os.path.join(MOUNT_PATHS["output"], "genome.fa")
