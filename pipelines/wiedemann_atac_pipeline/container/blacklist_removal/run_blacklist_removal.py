@@ -8,7 +8,7 @@ import os
 import subprocess
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = MOUNT_PATHS["dependencies"]["splitting"]
+INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
 BLACKLIST_PATH = os.path.join(MOUNT_PATHS["globals"]["GENOME"], "blacklist.bed")
 BAM_SUFFIX = ".bam"
 

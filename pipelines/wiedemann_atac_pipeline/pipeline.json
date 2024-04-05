@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_atac_paired_end",
   "name": "Wiedemann ATAC paired end pipeline",
-  "version": "0.1.68",
+  "version": "0.1.71",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {
@@ -237,19 +237,19 @@
       "variables": []
     },
     {
-      "id": "splitting",
-      "name": "Splitting",
-      "description": "<p>Splits the alignment into nucleosome specific chuncks.</p><p><b>References</b><ol><li>Buenrostro JD, Giresi PG, Zaba LC, Chang HY, Greenleaf WJ. Transposition of native chromatin for fast and sensitive epigenomic profiling of open chromatin, DNA-binding proteins and nucleosome position. Nat Methods. 2013 Dec;10(12):1213-8. doi: 10.1038/nmeth.2688. Epub 2013 Oct 6. PMID: 24097267; PMCID: PMC3959825.</li><li>HTSlib: C library for reading/writing high-throughput sequencing data. James K Bonfield, John Marshall, Petr Danecek, Heng Li, Valeriu Ohan, Andrew Whitwham, Thomas Keane, Robert M Davies. GigaScience, Volume 10, Issue 2, February 2021, giab007, <a href=\"https://doi.org/10.1093/gigascience/giab007\">https://doi.org/10.1093/gigascience/giab007</a></li><li>Twelve years of SAMtools and BCFtools. Petr Danecek, James K Bonfield, Jennifer Liddle, John Marshall, Valeriu Ohan, Martin O Pollard, Andrew Whitwham, Thomas Keane, Shane A McCarthy, Robert M Davies, Heng Li. GigaScience, Volume 10, Issue 2, February 2021, giab008, <a href=\"https://doi.org/10.1093/gigascience/giab008\">https://doi.org/10.1093/gigascience/giab008</a></li></ol></p>",
-      "container": "splitting",
-      "dependencies": ["duplicate_removal"],
-      "variables": []
-    },
-    {
       "id": "blacklist_removal",
       "name": "Removing blacklisted regions",
       "description": "<espe-import>step_blacklist_removal_description.html</espe-import>",
       "container": "blacklist_removal",
-      "dependencies": ["splitting"],
+      "dependencies": ["duplicate_removal"],
+      "variables": []
+    },
+    {
+      "id": "splitting",
+      "name": "Splitting",
+      "description": "<p>Splits the alignment into nucleosome specific chuncks.</p><p><b>References</b><ol><li>Buenrostro JD, Giresi PG, Zaba LC, Chang HY, Greenleaf WJ. Transposition of native chromatin for fast and sensitive epigenomic profiling of open chromatin, DNA-binding proteins and nucleosome position. Nat Methods. 2013 Dec;10(12):1213-8. doi: 10.1038/nmeth.2688. Epub 2013 Oct 6. PMID: 24097267; PMCID: PMC3959825.</li><li>HTSlib: C library for reading/writing high-throughput sequencing data. James K Bonfield, John Marshall, Petr Danecek, Heng Li, Valeriu Ohan, Andrew Whitwham, Thomas Keane, Robert M Davies. GigaScience, Volume 10, Issue 2, February 2021, giab007, <a href=\"https://doi.org/10.1093/gigascience/giab007\">https://doi.org/10.1093/gigascience/giab007</a></li><li>Twelve years of SAMtools and BCFtools. Petr Danecek, James K Bonfield, Jennifer Liddle, John Marshall, Valeriu Ohan, Martin O Pollard, Andrew Whitwham, Thomas Keane, Shane A McCarthy, Robert M Davies, Heng Li. GigaScience, Volume 10, Issue 2, February 2021, giab008, <a href=\"https://doi.org/10.1093/gigascience/giab008\">https://doi.org/10.1093/gigascience/giab008</a></li></ol></p>",
+      "container": "splitting",
+      "dependencies": ["blacklist_removal"],
       "variables": []
     },
     {

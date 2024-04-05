@@ -15,14 +15,15 @@ with open(GENOME_SIZE_PATH, mode="rt", encoding="utf-8") as g_file:
     mappable_genome_size = g_file.read()
     print(f"Mappable genome size: {mappable_genome_size}")
 
-options = f"-f BAMPE -q 0.05 --keep-dup all --cutoff-analysis -B -g {mappable_genome_size}"
+options = (
+    f"-f BAMPE -q 0.05 --keep-dup all --cutoff-analysis -B -g {mappable_genome_size}"
+)
 
 # Iterates over all sample directories and processes them conserving the directory structure.
 FILE_EXTENSION = ".bam"
-INPUT_SUFFIX_FORWARD = f"_nucleosomefree{FILE_EXTENSION}"
 for root, dirs, files in os.walk(INPUT_FOLDER):
     for file in files:
-        if file.endswith(INPUT_SUFFIX_FORWARD):
+        if file.endswith(FILE_EXTENSION):
             file_name = file.removesuffix(FILE_EXTENSION)
             input_file = os.path.join(root, file)
             base_output_path = os.path.join(
@@ -30,32 +31,16 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 root.removeprefix(INPUT_FOLDER + "/"),
             )
             print(f"Processing file {input_file}...", flush=True)
-            broad_output_folder = os.path.join(base_output_path, "broad")
-            narrow_output_folder = os.path.join(base_output_path, "narrow")
-            os.makedirs(broad_output_folder, exist_ok=True)
-            os.makedirs(narrow_output_folder, exist_ok=True)
+            os.makedirs(base_output_path, exist_ok=True)
 
-            print("Calling narrow peaks...", flush=True)
+            print("Calling peaks...", flush=True)
             subprocess.run(
                 (
                     f"macs3 callpeak -t {input_file} "
-                    f"-n {file_name}_narrow --outdir {narrow_output_folder} "
+                    f"-n {file_name}_narrow --outdir {base_output_path} "
                     f"{options}"
                 ),
-                cwd=narrow_output_folder,
-                shell=True,
-                check=True,
-            )
-
-            print("Calling broad peaks...", flush=True)
-            subprocess.run(
-                (
-                    f"macs3 callpeak -t {input_file} "
-                    f"-n {file_name}_broad --outdir {broad_output_folder} "
-                    f"--broad --broad-cutoff 0.1 "
-                    f"{options}"
-                ),
-                cwd=narrow_output_folder,
+                cwd=base_output_path,
                 shell=True,
                 check=True,
             )
