@@ -1,7 +1,15 @@
 <script setup lang="ts">
+import { matMenu } from "@quasar/extras/material-icons";
+import {
+  symOutlinedLibraryBooks,
+  symOutlinedScience,
+} from "@quasar/extras/material-symbols-outlined";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
+const emit = defineEmits<{
+  (event: "triggerSidebar"): void;
+}>();
 
 function navigateToDocumentation() {
   router.push({ name: "documentation" });
@@ -10,27 +18,52 @@ function navigateToDocumentation() {
 function navigateToExperiments() {
   router.push({ name: "experiments" });
 }
+
+function clickSidebarButton() {
+  emit("triggerSidebar");
+}
 </script>
 
 <template>
   <main>
-    <div class="background-image-container row flex-center">
+    <div class="q-pa-xl background-image-container row flex-center">
       <img class="background-image" src="/icon_main.svg" />
     </div>
-    <div class="row flex-center text-description-container">
-      <div class="text-description q-pa-xl">
+    <div class="q-pa-lg row flex-center text-description-container">
+      <div class="text-description">
         ESPE is a sequencing pipeline engine to automate your biological
         workflows.<br />
         Get started by creating a new
-        <q-btn @click="navigateToExperiments" label="experiment" no-caps />
+        <span class="q-pa-sm">
+          <q-btn
+            @click="navigateToExperiments"
+            :icon="symOutlinedScience"
+            label="experiment"
+            no-caps
+          />
+        </span>
         or reading the
-        <q-btn
-          @click="navigateToDocumentation"
-          label="documentation"
-          no-caps
-        />.
+        <span class="q-pa-sm">
+          <q-btn
+            @click="navigateToDocumentation"
+            :icon="symOutlinedLibraryBooks"
+            label="documentation"
+            no-caps
+          />
+        </span>
+        .
         <br />
-        Everything can also be accessed via the sidebar.
+        <span class="q-pa-sm">
+          Everything can also be accessed conveniently via the
+          <q-btn
+            color="primary"
+            :icon="matMenu"
+            label="sidebar"
+            no-caps
+            @click="clickSidebarButton"
+          />
+        </span>
+        .
       </div>
     </div>
   </main>
@@ -38,12 +71,11 @@ function navigateToExperiments() {
 
 <style scoped lang="scss">
 .background-image {
-  height: 90%;
-  opacity: 0.3;
+  height: 40vh;
+  opacity: 0.8;
 }
 
 .background-image-container {
-  position: absolute;
   width: 100%;
   height: 100%;
   animation: fadeIn-image 5s;
@@ -59,16 +91,12 @@ function navigateToExperiments() {
   -moz-animation: fadeIn 2s;
   -o-animation: fadeIn 2s;
   -ms-animation: fadeIn 2s;
-  height: 80vh;
 }
 
 .text-description {
   line-height: 3em;
-  font-size: 1.5em;
+  font-size: 1.75em;
   text-align: center;
-  background-color: rgb(255, 255, 255, 0.9);
-  border: black;
-  border-style: solid;
 }
 
 @keyframes fadeIn-image {
