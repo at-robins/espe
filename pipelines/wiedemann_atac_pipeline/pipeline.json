@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_atac_paired_end",
   "name": "Wiedemann ATAC paired end pipeline",
-  "version": "0.1.76",
+  "version": "0.1.78",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {
@@ -282,6 +282,14 @@
       "description": "<espe-import>step_feature_counts_description.html</espe-import>",
       "container": "feature_counts",
       "dependencies": ["blacklist_removal", "peak_annotation"],
+      "variables": []
+    },
+    {
+      "id": "differential_accessibility",
+      "name": "Differential accessibility",
+      "description": "<espe-import>step_differential_accessibility_description.html</espe-import>",
+      "container": "differential_accessibility",
+      "dependencies": ["feature_counts"],
       "variables": []
     }
   ]

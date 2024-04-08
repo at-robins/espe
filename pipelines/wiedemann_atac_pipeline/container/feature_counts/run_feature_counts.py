@@ -102,7 +102,7 @@ bam_files = []
 sample_dirs = []
 for root, dirs, files in os.walk(INPUT_FOLDER_BAM):
     for file in files:
-        if file.endswith(f"nucleosomefree{BAM_SUFFIX}"):
+        if file.endswith(BAM_SUFFIX):
             bam_file_path = os.path.join(root, file)
             print(f"Detected BAM file {bam_file_path}...", flush=True)
             bam_files.append(bam_file_path)
