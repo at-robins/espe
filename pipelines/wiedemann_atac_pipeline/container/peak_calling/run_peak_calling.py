@@ -31,16 +31,32 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 root.removeprefix(INPUT_FOLDER + "/"),
             )
             print(f"Processing file {input_file}...", flush=True)
-            os.makedirs(base_output_path, exist_ok=True)
+            broad_output_folder = os.path.join(base_output_path, "broad")
+            narrow_output_folder = os.path.join(base_output_path, "narrow")
+            os.makedirs(broad_output_folder, exist_ok=True)
+            os.makedirs(narrow_output_folder, exist_ok=True)
 
-            print("Calling peaks...", flush=True)
+            print("Calling narrow peaks...", flush=True)
             subprocess.run(
                 (
                     f"macs3 callpeak -t {input_file} "
-                    f"-n {file_name}_narrow --outdir {base_output_path} "
+                    f"-n {file_name}_narrow --outdir {narrow_output_folder} "
                     f"{options}"
                 ),
-                cwd=base_output_path,
+                cwd=narrow_output_folder,
+                shell=True,
+                check=True,
+            )
+
+            print("Calling broad peaks...", flush=True)
+            subprocess.run(
+                (
+                    f"macs3 callpeak -t {input_file} "
+                    f"-n {file_name}_broad --outdir {broad_output_folder} "
+                    f"--broad --broad-cutoff 0.1 "
+                    f"{options}"
+                ),
+                cwd=broad_output_folder,
                 shell=True,
                 check=True,
             )
