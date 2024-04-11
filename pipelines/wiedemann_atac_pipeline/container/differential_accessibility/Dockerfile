@@ -15,7 +15,7 @@ ENV R_REPO="\"https://cloud.r-project.org/\""
 RUN Rscript -e "install.packages(\"remotes\", repos = $R_REPO)"
 RUN Rscript -e "library(remotes)"
 RUN Rscript -e "remotes::install_version(\"BiocManager\", version = \"1.30.22\", repos = $R_REPO)"
-RUN Rscript -e "BiocManager::install(\"DESeq2\", version = \"3.18\")"
+RUN Rscript -e "BiocManager::install(\"DESeq2\", version = \"3.16\")"
 RUN Rscript -e "library(DESeq2)"
 
 COPY run_differential_accessibility.py /run.py
