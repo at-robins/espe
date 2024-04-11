@@ -17,6 +17,8 @@ RUN Rscript -e "library(remotes)"
 RUN Rscript -e "remotes::install_version(\"BiocManager\", version = \"1.30.22\", repos = $R_REPO)"
 RUN Rscript -e "BiocManager::install(\"DESeq2\", version = \"3.16\")"
 RUN Rscript -e "library(DESeq2)"
+RUN Rscript -e "remotes::install_version(\"svglite\", version = \"2.1.3\", repos = $R_REPO)"
+RUN Rscript -e "library(svglite)"
 
 COPY run_differential_accessibility.py /run.py
 ENTRYPOINT ["python", "run.py"]

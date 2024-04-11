@@ -3,17 +3,44 @@
 
 import csv
 import json
+import logging
 import os
+import pandas as pd
 import pathvalidate
 import rpy2.rinterface_lib.callbacks as rcb
 import rpy2.robjects as ro
 
+from pathlib import Path
 from rpy2.robjects.packages import importr
 
+# Setup of rpy2.
+rcb.logger.setLevel(logging.INFO)
+ro.r(
+    '.libPaths(c("/usr/local/lib/R/site-library", "/usr/lib/R/site-library", "/usr/lib/R/library"))'
+)
+
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
-COUNT_MATRIX_PATH = os.path.join(INPUT_FOLDER, "counts/count_matrix_final.txt")
+INPUT_FOLDER_COUNTS = MOUNT_PATHS["dependencies"]["feature_counts"]
+INPUT_FOLDER_ANNOTATIONS = MOUNT_PATHS["dependencies"]["peak_annotation"]
+COUNT_MATRIX_PATH = os.path.join(INPUT_FOLDER_COUNTS, "counts/count_matrix_final.txt")
+ANNOTATION_PATH = os.path.join(INPUT_FOLDER_ANNOTATIONS, "merged.mergedPeak")
 SAMPLE_COMPARISON_PATH = os.path.join(MOUNT_PATHS["input"], "sample_comparison.csv")
+VALID_R_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+
+
+def convert_string_to_r(val: str) -> str:
+    """
+    Converts a string to a valid R string.
+    """
+    return "".join(
+        list(
+            map(
+                lambda letter: letter if letter in VALID_R_CHARACTERS else ".",
+                val.replace(" ", "_"),
+            )
+        )
+    )
+
 
 print("Loading count matrix...", flush=True)
 peak_ids = []
@@ -60,6 +87,7 @@ r_count_matrix = ro.r.matrix(
 )
 
 print("Loading R dependencies...", flush=True)
+importr("ggplot2")
 importr("DESeq2")
 print("Running R...", flush=True)
 deseq_function = ro.r(
@@ -70,6 +98,8 @@ deseq_function = ro.r(
         groups,
         conditions_test,
         conditions_reference,
+        condition_names_test,
+        condition_names_reference,
         output_path,
         output_suffixes
     ) {
@@ -77,7 +107,10 @@ deseq_function = ro.r(
         # Names rows and columns of the data matrix.
         rownames(data_matrix) <- peak_ids
         colnames(data_matrix) <- 1:ncol(data_matrix)
-        meta_data <- data.frame(factor(groups), row.names = colnames(data_matrix))
+        meta_data <- data.frame(
+            factor(groups),
+            row.names = colnames(data_matrix)
+        )
         colnames(meta_data) <- c("groups")
         atac_dds <- DESeqDataSetFromMatrix(
             countData = data_matrix,
@@ -90,17 +123,16 @@ deseq_function = ro.r(
         atac_rlog <- rlog(atac_dds)
 
         cat("Plotting PCA...\\n", sep="")
-        svg(filename = "PCA.svg")
-        plotPCA(atac_rlog, intgroup = "groups", ntop = nrow(atac_rlog))
-        dev.off()
+        pca_plot <- plotPCA(atac_rlog, intgroup = c("groups"), ntop = nrow(atac_rlog))
+        ggsave(filename = paste(output_path, "pca.svg", sep = "/"), plot = pca_plot)
 
         cat("Performing differential accessiblity analysis...\\n", sep="")
         for (i in 1:length(conditions_test)) {
             cat(
                 "\\tComparing sample ",
-                conditions_test[i],
+                condition_names_test[i],
                 " to reference ",
-                conditions_reference[i],
+                condition_names_reference[i],
                 "...\\n",
                 sep=""
             )
@@ -108,8 +140,8 @@ deseq_function = ro.r(
                 atac_dds,
                 contrast = c("groups", conditions_test[i], conditions_reference[i])
             )
-            atac_result["conditionSample"] <- conditions_test[i]
-            atac_result["conditionReference"] <- conditions_reference[i]
+            atac_result["conditionSample"] <- condition_names_test[i]
+            atac_result["conditionReference"] <- condition_names_reference[i]
             write.csv(
                 atac_result,
                 file = paste(
@@ -123,16 +155,46 @@ deseq_function = ro.r(
                 row.names=TRUE
             )
         }
-        cat("Done.\\n", sep="")
     }
     """
 )
 deseq_function(
     r_count_matrix,
-    peak_ids,
-    groups,
-    samples_test,
-    samples_reference,
+    ro.StrVector(peak_ids),
+    ro.StrVector(list(map(convert_string_to_r, groups))),
+    ro.StrVector(list(map(convert_string_to_r, samples_test))),
+    ro.StrVector(list(map(convert_string_to_r, samples_reference))),
+    ro.StrVector(samples_test),
+    ro.StrVector(samples_reference),
     MOUNT_PATHS["output"],
-    sample_comparisons_output_suffixes,
+    ro.StrVector(sample_comparisons_output_suffixes),
 )
+
+print("Loading annotations...", flush=True)
+annotation = pd.read_csv(
+    ANNOTATION_PATH, sep="\t", header=0, index_col=0, encoding="utf-8"
+)
+
+# Annotates all output files.
+for root, dirs, files in os.walk(MOUNT_PATHS["output"]):
+    for file in files:
+        if file.endswith(".csv"):
+            raw_path = Path(os.path.join(root, file))
+            annotated_path = Path(os.path.join(root, f"annotated_{file}"))
+            print(f"Annotating {raw_path}...", flush=True)
+            da_table = pd.read_csv(
+                raw_path, sep=",", header=0, index_col=0, encoding="utf-8"
+            )
+            pd.merge(
+                left=da_table,
+                right=annotation,
+                left_index=True,
+                right_index=True,
+                how="left",
+            ).sort_values("padj", ascending=True).to_csv(
+                annotated_path,
+                sep=",",
+                encoding="utf-8",
+                index=True,
+                index_label="PeakID",
+            )
