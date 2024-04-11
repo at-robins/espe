@@ -109,12 +109,10 @@ for root, dirs, files in os.walk(INPUT_FOLDER_BAM):
             sample_dirs.append(root.removeprefix(INPUT_FOLDER_BAM).removeprefix("/"))
 
 
-def rename_count_matrix(out_file):
+def rename_count_matrix(in_file, out_file):
     """
     Renames the sample headers of the count marix file.
     """
-    in_file = f"{out_file}_tmp"
-    os.rename(out_file, in_file)
     with open(in_file, newline="", mode="rt", encoding="utf-8") as count_matrix_in:
         with open(
             out_file, newline="", mode="wt", encoding="utf-8"
@@ -131,10 +129,11 @@ def rename_count_matrix(out_file):
             )
             for i_matrix, row_matrix in enumerate(count_matrix_reader):
                 # The first row is a comment, so we start with the second row.
-                if i_matrix == 1 and len(row_matrix) > MATRIX_NON_SAMPLE_COLUMNS:
-                    sample_rows = row_matrix[
-                        MATRIX_NON_SAMPLE_COLUMNS : len(row_matrix)
-                    ]
+                if i_matrix == 0:
+                    continue
+                # Renames the sample headers and drops everything except the peak ID.
+                sample_rows = row_matrix[MATRIX_NON_SAMPLE_COLUMNS : len(row_matrix)]
+                if i_matrix == 1:
                     renamed_samples = []
                     for sample_path in sample_rows:
                         sample_folder = PurePath(sample_path).parent.name
@@ -149,25 +148,27 @@ def rename_count_matrix(out_file):
                             )
                             sys.exit(1)
                         renamed_samples.append(sample_name)
-                    count_matrix_writer.writerow(
-                        [*row_matrix[0:MATRIX_NON_SAMPLE_COLUMNS], *renamed_samples]
-                    )
+                    count_matrix_writer.writerow(["PeakID", *renamed_samples])
                 else:
-                    count_matrix_writer.writerow(row_matrix)
-    os.remove(in_file)
+                    count_matrix_writer.writerow([row_matrix[0], *sample_rows])
 
 
 print("Counting features...", flush=True)
 for peak_file in peak_files:
-    output_path = os.path.join(MOUNT_PATHS["output"], "counts", "count_matrix.txt")
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    output_path_raw = os.path.join(
+        MOUNT_PATHS["output"], "counts", "count_matrix_raw.txt"
+    )
+    output_path_final = os.path.join(
+        MOUNT_PATHS["output"], "counts", "count_matrix_final.txt"
+    )
+    os.makedirs(os.path.dirname(output_path_raw), exist_ok=True)
 
     subprocess.run(
         (
             f"featureCounts -F SAF -T {threads} -O -p --countReadPairs "
-            f"-a {peak_file} -o {output_path} {' '.join(bam_files)}"
+            f"-a {peak_file} -o {output_path_raw} {' '.join(bam_files)}"
         ),
         shell=True,
         check=True,
     )
-    rename_count_matrix(output_path)
+    rename_count_matrix(in_file=output_path_raw, out_file=output_path_final)
