@@ -1,0 +1,47 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: 0.05rem;
+    border-radius: 0.2rem;
+  }
+</style>
+<p>
+  Determines differentailly accessible regions between conditions based on the
+  input <code>sample_comparison.csv</code>.
+</p>
+<p>
+  <b>Output</b>
+  The following files are created:
+</p>
+<ol>
+  <li>
+    <code>pca.svg</code>: A dotplot of the principle component analysis of all
+    different samples.
+  </li>
+  <li>
+    <code>differential_accessibility_*.csv</code>: A UTF-8 encoded CSV for each
+    condition comparison containing differentially accessible peak region
+    analysis results.
+  </li>
+  <li>
+    <code>annotated_differential_accessibility_*.csv</code>: The respective
+    <code>differential_accessibility_*.csv</code> files with additional peak
+    annotation information as generated during the peak annotation step.
+  </li>
+</ol>
+<br />
+<p>
+  <b>References</b>
+</p>
+<ol>
+  <li>
+    Love, M. I., Huber, W., & Anders, S. (2014). Moderated estimation of fold
+    change and dispersion for RNA-seq data with DESeq2. Genome biology, 15(12),
+    550.
+    <a href="https://doi.org/10.1186/s13059-014-0550-8"
+      >https://doi.org/10.1186/s13059-014-0550-8</a
+    >
+  </li>
+</ol>
