@@ -16,7 +16,7 @@ with open(GENOME_SIZE_PATH, mode="rt", encoding="utf-8") as g_file:
     print(f"Mappable genome size: {mappable_genome_size}")
 
 options = (
-    f"-f BAMPE -q 0.05 --keep-dup all --cutoff-analysis -B -g {mappable_genome_size}"
+    f"-f BAMPE -q 0.05 --keep-dup all --cutoff-analysis -g {mappable_genome_size}"
 )
 
 # Iterates over all sample directories and processes them conserving the directory structure.
