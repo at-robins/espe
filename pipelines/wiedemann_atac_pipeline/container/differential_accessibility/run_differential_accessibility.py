@@ -96,6 +96,7 @@ deseq_function = ro.r(
         data_matrix,
         peak_ids,
         groups,
+        group_names,
         conditions_test,
         conditions_reference,
         condition_names_test,
@@ -103,6 +104,8 @@ deseq_function = ro.r(
         output_path,
         output_suffixes
     ) {
+        # Creates a mapping between groups and their names.
+        names(group_names) <- groups
         cat("Preprocessing data matrix...\\n", sep="")
         # Names rows and columns of the data matrix.
         rownames(data_matrix) <- peak_ids
@@ -123,7 +126,15 @@ deseq_function = ro.r(
         atac_rlog <- rlog(atac_dds)
 
         cat("Plotting PCA...\\n", sep="")
-        pca_plot <- plotPCA(atac_rlog, intgroup = c("groups"), ntop = nrow(atac_rlog))
+        pca_plot <- plotPCA(atac_rlog, intgroup = c("groups"), ntop = nrow(atac_rlog)) +
+            scale_colour_discrete(labels = group_names, name = "Condition") +
+            theme(
+                panel.background = element_blank(),
+                panel.grid.major = element_blank(),
+                panel.grid.minor = element_blank(),
+                axis.line = element_blank(),
+                panel.border = element_rect(colour = "black", fill=NA, size=1.0)
+            )
         ggsave(filename = paste(output_path, "pca.svg", sep = "/"), plot = pca_plot)
 
         cat("Performing differential accessiblity analysis...\\n", sep="")
@@ -162,6 +173,7 @@ deseq_function(
     r_count_matrix,
     ro.StrVector(peak_ids),
     ro.StrVector(list(map(convert_string_to_r, groups))),
+    ro.StrVector(groups),
     ro.StrVector(list(map(convert_string_to_r, samples_test))),
     ro.StrVector(list(map(convert_string_to_r, samples_reference))),
     ro.StrVector(samples_test),

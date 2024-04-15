@@ -65,6 +65,11 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                     header=bam_file_in.header,
                     threads=threads,
                 ) as bam_file_out_trinucleosomal:
+                    alignments_nucleosome_free = 0
+                    alignments_mononucleosomal = 0
+                    alignments_dinucleosomal = 0
+                    alignments_trinucleosomal = 0
+                    alignments_other = 0
                     fetched_alignments = bam_file_in.fetch(until_eof=True)
                     for alignment_row in fetched_alignments:
                         template_length = abs(alignment_row.template_length)
@@ -73,21 +78,32 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                             and template_length <= REGION_NUCLEOSOME_FREE_MAX
                         ):
                             bam_file_out_nucleosome_free.write(alignment_row)
+                            alignments_nucleosome_free += 1
                         elif (
                             template_length >= REGION_MONONUCLEOSOMAL_MIN
                             and template_length <= REGION_MONONUCLEOSOMAL_MAX
                         ):
                             bam_file_out_mononucleosomal.write(alignment_row)
+                            alignments_mononucleosomal += 1
                         elif (
                             template_length >= REGION_DINUCLEOSOMAL_MIN
                             and template_length <= REGION_DINUCLEOSOMAL_MAX
                         ):
                             bam_file_out_dinucleosomal.write(alignment_row)
+                            alignments_dinucleosomal += 1
                         elif (
                             template_length >= REGION_TRINUCLEOSOMAL_MIN
                             and template_length <= REGION_TRINUCLEOSOMAL_MAX
                         ):
                             bam_file_out_trinucleosomal.write(alignment_row)
+                            alignments_trinucleosomal += 1
+                        else:
+                            alignments_other += 1
+                    print(f"\tNucleosome free alignments: {alignments_nucleosome_free}")
+                    print(f"\tMononucleosomal alignments: {alignments_mononucleosomal}")
+                    print(f"\tDinucleosomal alignments: {alignments_dinucleosomal}")
+                    print(f"\tTrinucleosomal alignments: {alignments_trinucleosomal}")
+                    print(f"\tOther alignments: {alignments_other}")
 
 for root, dirs, files in os.walk(MOUNT_PATHS["output"]):
     for file in files:
