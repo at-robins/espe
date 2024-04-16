@@ -8,6 +8,16 @@ import subprocess
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
 
+# ANNOTATION_TTS = "TTS"
+# ANNOTATION_PROMOTOR = "promotor"
+# ANNOTATION_INTRON = "intron"
+# ANNOTATION_EXON = "exon"
+# ANNOTATION_INTERGENIC = "intergenic"
+# ANNOTATION_NON_CODING = "non-coding"
+# ANNOTATION_UTR_3 = "3\' UTR"
+# ANNOTATION_UTR_5 = "5\' UTR"
+# ANNOTATION_UNKNOWN = "unknown"
+
 print("Loading pathway database...")
 organism_env = os.environ.get("GLOBAL_ORGANISM")
 if organism_env is not None and organism_env == "human":
