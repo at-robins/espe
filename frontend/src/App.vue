@@ -12,6 +12,10 @@ function navigateToGlobals() {
 function navigateToExperiments() {
   router.push({ name: "experiments" });
 }
+
+function navigateToInfo() {
+  router.push({ name: "info" });
+}
 </script>
 
 <template>
@@ -48,6 +52,9 @@ function navigateToExperiments() {
         </q-item>
         <q-item clickable v-ripple @click="navigateToGlobals">
           <q-item-section>Global data repositories</q-item-section>
+        </q-item>
+        <q-item clickable v-ripple @click="navigateToInfo">
+          <q-item-section>Information</q-item-section>
         </q-item>
       </q-list>
     </q-drawer>
