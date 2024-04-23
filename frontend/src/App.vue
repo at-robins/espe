@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { matPublic } from "@quasar/extras/material-icons";
 import {
+  symOutlinedInfo,
   symOutlinedLibraryBooks,
   symOutlinedScience,
 } from "@quasar/extras/material-symbols-outlined";
@@ -16,6 +17,10 @@ function navigateToGlobals() {
 
 function navigateToExperiments() {
   router.push({ name: "experiments" });
+}
+
+function navigateToInfo() {
+  router.push({ name: "info" });
 }
 
 function navigateToDocumentation() {
@@ -61,6 +66,12 @@ function triggerSidebar() {
             <q-icon :name="matPublic" />
           </q-item-section>
           <q-item-section>Global data repositories</q-item-section>
+        </q-item>
+        <q-item clickable v-ripple @click="navigateToInfo">
+          <q-item-section avatar>
+            <q-icon :name="symOutlinedInfo" />
+          </q-item-section>
+          <q-item-section>Information</q-item-section>
         </q-item>
         <q-item clickable v-ripple @click="navigateToDocumentation">
           <q-item-section avatar>
