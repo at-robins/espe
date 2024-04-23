@@ -67,17 +67,17 @@ function triggerSidebar() {
           </q-item-section>
           <q-item-section>Global data repositories</q-item-section>
         </q-item>
-        <q-item clickable v-ripple @click="navigateToInfo">
-          <q-item-section avatar>
-            <q-icon :name="symOutlinedInfo" />
-          </q-item-section>
-          <q-item-section>Information</q-item-section>
-        </q-item>
         <q-item clickable v-ripple @click="navigateToDocumentation">
           <q-item-section avatar>
             <q-icon :name="symOutlinedLibraryBooks" />
           </q-item-section>
           <q-item-section>Documentation</q-item-section>
+        </q-item>
+        <q-item clickable v-ripple @click="navigateToInfo">
+          <q-item-section avatar>
+            <q-icon :name="symOutlinedInfo" />
+          </q-item-section>
+          <q-item-section>Information</q-item-section>
         </q-item>
       </q-list>
     </q-drawer>

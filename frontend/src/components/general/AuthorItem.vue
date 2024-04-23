@@ -55,7 +55,7 @@ const props = defineProps({
   },
 });
 
-export type InfoType = {
+type InfoType = {
   name: string;
   value: string;
   url: string | null | undefined;
