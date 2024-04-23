@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
-import AuthorView from "../views/AuthorView.vue";
+import GeneralInformationView from "../views/GeneralInformationView.vue";
 import HomeView from "../views/HomeView.vue";
 import GlobalDataView from "@/views/GlobalDataView.vue";
 import GlobalDataDetailsView from "@/views/GlobalDataDetailsView.vue";
@@ -20,9 +20,9 @@ const router = createRouter({
       component: HomeView,
     },
     {
-      path: "/ui/author",
-      name: "author",
-      component: AuthorView,
+      path: "/ui/info",
+      name: "info",
+      component: GeneralInformationView,
     },
     {
       path: "/ui/globals",
