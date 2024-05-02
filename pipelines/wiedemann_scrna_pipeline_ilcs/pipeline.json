@@ -42,6 +42,14 @@
       "variables": []
     },
     {
+      "id": "rna_velocity",
+      "name": "RNA velocity",
+      "description": "<espe-import>step_rna_velocity_description.html</espe-import>",
+      "container": "rna_velocity",
+      "dependencies": ["clustering_cell_type"],
+      "variables": []
+    },
+    {
       "id": "cluster_comparison",
       "name": "Cluster comparison",
       "description": "<espe-import>step_cluster_comparison_description.html</espe-import>",

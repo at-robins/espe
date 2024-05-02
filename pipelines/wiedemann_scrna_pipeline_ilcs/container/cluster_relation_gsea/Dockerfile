@@ -15,6 +15,8 @@ RUN wget -O /gmts/reactome_human.gmt https://data.broadinstitute.org/gsea-msigdb
 RUN wget -O /gmts/reactome_mouse.gmt https://data.broadinstitute.org/gsea-msigdb/msigdb/release/2023.2.Mm/m2.cp.reactome.v2023.2.Mm.symbols.gmt
 RUN wget -O /gmts/go_human.gmt https://data.broadinstitute.org/gsea-msigdb/msigdb/release/2023.2.Hs/c5.all.v2023.2.Hs.symbols.gmt
 RUN wget -O /gmts/go_mouse.gmt https://data.broadinstitute.org/gsea-msigdb/msigdb/release/2023.2.Mm/m5.all.v2023.2.Mm.symbols.gmt
+RUN wget -O /gmts/hallmark_human.gmt https://data.broadinstitute.org/gsea-msigdb/msigdb/release/2023.2.Hs/h.all.v2023.2.Hs.symbols.gmt
+RUN wget -O /gmts/hallmark_mouse.gmt https://data.broadinstitute.org/gsea-msigdb/msigdb/release/2023.2.Mm/mh.all.v2023.2.Mm.symbols.gmt
 
 COPY run_cluster_relation_gsea.py /run.py
 ENTRYPOINT ["python", "run.py"]

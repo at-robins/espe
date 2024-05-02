@@ -24,6 +24,8 @@ GMT_PATH_HUMAN_REACTOME = "/gmts/reactome_human.gmt"
 GMT_PATH_MOUSE_REACTOME = "/gmts/reactome_mouse.gmt"
 GMT_PATH_HUMAN_GO = "/gmts/go_human.gmt"
 GMT_PATH_MOUSE_GO = "/gmts/go_mouse.gmt"
+GMT_PATH_HUMAN_HALLMARK = "/gmts/hallmark_human.gmt"
+GMT_PATH_MOUSE_HALLMARK = "/gmts/hallmark_mouse.gmt"
 KEY_PATHWAY_DB_GENESET = "geneset"
 KEY_PATHWAY_DB_GENESYMBOL = "genesymbol"
 FILTER_PATHWAY_DB_MIN = 15
@@ -209,10 +211,12 @@ if organism_env is not None and organism_env == "human":
     print("\tUsing human data...", flush=True)
     pathway_database_reactome = parse_gmt(GMT_PATH_HUMAN_REACTOME)
     pathway_database_go = parse_gmt(GMT_PATH_HUMAN_GO)
+    pathway_database_hallmark = parse_gmt(GMT_PATH_HUMAN_HALLMARK)
 else:
     print("\tUsing mouse data...", flush=True)
     pathway_database_reactome = parse_gmt(GMT_PATH_MOUSE_REACTOME)
     pathway_database_go = parse_gmt(GMT_PATH_MOUSE_GO)
+    pathway_database_hallmark = parse_gmt(GMT_PATH_MOUSE_HALLMARK)
 
 # Iterates over all directories and loads sample information.
 print("Processing differential gene expression data...", flush=True)
@@ -234,4 +238,10 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 pathway_db=pathway_database_reactome,
                 output_folder=output_folder_path,
                 suffix="rectome",
+            )
+            perform_enrichment_analysis(
+                dge_path=dge_file,
+                pathway_db=pathway_database_hallmark,
+                output_folder=output_folder_path,
+                suffix="hallmark",
             )
