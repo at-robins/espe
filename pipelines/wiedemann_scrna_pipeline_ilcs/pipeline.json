@@ -148,6 +148,14 @@
       "container": "cluster_relation_gsea",
       "dependencies": ["cluster_relation_dge"],
       "variables": []
+    },
+    {
+      "id": "cluster_relation_marker",
+      "name": "Marker genes",
+      "description": "Dummy GSEA",
+      "container": "cluster_relation_marker",
+      "dependencies": ["cluster_relation_dge"],
+      "variables": []
     }
   ]
 }
