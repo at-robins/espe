@@ -4,7 +4,9 @@
 import anndata
 import csv
 import json
+import numpy as np
 import os
+import pandas as pd
 import scanpy as sc
 
 from matplotlib import pyplot as plt
@@ -12,7 +14,6 @@ from pathlib import PurePath
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
-# CLUSTER_KEY = "number_of_clusters_17"
 
 
 # Setup of scanpy.
@@ -50,50 +51,6 @@ def parse_dge_csv(dge_csv_path) -> set[str]:
         return set(genes)
 
 
-# print("Searching for data...")
-# # Iterates over all sample directories and processes them conserving the directory structure.
-# for root, dirs, files in os.walk(INPUT_FOLDER):
-#     for file in files:
-#         if file.casefold().endswith("cluster_relation.h5ad"):
-#             file_path_adata = os.path.join(root, file)
-
-#             output_folder_path = os.path.join(
-#                 MOUNT_PATHS["output"],
-#                 os.path.normpath(os.path.relpath(root, INPUT_FOLDER)),
-#             )
-#             os.makedirs(output_folder_path, exist_ok=True)
-#             print(
-#                 f"Processing file {file_path_adata}...",
-#                 flush=True,
-#             )
-#             print(
-#                 "\tReading data...",
-#                 flush=True,
-#             )
-#             adata = anndata.read_h5ad(file_path_adata)
-#             adata.obs[CLUSTER_KEY] = adata.obs[CLUSTER_KEY].astype("str")
-#             print(
-#                 "\tRanking genes...",
-#                 flush=True,
-#             )
-#             sc.tl.rank_genes_groups(
-#                 adata,
-#                 groupby=CLUSTER_KEY,
-#                 method="wilcoxon",
-#             )
-#             print(
-#                 "\tPlotting...",
-#                 flush=True,
-#             )
-#             fig = sc.pl.rank_genes_groups_stacked_violin(
-#                 adata, n_genes=5, groupby=CLUSTER_KEY, return_fig=True
-#             )
-#             fig.savefig(
-#                 os.path.join(output_folder_path, "marker_genes_violin.svg"),
-#                 format="svg",
-#             )
-
-
 print("Searching for data...")
 directory_paths = set()
 dge_tree = {}
@@ -125,8 +82,19 @@ def sort_key_conversion(gene_key) -> int:
     return int(PurePath(gene_key).name)
 
 
+def path_key_to_adata_key(path_key) -> int:
+    """
+    Converts the path key to the respective adata key.
+    """
+    return f"number_of_clusters_{PurePath(path_key).name}"
+
+
 for directory_path in directory_paths:
     print(f"Processing directory {directory_path}...", flush=True)
+    adata_path = os.path.join(directory_path, "cluster_relation.h5ad")
+    print(f"\tLoading {adata_path}...", flush=True)
+    adata = anndata.read_h5ad(adata_path)
+    # Filters and sorts keys (cluster relation splitoffs) that belong to the currently processed directory.
     dge_set = set()
     keys = [x for x in dge_tree.keys() if x.startswith(directory_path)]
     keys.sort(key=sort_key_conversion)
@@ -139,11 +107,28 @@ for directory_path in directory_paths:
         )
         os.makedirs(output_folder_path, exist_ok=True)
         dge_set = dge_set | dge_tree[key]
-        print(f"\t\tWriting total differentially expressed genes to file...", flush=True)
+        print("\t\tWriting total differentially expressed genes to file...", flush=True)
+        sorted_gene_set = sorted(dge_set)
         with open(
             os.path.join(
                 output_folder_path, "differentially_expressed_genes_total.json"
             ),
-            "wt",
+            mode="wt",
+            encoding="utf-8",
         ) as gene_file:
-            json.dump(sorted(dge_set), gene_file)
+            json.dump(sorted_gene_set, gene_file)
+        # Calculate median expression for each gene and cluster.
+        adata_cluster_key = path_key_to_adata_key(key)
+        clusters = adata.obs[adata_cluster_key].cat.categories
+
+        median_dataframe = pd.DataFrame(
+            np.empty((len(sorted_gene_set), len(clusters)), dtype=pd.Float64Dtype),
+            columns=clusters,
+            index=sorted_gene_set,
+        )
+        print(median_dataframe, flush=True)
+        # for gene in sorted_gene_set:
+        #     adata_clusters = adata[path]
+            # The median test has low test power, but is still preferable here
+            # as only the difference in median expression not the actual distribution
+            # should be tested for ordering of the clusters.
