@@ -89,6 +89,16 @@ def path_key_to_adata_key(path_key) -> int:
     return f"number_of_clusters_{PurePath(path_key).name}"
 
 
+def fill_median_table(gene, adata, cluster_key, median_table):
+    clusters = adata.obs[adata_cluster_key].cat.categories
+    for cluster in clusters:
+        median_table.loc[gene, cluster] = np.median(
+            adata[adata.obs[adata_cluster_key] == cluster].obs_vector(
+                gene, layer="log1p_norm"
+            )
+        )
+
+
 for directory_path in directory_paths:
     print(f"Processing directory {directory_path}...", flush=True)
     adata_path = os.path.join(directory_path, "cluster_relation.h5ad")
@@ -126,9 +136,21 @@ for directory_path in directory_paths:
             columns=clusters,
             index=sorted_gene_set,
         )
-        print(median_dataframe, flush=True)
-        # for gene in sorted_gene_set:
-        #     adata_clusters = adata[path]
-            # The median test has low test power, but is still preferable here
-            # as only the difference in median expression not the actual distribution
-            # should be tested for ordering of the clusters.
+        for cluster in clusters:
+            print(f"\t\t\tProcessing cluster {cluster}...", flush=True)
+            cluster_cells = adata[
+                adata.obs[adata_cluster_key] == cluster, sorted_gene_set
+            ].to_df(layer="log1p_norm")
+            median_dataframe[cluster] = cluster_cells.median()
+
+        median_dataframe.to_csv(
+            os.path.join(
+                output_folder_path, "differentially_expressed_genes_medians.csv"
+            ),
+            sep=",",
+            encoding="utf-8",
+        )
+
+        # The median test has low test power, but is still preferable here
+        # as only the difference in median expression not the actual distribution
+        # should be tested for ordering of the clusters.
