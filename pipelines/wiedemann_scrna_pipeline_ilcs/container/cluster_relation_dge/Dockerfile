@@ -31,6 +31,7 @@ RUN Rscript -e "renv::restore(\
     repos = $R_REPO, \
     prompt = FALSE \
 )"
+RUN Rscript -e "library(Seurat); library(scater); library(edgeR)"
 
 COPY run_cluster_relation_dge.py /run.py
 ENTRYPOINT ["python", "/run.py"]
