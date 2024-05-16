@@ -18,13 +18,14 @@ ENV R_PROJECT_PATH="/renv/"
 RUN Rscript -e "install.packages(\"remotes\", repos = $R_REPO)" && Rscript -e "library(remotes)"
 RUN Rscript -e "remotes::install_version(\"BiocManager\", version = \"1.30.23\", repos = $R_REPO)"
 RUN Rscript -e "remotes::install_version(\"renv\", version = \"1.0.7\", repos = $R_REPO)" && Rscript -e "library(renv)"
-COPY r*.lock $R_PROJECT_PATH
+COPY r_sc_base.lock $R_PROJECT_PATH
 RUN Rscript -e "renv::restore(\
     lockfile = \"${R_PROJECT_PATH}r_sc_base.lock\", \
     library = \"/usr/local/lib/R/site-library\", \
     repos = $R_REPO, \
     prompt = FALSE \
 )"
+COPY r_sc_dge.lock $R_PROJECT_PATH
 RUN Rscript -e "renv::restore(\
     lockfile = \"${R_PROJECT_PATH}r_sc_dge.lock\", \
     library = \"/usr/local/lib/R/site-library\", \

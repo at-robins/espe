@@ -10,15 +10,19 @@ RUN yes | pip install pathvalidate==3.2.0 --exists-action i
 
 # Install R dependencies.
 # The library calls verify that the installation worked.
-WORKDIR /
 ENV R_REPO="\"https://cloud.r-project.org/\""
-RUN Rscript -e "install.packages(\"remotes\", repos = $R_REPO)"
-RUN Rscript -e "library(remotes)"
-RUN Rscript -e "remotes::install_version(\"BiocManager\", version = \"1.30.22\", repos = $R_REPO)"
-RUN Rscript -e "BiocManager::install(\"DESeq2\", version = \"3.16\")"
-RUN Rscript -e "library(DESeq2)"
-RUN Rscript -e "remotes::install_version(\"svglite\", version = \"2.1.3\", repos = $R_REPO)"
-RUN Rscript -e "library(svglite)"
+ENV R_PROJECT_PATH="/renv/"
+RUN Rscript -e "install.packages(\"remotes\", repos = $R_REPO)" && Rscript -e "library(remotes)"
+RUN Rscript -e "remotes::install_version(\"BiocManager\", version = \"1.30.23\", repos = $R_REPO)"
+RUN Rscript -e "remotes::install_version(\"renv\", version = \"1.0.7\", repos = $R_REPO)" && Rscript -e "library(renv)"
+COPY r_atac_da.lock $R_PROJECT_PATH
+RUN Rscript -e "renv::restore(\
+    lockfile = \"${R_PROJECT_PATH}r_atac_da.lock\", \
+    library = \"/usr/local/lib/R/site-library\", \
+    repos = $R_REPO, \
+    prompt = FALSE \
+)"
+RUN Rscript -e "library(DESeq2); library(svglite)"
 
 COPY run_differential_accessibility.py /run.py
-ENTRYPOINT ["python", "run.py"]
+ENTRYPOINT ["python", "/run.py"]

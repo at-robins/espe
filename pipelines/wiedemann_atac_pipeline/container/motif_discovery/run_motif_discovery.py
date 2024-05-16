@@ -84,8 +84,8 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
             print("\tRunning motif discovery...", flush=True)
             subprocess.run(
                 (
-                    f"findMotifsGenome.pl {file_path_peaks} {genome_id} "
-                    f"{directory_path_output} -size given -mask -p {threads}"
+                    f"findMotifsGenome.pl \"{file_path_peaks}\" {genome_id} "
+                    f"\"{directory_path_output}\" -size given -mask -p {threads}"
                 ),
                 cwd=directory_path_output,
                 shell=True,
