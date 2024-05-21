@@ -16,6 +16,12 @@ from pathlib import PurePath
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
 
+GROUPING_VERY_LOW = "very low"
+GROUPING_LOW = "low"
+GROUPING_MEDIUM = "medium"
+GROUPING_HIGH = "high"
+GROUPING_VERY_HIGH = "very high"
+
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
@@ -148,48 +154,65 @@ for directory_path in directory_paths:
                 adata.obs[adata_cluster_key] == cluster, sorted_gene_set
             ].to_df(layer="log1p_norm")
             cluster_dictionary[cluster] = cluster_cells
-            median_dataframe[cluster] = cluster_cells.median()
+            median_dataframe[cluster] = cluster_cells.mean()
 
         median_dataframe.to_csv(
             os.path.join(
-                output_folder_path, "differentially_expressed_genes_medians.csv"
+                output_folder_path, "differentially_expressed_genes_means.csv"
             ),
             sep=",",
             encoding="utf-8",
         )
-        print("\t\tGrouping gene medians...", flush=True)
+
+        print("\t\tNormalising gene expression...", flush=True)
+        minimums = median_dataframe.min(axis=1)
+        maximums = median_dataframe.max(axis=1)
+        normalised_dataframe = median_dataframe.sub(minimums, axis=0).div(
+            maximums - minimums, axis=0
+        )
+
+        normalised_dataframe.to_csv(
+            os.path.join(
+                output_folder_path,
+                "differentially_expressed_genes_normalised_means.csv",
+            ),
+            sep=",",
+            encoding="utf-8",
+        )
+
+        print("\t\tGrouping genes by expression...", flush=True)
         grouping_dataframe = pd.DataFrame(
             np.empty((len(sorted_gene_set), len(clusters)), dtype=pd.Int64Dtype),
             columns=clusters,
             index=sorted_gene_set,
         )
 
-        for gene in sorted_gene_set:
-            sorted_medians = median_dataframe.loc[gene].sort_values(ascending=True)
-            sorted_clusters = sorted_medians.index.tolist()
-            i = 0
-            offset = 0
-            current_category = 0
-            while i + offset < len(sorted_clusters):
-                cluster_a = sorted_clusters[i]
-                cluster_b = sorted_clusters[i + offset]
-                if offset == 0:
-                    # This defines the current category.
-                    grouping_dataframe.loc[gene, cluster_a] = current_category
-                    offset += 1
-                else:
-                    if is_same(cluster_dictionary[cluster_a][gene], cluster_dictionary[cluster_b][gene]):
-                        grouping_dataframe.loc[gene, cluster_b] = current_category
-                        offset += 1
-                    else:
-                        i = i + offset
-                        offset = 0
-                        current_category += 1
+        # for gene in sorted_gene_set:
+        #     sorted_medians = median_dataframe.loc[gene].sort_values(ascending=True)
+        #     sorted_clusters = sorted_medians.index.tolist()
+        #     i = 0
+        #     offset = 0
+        #     current_category = 0
+        #     while i + offset < len(sorted_clusters):
+        #         cluster_a = sorted_clusters[i]
+        #         cluster_b = sorted_clusters[i + offset]
+        #         if offset == 0:
+        #             # This defines the current category.
+        #             grouping_dataframe.loc[gene, cluster_a] = current_category
+        #             offset += 1
+        #         else:
+        #             if is_same(cluster_dictionary[cluster_a][gene], cluster_dictionary[cluster_b][gene]):
+        #                 grouping_dataframe.loc[gene, cluster_b] = current_category
+        #                 offset += 1
+        #             else:
+        #                 i = i + offset
+        #                 offset = 0
+        #                 current_category += 1
 
-        grouping_dataframe.to_csv(
-            os.path.join(
-                output_folder_path, "differentially_expressed_genes_groupings.csv"
-            ),
-            sep=",",
-            encoding="utf-8",
-        )
+        # grouping_dataframe.to_csv(
+        #     os.path.join(
+        #         output_folder_path, "differentially_expressed_genes_groupings.csv"
+        #     ),
+        #     sep=",",
+        #     encoding="utf-8",
+        # )
