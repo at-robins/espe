@@ -9,6 +9,7 @@ import os
 import pandas as pd
 import scanpy as sc
 import scipy
+import seaborn as sns
 
 from matplotlib import pyplot as plt
 from pathlib import PurePath
@@ -96,18 +97,20 @@ def path_key_to_adata_key(path_key) -> int:
     return f"number_of_clusters_{PurePath(path_key).name}"
 
 
-def is_same(cells_a, cells_b) -> bool:
+def group_values(value) -> str:
     """
-    Returns true if the cell populations have the same median.
+    Groups normalised values.
     """
-    # The median test has low test power, but is still preferable here
-    # as only the difference in median expression not the actual distribution
-    # should be tested for ordering of the clusters.
-    try:
-        return scipy.stats.median_test(cells_a, cells_b).pvalue > 0.005
-    except ValueError:
-        # An error is produced if all values are equal.
-        return True
+    if value <= 0.2:
+        return GROUPING_VERY_LOW
+    elif value <= 0.4:
+        return GROUPING_LOW
+    elif value <= 0.6:
+        return GROUPING_MEDIUM
+    elif value <= 0.8:
+        return GROUPING_HIGH
+    else:
+        return GROUPING_VERY_HIGH
 
 
 for directory_path in directory_paths:
@@ -115,7 +118,8 @@ for directory_path in directory_paths:
     adata_path = os.path.join(directory_path, "cluster_relation.h5ad")
     print(f"\tLoading {adata_path}...", flush=True)
     adata = anndata.read_h5ad(adata_path)
-    # Filters and sorts keys (cluster relation splitoffs) that belong to the currently processed directory.
+    # Filters and sorts keys (cluster relation splitoffs) that 
+    # belong to the currently processed directory.
     dge_set = set()
     keys = [x for x in dge_tree.keys() if x.startswith(directory_path)]
     keys.sort(key=sort_key_conversion)
@@ -180,6 +184,26 @@ for directory_path in directory_paths:
             encoding="utf-8",
         )
 
+        plot = sns.clustermap(normalised_dataframe, cmap="vlag", center=0.5)
+        plot.savefig(
+            os.path.join(
+                output_folder_path,
+                "clustermap_normalised.svg",
+            )
+        )
+        reordered_dataframe = normalised_dataframe.iloc[
+            plot.dendrogram_row.reordered_ind, plot.dendrogram_col.reordered_ind
+        ]
+        reordered_dataframe.to_csv(
+            os.path.join(
+                output_folder_path,
+                "differentially_expressed_genes_normalised_means_reordered.csv",
+            ),
+            sep=",",
+            encoding="utf-8",
+        )
+        plt.close()
+
         print("\t\tGrouping genes by expression...", flush=True)
         grouping_dataframe = pd.DataFrame(
             np.empty((len(sorted_gene_set), len(clusters)), dtype=pd.Int64Dtype),
@@ -187,32 +211,12 @@ for directory_path in directory_paths:
             index=sorted_gene_set,
         )
 
-        # for gene in sorted_gene_set:
-        #     sorted_medians = median_dataframe.loc[gene].sort_values(ascending=True)
-        #     sorted_clusters = sorted_medians.index.tolist()
-        #     i = 0
-        #     offset = 0
-        #     current_category = 0
-        #     while i + offset < len(sorted_clusters):
-        #         cluster_a = sorted_clusters[i]
-        #         cluster_b = sorted_clusters[i + offset]
-        #         if offset == 0:
-        #             # This defines the current category.
-        #             grouping_dataframe.loc[gene, cluster_a] = current_category
-        #             offset += 1
-        #         else:
-        #             if is_same(cluster_dictionary[cluster_a][gene], cluster_dictionary[cluster_b][gene]):
-        #                 grouping_dataframe.loc[gene, cluster_b] = current_category
-        #                 offset += 1
-        #             else:
-        #                 i = i + offset
-        #                 offset = 0
-        #                 current_category += 1
+        grouping_dataframe = reordered_dataframe.map(group_values)
 
-        # grouping_dataframe.to_csv(
-        #     os.path.join(
-        #         output_folder_path, "differentially_expressed_genes_groupings.csv"
-        #     ),
-        #     sep=",",
-        #     encoding="utf-8",
-        # )
+        grouping_dataframe.to_csv(
+            os.path.join(
+                output_folder_path, "differentially_expressed_genes_groupings.csv"
+            ),
+            sep=",",
+            encoding="utf-8",
+        )

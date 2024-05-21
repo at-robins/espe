@@ -7,6 +7,7 @@ RUN yes | pip install numpy==1.26.1 --exists-action i
 RUN yes | pip install scanpy[leiden]==1.9.6 --exists-action i
 RUN yes | pip install seaborn==0.12.2 --exists-action i
 RUN yes | pip install pathvalidate==3.2.0 --exists-action i
+RUN yes | pip install fastcluster==1.2.6 --exists-action i
 
 COPY run_cluster_relation_marker.py /run.py
 ENTRYPOINT ["python", "/run.py"]
