@@ -34,6 +34,7 @@ KEY_PSEUDOBULK_N_CELLS = "cellcount"
 VALUE_PSEUDOBULK_SAMPLE_TEST = "test"
 VALUE_PSEUDOBULK_SAMPLE_REFERENCE = "reference"
 VALID_R_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+MINIMUM_SUBSET_OBSERVATIONS = 3
 
 # Setup of rpy2.
 rcb.logger.setLevel(logging.INFO)
@@ -135,9 +136,7 @@ def load_counts(counts_path, tree, output_folder):
         entry_obs_names.append(entry_obs_name)
 
     print("\tSaving count data...", flush=True)
-    adata.write(
-        os.path.join(output_folder, "cluster_relation.h5ad")
-    )
+    adata.write(os.path.join(output_folder, "cluster_relation.h5ad"))
 
     print("\tPlotting data...")
     fig = sc.pl.umap(
@@ -171,7 +170,7 @@ def aggregate_pseudobulk_data(adata, mask):
         adata_subset = adata[final_mask]
         n_obs_subset = adata_subset.n_obs
         print(f"\t\tNumber of subset observations: {n_obs_subset}")
-        if n_obs_subset > 0:
+        if n_obs_subset >= MINIMUM_SUBSET_OBSERVATIONS:
             # A single batch / replicate there can only have one sample type.
             aggregated_row = adata_subset.to_df().agg(np.sum)
             replicate_array.append(batch)
@@ -182,7 +181,9 @@ def aggregate_pseudobulk_data(adata, mask):
                 join="outer",
             )
         else:
-            print("\t\tNo observations found. Skipping subset...")
+            print(
+                f"\t\tLess than {MINIMUM_SUBSET_OBSERVATIONS} observations found. Skipping subset..."
+            )
 
     return (
         pseudobulk_dataframe,

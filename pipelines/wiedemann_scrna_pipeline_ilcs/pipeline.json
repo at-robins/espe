@@ -142,6 +142,17 @@
       "variables": []
     },
     {
+      "id": "cluster_relation_dge_merge",
+      "name": "Cluster relation tree DGE merging",
+      "description": "<espe-import>step_cluster_relation_dge_merging_description.html</espe-import>",
+      "container": "cluster_relation_dge_merging",
+      "dependencies": [
+        "cluster_relation_dge",
+        "cluster_relation_tree"
+      ],
+      "variables": []
+    },
+    {
       "id": "cluster_relation_gsea",
       "name": "Cluster relation tree GSEA",
       "description": "<espe-import>step_cluster_relation_tree_description.html</espe-import>",
