@@ -125,6 +125,15 @@ deseq_function = ro.r(
         cat("Regularising count matrix...\\n", sep="")
         atac_rlog <- rlog(atac_dds)
 
+        cat("Exporting count matrix...\\n", sep="")
+        atac_matrix_regularised <- as.data.frame(assay(atac_rlog))
+        colnames(atac_matrix_regularised) = group_names
+        write.csv(
+            atac_matrix_regularised,
+            file = paste(output_path, "count_matrix_regularised.csv", sep = "/"),
+            row.names=TRUE
+        )
+
         cat("Plotting PCA...\\n", sep="")
         pca_plot <- plotPCA(atac_rlog, intgroup = c("groups"), ntop = nrow(atac_rlog)) +
             scale_colour_discrete(labels = group_names, name = "Condition") +
@@ -133,11 +142,11 @@ deseq_function = ro.r(
                 panel.grid.major = element_blank(),
                 panel.grid.minor = element_blank(),
                 axis.line = element_blank(),
-                panel.border = element_rect(colour = "black", fill=NA, size=1.0)
+                panel.border = element_rect(colour = "black", fill = NA, linewidth = 1.0)
             )
         ggsave(filename = paste(output_path, "pca.svg", sep = "/"), plot = pca_plot)
 
-        cat("Performing differential accessiblity analysis...\\n", sep="")
+        cat("Performing differential accessiblity analysis...\\n", sep = "")
         for (i in 1:length(conditions_test)) {
             cat(
                 "\\tComparing sample ",
@@ -190,7 +199,7 @@ annotation = pd.read_csv(
 # Annotates all output files.
 for root, dirs, files in os.walk(MOUNT_PATHS["output"]):
     for file in files:
-        if file.endswith(".csv"):
+        if "differential_accessibility" in file and file.endswith(".csv"):
             raw_path = Path(os.path.join(root, file))
             annotated_path = Path(os.path.join(root, f"annotated_{file}"))
             print(f"Annotating {raw_path}...", flush=True)
