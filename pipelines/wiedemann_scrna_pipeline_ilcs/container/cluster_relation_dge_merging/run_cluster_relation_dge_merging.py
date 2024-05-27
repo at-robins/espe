@@ -1,5 +1,8 @@
 #!/usr/bin/python
-"""This module plots marker genes."""
+"""
+This module merges differential gene expression data from
+the cluster relation tree.
+"""
 
 import anndata
 import csv
@@ -19,6 +22,8 @@ MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER_DGE = MOUNT_PATHS["dependencies"]["cluster_relation_dge"] + "/"
 INPUT_FOLDER_TREE = MOUNT_PATHS["dependencies"]["cluster_relation_tree"] + "/"
 SIGNIFICANCE_CUTOFF = 0.05
+KEY_ENRICHMENT_SCORE = "enrichment"
+KEY_SIGNIFICANCE_DEPTH = "significance"
 
 
 # Setup of scanpy.
@@ -59,7 +64,7 @@ def parse_dge_csv(dge_csv_path, depth) -> pd.DataFrame:
             )
 
         return pd.DataFrame(
-            data={"logFC": lfc, "significant": significance}, index=genes
+            data={KEY_ENRICHMENT_SCORE: lfc, KEY_SIGNIFICANCE_DEPTH: significance}, index=genes
         )
 
 
@@ -69,9 +74,9 @@ def merge_dges(dge_a, dge_b):
     """
     return pd.DataFrame(
         data={
-            "logFC": dge_a["logFC"].add(dge_b["logFC"], fill_value=0),
-            "significant": dge_a["significant"].combine(
-                dge_b["significant"], max, fill_value=-1
+            KEY_ENRICHMENT_SCORE: dge_a[KEY_ENRICHMENT_SCORE].add(dge_b[KEY_ENRICHMENT_SCORE], fill_value=0),
+            KEY_SIGNIFICANCE_DEPTH: dge_a[KEY_SIGNIFICANCE_DEPTH].combine(
+                dge_b[KEY_SIGNIFICANCE_DEPTH], max, fill_value=-1
             ),
         },
         index=dge_a.index,
@@ -91,8 +96,11 @@ def load_and_merge_dges(dge_paths):
     return merged_dges
 
 
-def cluster_to_merged_dges(number_of_clusters, cluster, cluster_tree, sub_folder):
-    """ """
+def get_branching_dges(number_of_clusters, cluster, cluster_tree, sub_folder):
+    """
+    Calculate branches of the cluster relation tree for the specified input cluster
+    and select the relevant files for merging of the expression data.
+    """
     # Filters out unnecessary information of higher order clusterings.
     filtered_tree = [
         x for x in cluster_tree if x["number_of_clusters"] < number_of_clusters
@@ -123,6 +131,7 @@ def cluster_to_merged_dges(number_of_clusters, cluster, cluster_tree, sub_folder
                 break
         current_noc = cluster_entry["number_of_clusters"]
 
+    # Orders the splits from root to leaf.
     dge_file_paths.reverse()
     return dge_file_paths
 
@@ -135,45 +144,7 @@ def load_tree(tree_path):
     with open(tree_path, mode="rt", encoding="utf-8") as tree:
         tree = json.load(tree)
         tree.sort(reverse=True, key=lambda x: x["number_of_clusters"])
-        print(tree, flush=True)
         return tree
-
-
-# def load_counts(counts_path, tree, output_folder):
-#     """
-#     Loads the count matrix and plots the sampled clusters.
-#     """
-#     print("\tLoading count data...", flush=True)
-#     adata = anndata.read_h5ad(counts_path)
-#     entry_obs_names = []
-#     for entry in tree:
-#         entry_obs_name = n_cluster_obs_name(entry["number_of_clusters"])
-#         adata.obs[entry_obs_name] = pd.Categorical(entry["clustering"])
-#         entry_obs_names.append(entry_obs_name)
-
-#     print("\tSaving count data...", flush=True)
-#     adata.write(os.path.join(output_folder, "cluster_relation.h5ad"))
-
-#     print("\tPlotting data...")
-#     fig = sc.pl.umap(
-#         adata,
-#         color=entry_obs_names,
-#         legend_loc="on data",
-#         show=False,
-#         return_fig=True,
-#     )
-#     fig.savefig(os.path.join(output_folder, "umap.svg"))
-#     plt.close(fig)
-
-#     adata.X = adata.layers["counts"]
-#     return adata
-
-
-# def n_cluster_obs_name(number_of_clusters):
-#     """
-#     Returns the observation name for the clustering info based on the number of clusters specified.
-#     """dusp
-#     return f"number_of_clusters_{number_of_clusters}"
 
 
 print("Searching for data...")
@@ -182,6 +153,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER_TREE):
     for file in files:
         if file.casefold().endswith("genealogy_cluster_resolution_data.json"):
             file_path_tree = os.path.join(root, file)
+            print(f"Processing cluster relation tree data {file_path_tree}...")
             relation_tree = load_tree(file_path_tree)
             relative_sub_directory = os.path.normpath(
                 os.path.relpath(root, INPUT_FOLDER_TREE)
@@ -194,25 +166,35 @@ for root, dirs, files in os.walk(INPUT_FOLDER_TREE):
                 MOUNT_PATHS["output"],
                 relative_sub_directory,
             )
-            for cluster_entry in relation_tree:
+            for cluster_entry_index, cluster_entry in enumerate(relation_tree):
+                if cluster_entry_index == len(relation_tree) - 1:
+                    # Skips the step at the root of the cluster relation tree
+                    # as no information on previous branches is available.
+                    break
+                number_of_clusters = cluster_entry["number_of_clusters"]
+                print(f"\tProcessing clustering with {number_of_clusters} clusters...")
                 for node in cluster_entry["nodes"]:
-                    dge_files = cluster_to_merged_dges(
-                        number_of_clusters=cluster_entry["number_of_clusters"],
-                        cluster=node["cluster_id"],
+                    cluster_id = node["cluster_id"]
+                    print(f"\t\tProcessing cluster {cluster_id}...")
+                    dge_files = get_branching_dges(
+                        number_of_clusters=number_of_clusters,
+                        cluster=cluster_id,
                         cluster_tree=relation_tree,
                         sub_folder=relative_sub_directory,
                     )
-                    print(dge_files, flush=True)
+                    print(f"\t\tThe following DGE files have been selected: {dge_files}")
+                    print("\t\tMerging gene expression data...")
                     merged_dge_file = load_and_merge_dges(dge_paths=dge_files)
                     final_output_folder = os.path.join(
                         output_folder_path,
-                        pathvalidate.sanitize_filename(str(cluster_entry["number_of_clusters"])),
+                        pathvalidate.sanitize_filename(str(number_of_clusters)),
                     )
+                    print("\t\tWriting output to file...")
                     os.makedirs(final_output_folder, exist_ok=True)
                     final_output_file = os.path.join(
                         final_output_folder,
                         pathvalidate.sanitize_filename(
-                            f"{node['cluster_id']}_merged_dge.csv"
+                            f"{cluster_id}_merged_dge.csv"
                         ),
                     )
                     merged_dge_file.to_csv(
@@ -220,17 +202,3 @@ for root, dirs, files in os.walk(INPUT_FOLDER_TREE):
                         sep=",",
                         encoding="utf-8",
                     )
-#             print(
-#                 f"Processing files {file_path_counts}, {file_path_sampling} and {file_path_tree}",
-#                 flush=True,
-#             )
-#             relation_tree = load_tree(file_path_tree)
-#             load_sampling(file_path_sampling, relation_tree)
-#             counts = load_counts(
-#                 counts_path=file_path_counts,
-#                 tree=relation_tree,
-#                 output_folder=output_folder_path,
-#             )
-#             dge_for_all_splits(
-#                 adata=counts, tree=relation_tree, output_path=output_folder_path
-#             )
