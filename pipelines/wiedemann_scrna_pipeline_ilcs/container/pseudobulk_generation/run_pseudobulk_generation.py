@@ -46,8 +46,8 @@ def aggregate_pseudobulk_data(file_path_sample):
         adata_subset = adata[batch_mask]
         n_obs_subset = adata_subset.n_obs
         print(f"\t\tNumber of subset observations: {n_obs_subset}")
-        if n_obs_subset > 0:
-            # A single batch / replicate there can only have one sample type.
+        if n_obs_subset >= 3:
+            # A single batch / replicate can only have one sample type.
             sample_name = adata.obs[SAMPLE_TYPE_KEY].cat.categories[0]
             aggregated_row = adata_subset.to_df().agg(np.sum)
             sample_array.append(sample_name)
@@ -59,7 +59,7 @@ def aggregate_pseudobulk_data(file_path_sample):
                 join="outer",
             )
         else:
-            print("\t\tNo observations found. Skipping subset...")
+            print("\t\tInsufficient observations. Skipping subset...")
 
     return (
         pseudobulk_dataframe,
