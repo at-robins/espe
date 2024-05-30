@@ -7,6 +7,8 @@ import os
 import pandas as pd
 import seaborn as sns
 
+from collections import OrderedDict
+from matplotlib.patches import Patch
 from matplotlib import pyplot as plt
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
@@ -44,15 +46,18 @@ print("Loading count matrix...", flush=True)
 count_matrix_file = os.path.join(INPUT_FOLDER, "count_matrix_regularised.csv")
 count_matrix_conditions = count_matrix_sample_headers(count_matrix_file)
 
+# Initialises the column name map with replicate 1 for each condition.
 count_matrix_header_map = {}
 for name in set(count_matrix_conditions):
     count_matrix_header_map[name] = 1
 
+# Creates a unique column name per replicate.
 count_matrix_col_names = []
 for name in count_matrix_conditions:
     count_matrix_col_names.append(f"{name} ({count_matrix_header_map[name]})")
     count_matrix_header_map[name] = count_matrix_header_map[name] + 1
 
+# Loads the actual count matrix.
 count_matrix = pd.read_csv(
     count_matrix_file,
     sep=",",
@@ -83,25 +88,40 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
 print(f"Selected {len(relevant_peaks)} relevant peaks...", flush=True)
 
 print("Plotting clustermap...", flush=True)
-unique_col_names = set(count_matrix_conditions)
+# The set is sorted into a list afterwards to allow consistent assignment
+# colour assignment per label.
+unique_col_names = sorted(set(count_matrix_conditions), key=str.casefold)
 col_colour_palette = sns.color_palette(
     palette=COLOUR_PALETTE, n_colors=len(unique_col_names)
 )
-lut = dict(zip(unique_col_names, col_colour_palette))
-column_colours = pd.Series(count_matrix_conditions).map(lut)
-column_colours.reindex(count_matrix_col_names)
-print(pd.Series(count_matrix_conditions).map(lut), flush=True)
-# column_colours = {}
-# for index_col, name_col in enumerate(count_matrix_col_names):
-#     column_colours[name_col] = lut[count_matrix_conditions[index_col]]
+lut = OrderedDict(zip(unique_col_names, col_colour_palette))
+# Assigns the column names colour based on their respective condition.
+column_colours = {}
+for index_col, name_col in enumerate(count_matrix_col_names):
+    column_colours[name_col] = lut[count_matrix_conditions[index_col]]
+
 plot = sns.clustermap(
     count_matrix.loc[sorted(relevant_peaks)],
     cmap="vlag",
-    col_colors=column_colours,
+    col_colors=pd.Series(column_colours, name="Sample type"),
+    cbar_kws={"label": "standardised rlog counts"},
     standard_scale=0,
     center=0.5,
 )
 plot.ax_row_dendrogram.set_visible(False)
+
+# Plots a legend for the per sample type / condition colour code.
+handles = [Patch(facecolor=lut[name]) for name in lut]
+plt.legend(
+    handles,
+    lut,
+    title="Sample type",
+    bbox_to_anchor=(0.15, 0.5),
+    bbox_transform=plt.gcf().transFigure,
+    # Where the anchor is on the legend box.
+    loc="center right",
+)
+
 plot.savefig(
     os.path.join(
         MOUNT_PATHS["output"],
