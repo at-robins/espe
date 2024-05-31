@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_atac_paired_end",
   "name": "Wiedemann ATAC paired end pipeline",
-  "version": "0.1.225",
+  "version": "0.1.228",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {
@@ -305,6 +305,14 @@
       "name": "Motif discovery",
       "description": "<espe-import>step_motif_discovery_description.html</espe-import>",
       "container": "motif_discovery",
+      "dependencies": ["differential_accessibility"],
+      "variables": []
+    },
+    {
+      "id": "da_gsea",
+      "name": "GSEA",
+      "description": "<espe-import>step_da_gsea_description.html</espe-import>",
+      "container": "da_gsea",
       "dependencies": ["differential_accessibility"],
       "variables": []
     }
