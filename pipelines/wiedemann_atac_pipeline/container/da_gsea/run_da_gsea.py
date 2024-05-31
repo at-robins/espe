@@ -67,7 +67,7 @@ def parse_da_csv(dge_csv_path) -> pd.DataFrame:
         dge_reader = csv.DictReader(
             csvfile, dialect="unix", delimiter=",", quotechar='"'
         )
-        genes = set()
+        genes = []
         stats = []
         total_peaks = 0
         for row in dge_reader:
@@ -75,9 +75,9 @@ def parse_da_csv(dge_csv_path) -> pd.DataFrame:
             gene = row["Gene Name"]
             # Only adds genes once for the most significant peak.
             if gene not in genes:
-                genes.add(gene)
+                genes.append(gene)
                 stats.append(float(row["stat"]))
-        df = pd.DataFrame(data={"scores": stats}, index=list(genes))
+        df = pd.DataFrame(data={"scores": stats}, index=genes)
         df.sort_values(by=["scores"], inplace=True, ascending=False)
 
         print(f"\tUsing {len(genes)} / {total_peaks} peaks.", flush=True)
@@ -92,7 +92,7 @@ def parse_da_csv_for_extension(dge_csv_path) -> pd.DataFrame:
         dge_reader = csv.DictReader(
             csvfile, dialect="unix", delimiter=",", quotechar='"'
         )
-        genes = set()
+        genes = []
         remainder = {
             "logFC": [],
             "PValue": [],
@@ -103,12 +103,12 @@ def parse_da_csv_for_extension(dge_csv_path) -> pd.DataFrame:
             gene = row["Gene Name"]
             # Only adds genes once for the most significant peak.
             if gene not in genes:
-                genes.add(gene)
+                genes.append(gene)
                 remainder["logFC"].append(row["log2FoldChange"])
                 remainder["PValue"].append(row["pvalue"])
                 remainder["FDR"].append(row["padj"])
                 remainder["PeakID"].append(row["PeakID"])
-        df = pd.DataFrame(data=remainder, index=list(genes))
+        df = pd.DataFrame(data=remainder, index=genes)
 
         return df
 
@@ -141,10 +141,10 @@ def perform_enrichment_analysis(dge_path, pathway_db, output_folder, suffix):
             **{
                 "regulation": lambda x: pd.Categorical(
                     map(
-                        lambda z: ("down-regulated" if z < 0.0 else "up-regulated"),
+                        lambda z: ("less accessible" if z < 0.0 else "more accessible"),
                         np.sign(x["score"]),
                     ),
-                    categories=["up-regulated", "down-regulated"],
+                    categories=["more accessible", "less accessible"],
                     ordered=True,
                 )
             },
