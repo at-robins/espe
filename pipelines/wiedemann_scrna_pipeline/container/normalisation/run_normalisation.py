@@ -10,6 +10,7 @@ import numpy as np
 import os
 import scanpy as sc
 import seaborn as sns
+import scipy as sp
 import rpy2.rinterface_lib.callbacks as rcb
 import rpy2.robjects as ro
 import warnings
@@ -74,6 +75,20 @@ def analytic_pearson_residuals(data, output_folder_path):
     data.layers["analytic_pearson_residuals"] = csr_matrix(analytic_pearson["X"])
 
 
+def pf_log1p_pf(data, output_folder_path):
+    """
+    Normalises the data using the proportional-fitting-log1p-proportional-fitting algorithm.
+    """
+    print("\tApplying PFlog1pPF normalisation...")
+    mtx = data.X
+    # if issparse(mtx):
+
+    pf = mtx.sum(axis=1).A.ravel()
+    sf = pf.mean()
+    pf = sp.sparse.diags(sf/pf) @ mtx
+    data.layers["PFlog1pPF"] = csr_matrix(pf)
+
+
 def scran(data, output_folder_path):
     """
     Normalises the data using the scran algorithm.
@@ -130,7 +145,7 @@ def plot_normalised_data(data, output_folder_path):
     Plots the normalised data.
     """
     print("\tPlotting normalised data...")
-    fig, ((axes_1, axes_2), (axes_3, axes_4)) = plt.subplots(2, 2, figsize=(10, 10))
+    fig, ((axes_1, axes_2, axes_3), (axes_4, axes_5, axes_6)) = plt.subplots(2, 3, figsize=(10, 15))
 
     axes_1.set_title("Before normalisation")
     sns.histplot(data.obs["total_counts"], bins=100, kde=False, ax=axes_1)
@@ -161,8 +176,19 @@ def plot_normalised_data(data, output_folder_path):
     axes_4.set(xlabel="Total normalised counts per cell", ylabel="Number of cells")
     axes_4.get_legend().remove()
 
+    axes_5.set_title("PFlog1pPF")
+    sns.histplot(
+        data.layers["PFlog1pPF"].sum(1),
+        bins=100,
+        kde=False,
+        ax=axes_5,
+    )
+    axes_5.set(xlabel="Total normalised counts per cell", ylabel="Number of cells")
+    axes_5.get_legend().remove()
+
     fig.tight_layout()
     fig.savefig(f"{output_folder_path}/histo_normalised_total_counts.svg")
+    plt.close(fig)
 
 
 def normalise_data(file_path_filtered, output_folder_path):
@@ -175,6 +201,7 @@ def normalise_data(file_path_filtered, output_folder_path):
     shifted_logarithm(adata_filtered, output_folder_path)
     analytic_pearson_residuals(adata_filtered, output_folder_path)
     scran(adata_filtered, output_folder_path)
+    pf_log1p_pf(adata_filtered, output_folder_path)
     plot_normalised_data(adata_filtered, output_folder_path)
     print("\tWriting filtered data to file...")
     adata_filtered.write(
