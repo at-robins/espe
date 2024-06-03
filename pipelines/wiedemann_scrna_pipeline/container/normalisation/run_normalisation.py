@@ -75,18 +75,24 @@ def analytic_pearson_residuals(data, output_folder_path):
     data.layers["analytic_pearson_residuals"] = csr_matrix(analytic_pearson["X"])
 
 
+def proportional_fitting(data_matrix):
+    """
+    Performs proportional fitting on the input matrix.
+    """
+    sum_array = data_matrix.sum(axis=1).A.ravel()
+    array_mean = sum_array.mean()
+    return sp.sparse.diags(array_mean / sum_array) @ data_matrix
+
+
 def pf_log1p_pf(data, output_folder_path):
     """
     Normalises the data using the proportional-fitting-log1p-proportional-fitting algorithm.
+    Useful if the sequencing depth is very different between samples.
     """
     print("\tApplying PFlog1pPF normalisation...")
-    mtx = data.X
-    # if issparse(mtx):
-
-    pf = mtx.sum(axis=1).A.ravel()
-    sf = pf.mean()
-    pf = sp.sparse.diags(sf/pf) @ mtx
-    data.layers["PFlog1pPF"] = csr_matrix(pf)
+    data.layers["PFlog1pPF"] = csr_matrix(
+        proportional_fitting(np.log1p(proportional_fitting(data.X)))
+    )
 
 
 def scran(data, output_folder_path):
@@ -145,7 +151,7 @@ def plot_normalised_data(data, output_folder_path):
     Plots the normalised data.
     """
     print("\tPlotting normalised data...")
-    fig, ((axes_1, axes_2, axes_3), (axes_4, axes_5, axes_6)) = plt.subplots(2, 3, figsize=(10, 15))
+    fig, ((axes_1, axes_2), (axes_3, axes_4)) = plt.subplots(2, 2, figsize=(10, 10))
 
     axes_1.set_title("Before normalisation")
     sns.histplot(data.obs["total_counts"], bins=100, kde=False, ax=axes_1)
@@ -175,16 +181,6 @@ def plot_normalised_data(data, output_folder_path):
     )
     axes_4.set(xlabel="Total normalised counts per cell", ylabel="Number of cells")
     axes_4.get_legend().remove()
-
-    axes_5.set_title("PFlog1pPF")
-    sns.histplot(
-        data.layers["PFlog1pPF"].sum(1),
-        bins=100,
-        kde=False,
-        ax=axes_5,
-    )
-    axes_5.set(xlabel="Total normalised counts per cell", ylabel="Number of cells")
-    axes_5.get_legend().remove()
 
     fig.tight_layout()
     fig.savefig(f"{output_folder_path}/histo_normalised_total_counts.svg")

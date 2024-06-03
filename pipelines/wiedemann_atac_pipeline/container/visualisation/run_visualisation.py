@@ -27,6 +27,48 @@ COLOUR_PALETTE = [
     "#B09C85",
 ]
 
+# KEY_EXON = "exon"
+# KEY_INTRON = "intron"
+# KEY_INTERGENIC = "Intergenic"
+# KEY_NON_CODING = "non-coding"
+# KEY_PROMOTER = "promoter-TSS"
+# KEY_UTR_5 = "5' UTR"
+# KEY_UTR_3 = "3' UTR"
+# KEY_TTS = "TTS"
+
+# LOCATION_EXON = "exon"
+# LOCATION_INTERGENIC = "intergenic"
+# LOCATION_INTRON = "intron"
+# LOCATION_NON_CODING = "non-coding"
+# LOCATION_PROMOTER = "promoter"
+# LOCATION_UTR_3 = "3' UTR"
+# LOCATION_UTR_5 = "5' UTR"
+# LOCATION_TTS = "TTS"
+
+ANNOTATION_RENAMING_MAP = OrderedDict(
+    [
+        ("exon", "exon"),
+        ("intron", "intron"),
+        ("Intergenic", "intergenic"),
+        ("non-coding", "non-coding"),
+        ("promoter-TSS", "promoter"),
+        ("5' UTR", "5' UTR"),
+        ("3' UTR", "3' UTR"),
+        ("TTS", "TTS"),
+    ]
+)
+
+# The bins for the log2-fold-change categories.
+# These need to be in descending order!
+LFC_BINS = [
+    (1.0, "       LFC ≥  1.0", "#E64B35"),
+    (0.5, " 1.0 > LFC ≥  0.5", "#87423D"),
+    (0.0, " 0.5 > LFC ≥  0.0", "#813B37"),
+    (-0.5, " 0.0 > LFC ≥ -0.5", "#D9EBF2"),
+    (-1.0, "-0.5 > LFC ≥ -1.0", "#387082"),
+    (float("-inf"), "-1.0 > LFC       ", "#4DBBD5"),
+]
+
 
 def count_matrix_sample_headers(count_matrix_file_path) -> [str]:
     """
@@ -42,90 +84,172 @@ def count_matrix_sample_headers(count_matrix_file_path) -> [str]:
         return matrix_row[1 : len(matrix_row)]
 
 
-print("Loading count matrix...", flush=True)
-count_matrix_file = os.path.join(INPUT_FOLDER, "count_matrix_regularised.csv")
-count_matrix_conditions = count_matrix_sample_headers(count_matrix_file)
+def plot_count_clustermap():
+    """
+    Plots a clustermap of all samples using normalised counts.
+    """
+    print("Loading count matrix...", flush=True)
+    count_matrix_file = os.path.join(INPUT_FOLDER, "count_matrix_regularised.csv")
+    count_matrix_conditions = count_matrix_sample_headers(count_matrix_file)
 
-# Initialises the column name map with replicate 1 for each condition.
-count_matrix_header_map = {}
-for name in set(count_matrix_conditions):
-    count_matrix_header_map[name] = 1
+    # Initialises the column name map with replicate 1 for each condition.
+    count_matrix_header_map = {}
+    for name in set(count_matrix_conditions):
+        count_matrix_header_map[name] = 1
 
-# Creates a unique column name per replicate.
-count_matrix_col_names = []
-for name in count_matrix_conditions:
-    count_matrix_col_names.append(f"{name} ({count_matrix_header_map[name]})")
-    count_matrix_header_map[name] = count_matrix_header_map[name] + 1
+    # Creates a unique column name per replicate.
+    count_matrix_col_names = []
+    for name in count_matrix_conditions:
+        count_matrix_col_names.append(f"{name} ({count_matrix_header_map[name]})")
+        count_matrix_header_map[name] = count_matrix_header_map[name] + 1
 
-# Loads the actual count matrix.
-count_matrix = pd.read_csv(
-    count_matrix_file,
-    sep=",",
-    header=0,
-    names=count_matrix_col_names,
-    index_col=0,
-    encoding="utf-8",
-)
-
-print("Loading relevant peaks...", flush=True)
-relevant_peaks = set()
-for root, dirs, files in os.walk(INPUT_FOLDER):
-    for file in files:
-        if file.startswith("differential_accessibility") and file.endswith(".csv"):
-            da_table = pd.read_csv(
-                os.path.join(root, file),
-                sep=",",
-                header=0,
-                index_col=0,
-                encoding="utf-8",
-            )
-            relevant_peaks = relevant_peaks | set(
-                da_table[da_table["padj"] >= 0.05]
-                .sort_values("padj", ascending=True)
-                .head(MAX_RELEVANT_GENES_PER_DA)
-                .index
-            )
-print(f"Selected {len(relevant_peaks)} relevant peaks...", flush=True)
-
-print("Plotting clustermap...", flush=True)
-# The set is sorted into a list afterwards to allow consistent assignment
-# colour assignment per label.
-unique_col_names = sorted(set(count_matrix_conditions), key=str.casefold)
-col_colour_palette = sns.color_palette(
-    palette=COLOUR_PALETTE, n_colors=len(unique_col_names)
-)
-lut = OrderedDict(zip(unique_col_names, col_colour_palette))
-# Assigns the column names colour based on their respective condition.
-column_colours = {}
-for index_col, name_col in enumerate(count_matrix_col_names):
-    column_colours[name_col] = lut[count_matrix_conditions[index_col]]
-
-plot = sns.clustermap(
-    count_matrix.loc[sorted(relevant_peaks)],
-    cmap="vlag",
-    col_colors=pd.Series(column_colours, name="Sample type"),
-    cbar_kws={"label": "standardised rlog counts"},
-    standard_scale=0,
-    center=0.5,
-)
-plot.ax_row_dendrogram.set_visible(False)
-
-# Plots a legend for the per sample type / condition colour code.
-handles = [Patch(facecolor=lut[name]) for name in lut]
-plt.legend(
-    handles,
-    lut,
-    title="Sample type",
-    bbox_to_anchor=(0.15, 0.5),
-    bbox_transform=plt.gcf().transFigure,
-    # Where the anchor is on the legend box.
-    loc="center right",
-)
-
-plot.savefig(
-    os.path.join(
-        MOUNT_PATHS["output"],
-        "clustermap.svg",
+    # Loads the actual count matrix.
+    count_matrix = pd.read_csv(
+        count_matrix_file,
+        sep=",",
+        header=0,
+        names=count_matrix_col_names,
+        index_col=0,
+        encoding="utf-8",
     )
-)
-plt.close()
+
+    print("Loading relevant peaks...", flush=True)
+    relevant_peaks = set()
+    for root, dirs, files in os.walk(INPUT_FOLDER):
+        for file in files:
+            if file.startswith("differential_accessibility") and file.endswith(".csv"):
+                da_table = pd.read_csv(
+                    os.path.join(root, file),
+                    sep=",",
+                    header=0,
+                    index_col=0,
+                    encoding="utf-8",
+                )
+                relevant_peaks = relevant_peaks | set(
+                    da_table[da_table["padj"] >= 0.05]
+                    .sort_values("padj", ascending=True)
+                    .head(MAX_RELEVANT_GENES_PER_DA)
+                    .index
+                )
+    print(f"Selected {len(relevant_peaks)} relevant peaks...", flush=True)
+
+    print("Plotting clustermap...", flush=True)
+    # The set is sorted into a list afterwards to allow consistent assignment
+    # colour assignment per label.
+    unique_col_names = sorted(set(count_matrix_conditions), key=str.casefold)
+    col_colour_palette = sns.color_palette(
+        palette=COLOUR_PALETTE, n_colors=len(unique_col_names)
+    )
+    colour_mapping = OrderedDict(zip(unique_col_names, col_colour_palette))
+    # Assigns the column names colour based on their respective condition.
+    column_colours = {}
+    for index_col, name_col in enumerate(count_matrix_col_names):
+        column_colours[name_col] = colour_mapping[count_matrix_conditions[index_col]]
+
+    plot = sns.clustermap(
+        count_matrix.loc[sorted(relevant_peaks)],
+        cmap="vlag",
+        col_colors=pd.Series(column_colours, name="Sample type"),
+        cbar_kws={"label": "standardised rlog counts"},
+        standard_scale=0,
+        center=0.5,
+    )
+    plot.ax_row_dendrogram.set_visible(False)
+
+    # Plots a legend for the per sample type / condition colour code.
+    handles = [Patch(facecolor=colour_mapping[name]) for name in colour_mapping]
+    plt.legend(
+        handles,
+        colour_mapping,
+        title="Sample type",
+        bbox_to_anchor=(0.15, 0.5),
+        bbox_transform=plt.gcf().transFigure,
+        # Where the anchor is on the legend box.
+        loc="center right",
+    )
+
+    plot.savefig(
+        os.path.join(
+            MOUNT_PATHS["output"],
+            "clustermap.svg",
+        )
+    )
+    plt.close()
+
+
+def annotation_to_plot_name(da_row):
+    """
+    Converts annotations to plotable categories.
+    """
+    annotation_name = da_row["Annotation"]
+    for key in ANNOTATION_RENAMING_MAP:
+        if (
+            annotation_name is not None
+            # Filters empty columns that are interpreted as NAs.
+            and not isinstance(annotation_name, float)
+            and annotation_name.startswith(key)
+        ):
+            return ANNOTATION_RENAMING_MAP[key]
+    # Returns NULL if no matching annotation can be found.
+    return None
+
+
+def lfc_to_category(da_row):
+    """
+    Converts log2-fold-changes to plotable categories.
+    """
+    lfc = float(da_row["log2FoldChange"])
+    for cutoff, label, _colour in LFC_BINS:
+        if lfc >= cutoff:
+            return label
+    # Returns NULL if no matching cutoff.
+    return None
+
+
+def plot_genomic_region_barplots():
+    print("Processing differential accessibility data...", flush=True)
+    for root, dirs, files in os.walk(INPUT_FOLDER):
+        for file in files:
+            if file.startswith(
+                "annotated_differential_accessibility"
+            ) and file.endswith(".csv"):
+                da_file = os.path.join(root, file)
+                print(f"Processing {da_file}...", flush=True)
+                output_path = os.path.join(
+                    MOUNT_PATHS["output"],
+                    file.replace(
+                        "annotated_differential_accessibility",
+                        "genomic_regions_barplot",
+                        1,
+                    ).removesuffix(".csv")
+                    + ".svg",
+                )
+                da_table = pd.read_csv(
+                    os.path.join(da_file),
+                    sep=",",
+                    header=0,
+                    index_col=0,
+                    encoding="utf-8",
+                )
+                filtered_da_table = da_table[da_table["padj"] >= 0.05]
+                da_table["plot_annotation"] = da_table.apply(
+                    annotation_to_plot_name, axis=1
+                )
+                da_table["lfc_category"] = da_table.apply(lfc_to_category, axis=1)
+                filtered_da_table = filtered_da_table[
+                    filtered_da_table["plot_annotation"] is not None
+                    and filtered_da_table["lfc_category"] is not None
+                ]
+                count_dictionary = {}
+                colour_dictionary = {}
+                for cutoff, label, colour in LFC_BINS:
+                    colour_dictionary[label] = colour
+                    count_dictionary[label] = filtered_da_table[
+                        filtered_da_table["lfc_category"] == label
+                    ].groupby(["plot_annotation"]).size() * np.sign(cutoff)
+                print(count_dictionary, flush=True)
+                # stacked_barplot = filtered_da_table.plot.bar(x=,rot=0, stacked=True)
+
+
+# plot_count_clustermap()
+plot_genomic_region_barplots()
