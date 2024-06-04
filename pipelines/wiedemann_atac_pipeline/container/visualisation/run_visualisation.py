@@ -12,6 +12,8 @@ from collections import OrderedDict
 from matplotlib.patches import Patch
 from matplotlib import pyplot as plt
 
+plt.rcParams['font.family'] = 'monospace'
+
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
 MAX_RELEVANT_GENES_PER_DA = 100
@@ -28,24 +30,6 @@ COLOUR_PALETTE = [
     "#B09C85",
 ]
 
-# KEY_EXON = "exon"
-# KEY_INTRON = "intron"
-# KEY_INTERGENIC = "Intergenic"
-# KEY_NON_CODING = "non-coding"
-# KEY_PROMOTER = "promoter-TSS"
-# KEY_UTR_5 = "5' UTR"
-# KEY_UTR_3 = "3' UTR"
-# KEY_TTS = "TTS"
-
-# LOCATION_EXON = "exon"
-# LOCATION_INTERGENIC = "intergenic"
-# LOCATION_INTRON = "intron"
-# LOCATION_NON_CODING = "non-coding"
-# LOCATION_PROMOTER = "promoter"
-# LOCATION_UTR_3 = "3' UTR"
-# LOCATION_UTR_5 = "5' UTR"
-# LOCATION_TTS = "TTS"
-
 ANNOTATION_RENAMING_MAP = OrderedDict(
     [
         ("exon", "exon"),
@@ -59,18 +43,7 @@ ANNOTATION_RENAMING_MAP = OrderedDict(
     ]
 )
 
-# The bins for the log2-fold-change categories.
-# These need to be in descending order!
-LFC_BINS = [
-    (1.0, "           LFC ≥  1.0", "#E64B35", 2),
-    (0.5, " 1.0 > LFC ≥  0.5", "#EE8778", 1),
-    (0.0, " 0.5 > LFC ≥  0.0", "#F7C3BC", 0),
-    (-0.5, " 0.0 > LFC ≥ -0.5", "#C4E8F1", 3),
-    (-1.0, "-0.5 > LFC ≥ -1.0", "#88D2E3", 4),
-    (float("-inf"), "-1.0 > LFC       ", "#4DBBD5", 5),
-]
-
-LOCATION_PLOT_LABEL_POS_HIGH = "           LFC ≥  1.0"
+LOCATION_PLOT_LABEL_POS_HIGH = "       LFC ≥  1.0"
 LOCATION_PLOT_LABEL_POS_MID = " 1.0 > LFC ≥  0.5"
 LOCATION_PLOT_LABEL_POS_LOW = " 0.5 > LFC ≥  0.0"
 LOCATION_PLOT_LABEL_NEG_LOW = " 0.0 > LFC ≥ -0.5"
@@ -85,6 +58,34 @@ LOCATION_PLOT_COLOURS = {
     LOCATION_PLOT_LABEL_NEG_MID: "#88D2E3",
     LOCATION_PLOT_LABEL_NEG_HIGH: "#4DBBD5",
 }
+
+LOCATION_PLOT_BINS = OrderedDict(
+    [
+        (LOCATION_PLOT_LABEL_POS_HIGH, 1.0),
+        (LOCATION_PLOT_LABEL_POS_MID, 0.5),
+        (LOCATION_PLOT_LABEL_POS_LOW, 0.0),
+        (LOCATION_PLOT_LABEL_NEG_LOW, -0.5),
+        (LOCATION_PLOT_LABEL_NEG_MID, -1.0),
+        (LOCATION_PLOT_LABEL_NEG_HIGH, float("-inf")),
+    ]
+)
+
+LOCATION_PLOT_LABEL_ORDER_STACK = [
+    LOCATION_PLOT_LABEL_POS_LOW,
+    LOCATION_PLOT_LABEL_POS_MID,
+    LOCATION_PLOT_LABEL_POS_HIGH,
+    LOCATION_PLOT_LABEL_NEG_LOW,
+    LOCATION_PLOT_LABEL_NEG_MID,
+    LOCATION_PLOT_LABEL_NEG_HIGH,
+]
+LOCATION_PLOT_LABEL_ORDER_LEGEND = [
+    LOCATION_PLOT_LABEL_POS_HIGH,
+    LOCATION_PLOT_LABEL_POS_MID,
+    LOCATION_PLOT_LABEL_POS_LOW,
+    LOCATION_PLOT_LABEL_NEG_LOW,
+    LOCATION_PLOT_LABEL_NEG_MID,
+    LOCATION_PLOT_LABEL_NEG_HIGH,
+]
 
 
 def count_matrix_sample_headers(count_matrix_file_path) -> [str]:
@@ -216,7 +217,7 @@ def lfc_to_category(da_row):
     Converts log2-fold-changes to plotable categories.
     """
     lfc = float(da_row["log2FoldChange"])
-    for cutoff, label, _colour, _sort_index in LFC_BINS:
+    for label, cutoff in LOCATION_PLOT_BINS.items():
         if lfc >= cutoff:
             return label
     # Returns NULL if no matching cutoff.
@@ -258,6 +259,7 @@ def plot_genomic_region_barplots():
                     index_col=0,
                     encoding="utf-8",
                 )
+                print("\tFiltering data...", flush=True)
                 filtered_da_table = da_table[da_table["padj"] <= 0.05][
                     ["log2FoldChange", "Annotation"]
                 ].copy()
@@ -271,18 +273,40 @@ def plot_genomic_region_barplots():
                     (filtered_da_table["plot_annotation"].notnull())
                     & (filtered_da_table["lfc_category"].notnull())
                 ]
+                # Creates columns that contain the counts of
+                # all the log2-fold-change cutoff categories.
                 count_dictionary = {}
-                colour_dictionary = {}
-                for cutoff, label, colour in LFC_BINS:
-                    colour_dictionary[label] = colour
+                for label, cutoff in LOCATION_PLOT_BINS.items():
                     count_dictionary[label] = filtered_da_table[
                         filtered_da_table["lfc_category"] == label
                     ].groupby(["plot_annotation"]).size() * sign_for_counts(cutoff)
                 location_summaries = pd.DataFrame(count_dictionary)
-                print(location_summaries, flush=True)
-                stacked_barplot_ax = location_summaries.plot.bar(
-                    color=colour_dictionary, rot=0, stacked=True
+                # Missing values are just zero counts.
+                location_summaries.fillna(value=0, inplace=True)
+                location_summaries = location_summaries.reindex(
+                    columns=LOCATION_PLOT_LABEL_ORDER_STACK,
+                    copy=False,
                 )
+                print("\tCreating genomic location plot...", flush=True)
+                stacked_barplot_ax = location_summaries.plot.bar(
+                    color=LOCATION_PLOT_COLOURS, rot=0, stacked=True, figsize=(9, 5)
+                )
+                # Hides the axis labels.
+                stacked_barplot_ax.xaxis.label.set_visible(False)
+                # Reorders legend labels.
+                stacked_barplot_handles, stacked_barplot_labels = (
+                    stacked_barplot_ax.get_legend_handles_labels()
+                )
+                stacked_barplot_handle_map = dict(
+                    zip(stacked_barplot_labels, stacked_barplot_handles)
+                )
+                ordered_handles = list(map(stacked_barplot_handle_map.get, LOCATION_PLOT_LABEL_ORDER_LEGEND))
+                stacked_barplot_ax.legend(
+                    handles=ordered_handles, labels=LOCATION_PLOT_LABEL_ORDER_LEGEND
+                )
+                # Converts negative Y axis labels to positve counts.
+                stacked_barplot_ax.set_yticklabels([f"{abs(x):0.0f}" for x in stacked_barplot_ax.get_yticks()])
+                # Saves the plot.
                 stacked_barplot_figure = stacked_barplot_ax.get_figure()
                 stacked_barplot_figure.savefig(output_path)
                 plt.close(stacked_barplot_figure)
