@@ -3,6 +3,7 @@
 
 import csv
 import json
+import numpy as np
 import os
 import pandas as pd
 import seaborn as sns
@@ -61,13 +62,29 @@ ANNOTATION_RENAMING_MAP = OrderedDict(
 # The bins for the log2-fold-change categories.
 # These need to be in descending order!
 LFC_BINS = [
-    (1.0, "       LFC ≥  1.0", "#E64B35"),
-    (0.5, " 1.0 > LFC ≥  0.5", "#87423D"),
-    (0.0, " 0.5 > LFC ≥  0.0", "#813B37"),
-    (-0.5, " 0.0 > LFC ≥ -0.5", "#D9EBF2"),
-    (-1.0, "-0.5 > LFC ≥ -1.0", "#387082"),
-    (float("-inf"), "-1.0 > LFC       ", "#4DBBD5"),
+    (1.0, "           LFC ≥  1.0", "#E64B35", 2),
+    (0.5, " 1.0 > LFC ≥  0.5", "#EE8778", 1),
+    (0.0, " 0.5 > LFC ≥  0.0", "#F7C3BC", 0),
+    (-0.5, " 0.0 > LFC ≥ -0.5", "#C4E8F1", 3),
+    (-1.0, "-0.5 > LFC ≥ -1.0", "#88D2E3", 4),
+    (float("-inf"), "-1.0 > LFC       ", "#4DBBD5", 5),
 ]
+
+LOCATION_PLOT_LABEL_POS_HIGH = "           LFC ≥  1.0"
+LOCATION_PLOT_LABEL_POS_MID = " 1.0 > LFC ≥  0.5"
+LOCATION_PLOT_LABEL_POS_LOW = " 0.5 > LFC ≥  0.0"
+LOCATION_PLOT_LABEL_NEG_LOW = " 0.0 > LFC ≥ -0.5"
+LOCATION_PLOT_LABEL_NEG_MID = "-0.5 > LFC ≥ -1.0"
+LOCATION_PLOT_LABEL_NEG_HIGH = "-1.0 > LFC       "
+
+LOCATION_PLOT_COLOURS = {
+    LOCATION_PLOT_LABEL_POS_HIGH: "#E64B35",
+    LOCATION_PLOT_LABEL_POS_MID: "#EE8778",
+    LOCATION_PLOT_LABEL_POS_LOW: "#F7C3BC",
+    LOCATION_PLOT_LABEL_NEG_LOW: "#C4E8F1",
+    LOCATION_PLOT_LABEL_NEG_MID: "#88D2E3",
+    LOCATION_PLOT_LABEL_NEG_HIGH: "#4DBBD5",
+}
 
 
 def count_matrix_sample_headers(count_matrix_file_path) -> [str]:
@@ -199,11 +216,21 @@ def lfc_to_category(da_row):
     Converts log2-fold-changes to plotable categories.
     """
     lfc = float(da_row["log2FoldChange"])
-    for cutoff, label, _colour in LFC_BINS:
+    for cutoff, label, _colour, _sort_index in LFC_BINS:
         if lfc >= cutoff:
             return label
     # Returns NULL if no matching cutoff.
     return None
+
+
+def sign_for_counts(cutoff_value) -> float:
+    """
+    Returns -1 for negative cutoff values and +1 for zero and positive cutoffs.
+    """
+    if np.sign(cutoff_value) < 0.0:
+        return -1.0
+    else:
+        return 1.0
 
 
 def plot_genomic_region_barplots():
@@ -231,14 +258,18 @@ def plot_genomic_region_barplots():
                     index_col=0,
                     encoding="utf-8",
                 )
-                filtered_da_table = da_table[da_table["padj"] >= 0.05]
-                da_table["plot_annotation"] = da_table.apply(
+                filtered_da_table = da_table[da_table["padj"] <= 0.05][
+                    ["log2FoldChange", "Annotation"]
+                ].copy()
+                filtered_da_table["plot_annotation"] = filtered_da_table.apply(
                     annotation_to_plot_name, axis=1
                 )
-                da_table["lfc_category"] = da_table.apply(lfc_to_category, axis=1)
+                filtered_da_table["lfc_category"] = filtered_da_table.apply(
+                    lfc_to_category, axis=1
+                )
                 filtered_da_table = filtered_da_table[
-                    filtered_da_table["plot_annotation"] is not None
-                    and filtered_da_table["lfc_category"] is not None
+                    (filtered_da_table["plot_annotation"].notnull())
+                    & (filtered_da_table["lfc_category"].notnull())
                 ]
                 count_dictionary = {}
                 colour_dictionary = {}
@@ -246,9 +277,15 @@ def plot_genomic_region_barplots():
                     colour_dictionary[label] = colour
                     count_dictionary[label] = filtered_da_table[
                         filtered_da_table["lfc_category"] == label
-                    ].groupby(["plot_annotation"]).size() * np.sign(cutoff)
-                print(count_dictionary, flush=True)
-                # stacked_barplot = filtered_da_table.plot.bar(x=,rot=0, stacked=True)
+                    ].groupby(["plot_annotation"]).size() * sign_for_counts(cutoff)
+                location_summaries = pd.DataFrame(count_dictionary)
+                print(location_summaries, flush=True)
+                stacked_barplot_ax = location_summaries.plot.bar(
+                    color=colour_dictionary, rot=0, stacked=True
+                )
+                stacked_barplot_figure = stacked_barplot_ax.get_figure()
+                stacked_barplot_figure.savefig(output_path)
+                plt.close(stacked_barplot_figure)
 
 
 # plot_count_clustermap()
