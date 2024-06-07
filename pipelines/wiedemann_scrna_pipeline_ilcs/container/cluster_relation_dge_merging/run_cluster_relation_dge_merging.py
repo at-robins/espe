@@ -22,8 +22,9 @@ MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER_DGE = MOUNT_PATHS["dependencies"]["cluster_relation_dge"] + "/"
 INPUT_FOLDER_TREE = MOUNT_PATHS["dependencies"]["cluster_relation_tree"] + "/"
 SIGNIFICANCE_CUTOFF = 0.05
-KEY_ENRICHMENT_SCORE = "enrichment"
+KEY_ENRICHMENT_SCORE_RAW = "raw enrichment"
 KEY_SIGNIFICANCE_DEPTH = "significance"
+KEY_ENRICHMENT_SCORE_WEIGHTED = "weighted enrichment"
 
 
 # Setup of scanpy.
@@ -45,7 +46,9 @@ sc.settings.set_figure_params(
 sc.settings.figdir = ""
 
 
-def parse_dge_csv(dge_csv_path, depth) -> pd.DataFrame:
+def parse_dge_csv(
+    dge_csv_path, depth, max_depth, cluster_size_weighting
+) -> pd.DataFrame:
     """
     Parses a CSV file containing differential gene expression data.
     """
@@ -55,16 +58,25 @@ def parse_dge_csv(dge_csv_path, depth) -> pd.DataFrame:
         )
         genes = []
         lfc = []
+        lfc_weighted = []
         significance = []
         for row in dge_reader:
             genes.append(row[""])
-            lfc.append(float(row["logFC"]))
+            raw_lfc = float(row["logFC"])
+            depth_weighting = 2.0 ** (depth - max_depth)
+            lfc.append(raw_lfc)
+            lfc_weighted.append(depth_weighting * cluster_size_weighting * raw_lfc)
             significance.append(
                 depth if float(row["FDR"]) <= SIGNIFICANCE_CUTOFF else -1
             )
 
         return pd.DataFrame(
-            data={KEY_ENRICHMENT_SCORE: lfc, KEY_SIGNIFICANCE_DEPTH: significance}, index=genes
+            data={
+                KEY_ENRICHMENT_SCORE_RAW: lfc,
+                KEY_SIGNIFICANCE_DEPTH: significance,
+                KEY_ENRICHMENT_SCORE_WEIGHTED: lfc_weighted,
+            },
+            index=genes,
         )
 
 
@@ -74,24 +86,41 @@ def merge_dges(dge_a, dge_b):
     """
     return pd.DataFrame(
         data={
-            KEY_ENRICHMENT_SCORE: dge_a[KEY_ENRICHMENT_SCORE].add(dge_b[KEY_ENRICHMENT_SCORE], fill_value=0),
+            KEY_ENRICHMENT_SCORE_RAW: dge_a[KEY_ENRICHMENT_SCORE_RAW].add(
+                dge_b[KEY_ENRICHMENT_SCORE_RAW], fill_value=0
+            ),
             KEY_SIGNIFICANCE_DEPTH: dge_a[KEY_SIGNIFICANCE_DEPTH].combine(
                 dge_b[KEY_SIGNIFICANCE_DEPTH], max, fill_value=-1
+            ),
+            KEY_ENRICHMENT_SCORE_WEIGHTED: dge_a[KEY_ENRICHMENT_SCORE_WEIGHTED].add(
+                dge_b[KEY_ENRICHMENT_SCORE_WEIGHTED], fill_value=0
             ),
         },
         index=dge_a.index,
     )
 
 
-def load_and_merge_dges(dge_paths):
+def load_and_merge_dges(dge_paths, cluster_size_weights):
     """
     Loads the specifed DGE files and merges them.
     The files need to be sorted by increasing depth.
     """
-    merged_dges = parse_dge_csv(dge_csv_path=dge_paths.pop(0), depth=0)
+    max_depth = len(dge_paths) - 1
+    merged_dges = parse_dge_csv(
+        dge_csv_path=dge_paths.pop(0),
+        depth=0,
+        max_depth=max_depth,
+        cluster_size_weighting=cluster_size_weights.pop(0),
+    )
     for depth, dge_path in enumerate(dge_paths, start=1):
         merged_dges = merge_dges(
-            merged_dges, parse_dge_csv(dge_csv_path=dge_path, depth=depth)
+            merged_dges,
+            parse_dge_csv(
+                dge_csv_path=dge_path,
+                depth=depth,
+                max_depth=max_depth,
+                cluster_size_weighting=cluster_size_weights.pop(0),
+            ),
         )
     return merged_dges
 
@@ -103,11 +132,14 @@ def get_branching_dges(number_of_clusters, cluster, cluster_tree, sub_folder):
     """
     # Filters out unnecessary information of higher order clusterings.
     filtered_tree = [
-        x for x in cluster_tree if x["number_of_clusters"] < number_of_clusters
+        x for x in cluster_tree if x["number_of_clusters"] <= number_of_clusters
     ]
+    # The entry that contains size information of the child clusters.
+    child_cluster_entry = filtered_tree.pop(0)
     current_cluster = cluster
     current_noc = number_of_clusters
     dge_file_paths = []
+    cluster_size_weightings = []
     for cluster_entry in filtered_tree:
         # Check all child clusters of the supercluster for the current cluster.
         for node in cluster_entry["nodes"]:
@@ -116,6 +148,26 @@ def get_branching_dges(number_of_clusters, cluster, cluster_tree, sub_folder):
                     reference_cluster_ids = [
                         z for z in node["child_clusters"] if z != current_cluster
                     ]
+                    # Determines cluster size weighting.
+                    sample_cluster_size = sum(
+                        [
+                            z["number_of_cells"]
+                            for z in child_cluster_entry["nodes"]
+                            if z["cluster_id"] == current_cluster
+                        ]
+                    )
+                    reference_cluster_size = sum(
+                        [
+                            z["number_of_cells"]
+                            for z in child_cluster_entry["nodes"]
+                            if z["cluster_id"] in reference_cluster_ids
+                        ]
+                    )
+                    size_weighting = reference_cluster_size / (
+                        reference_cluster_size + sample_cluster_size
+                    )
+                    cluster_size_weightings.append(size_weighting)
+                    # Determines DGE file path.
                     dge_file_paths.append(
                         os.path.join(
                             INPUT_FOLDER_DGE,
@@ -130,10 +182,12 @@ def get_branching_dges(number_of_clusters, cluster, cluster_tree, sub_folder):
                 current_cluster = node["cluster_id"]
                 break
         current_noc = cluster_entry["number_of_clusters"]
+        child_cluster_entry = cluster_entry
 
     # Orders the splits from root to leaf.
     dge_file_paths.reverse()
-    return dge_file_paths
+    cluster_size_weightings.reverse()
+    return (dge_file_paths, cluster_size_weightings)
 
 
 def load_tree(tree_path):
@@ -176,15 +230,23 @@ for root, dirs, files in os.walk(INPUT_FOLDER_TREE):
                 for node in cluster_entry["nodes"]:
                     cluster_id = node["cluster_id"]
                     print(f"\t\tProcessing cluster {cluster_id}...")
-                    dge_files = get_branching_dges(
+                    dge_files, cluster_size_weightings = get_branching_dges(
                         number_of_clusters=number_of_clusters,
                         cluster=cluster_id,
                         cluster_tree=relation_tree,
                         sub_folder=relative_sub_directory,
                     )
-                    print(f"\t\tThe following DGE files have been selected: {dge_files}")
+                    print(
+                        f"\t\tThe following DGE files have been selected: {dge_files}"
+                    )
+                    print(
+                        f"\t\tThe following population size weights will be applied: {cluster_size_weightings}"
+                    )
                     print("\t\tMerging gene expression data...")
-                    merged_dge_file = load_and_merge_dges(dge_paths=dge_files)
+                    merged_dge_file = load_and_merge_dges(
+                        dge_paths=dge_files,
+                        cluster_size_weights=cluster_size_weightings,
+                    )
                     final_output_folder = os.path.join(
                         output_folder_path,
                         pathvalidate.sanitize_filename(str(number_of_clusters)),
@@ -193,9 +255,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER_TREE):
                     os.makedirs(final_output_folder, exist_ok=True)
                     final_output_file = os.path.join(
                         final_output_folder,
-                        pathvalidate.sanitize_filename(
-                            f"{cluster_id}_merged_dge.csv"
-                        ),
+                        pathvalidate.sanitize_filename(f"{cluster_id}_merged_dge.csv"),
                     )
                     merged_dge_file.to_csv(
                         final_output_file,
