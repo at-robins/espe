@@ -12,7 +12,7 @@ from collections import OrderedDict
 from matplotlib.patches import Patch
 from matplotlib import pyplot as plt
 
-plt.rcParams['font.family'] = 'monospace'
+plt.rcParams["font.family"] = "monospace"
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
@@ -133,9 +133,18 @@ def plot_count_clustermap():
 
     print("Loading relevant peaks...", flush=True)
     relevant_peaks = set()
+    relevant_peak_ids = []
+    relevant_gene_symbols = []
     for root, dirs, files in os.walk(INPUT_FOLDER):
         for file in files:
-            if file.startswith("differential_accessibility") and file.endswith(".csv"):
+            if file.startswith(
+                "annotated_differential_accessibility"
+            ) and file.endswith(".csv"):
+                da_table_path = os.path.join(root, file)
+                print(
+                    f"\tProcessing {da_table_path}...",
+                    flush=True,
+                )
                 da_table = pd.read_csv(
                     os.path.join(root, file),
                     sep=",",
@@ -143,12 +152,17 @@ def plot_count_clustermap():
                     index_col=0,
                     encoding="utf-8",
                 )
-                relevant_peaks = relevant_peaks | set(
-                    da_table[da_table["padj"] >= 0.05]
-                    .sort_values("padj", ascending=True)
-                    .head(MAX_RELEVANT_GENES_PER_DA)
-                    .index
+                filtered_da_table = da_table[da_table["padj"] <= 0.05]
+                print(
+                    f"\tFound {len(filtered_da_table.index)} significantly different regions. Selecting top peaks...",
+                    flush=True,
                 )
+                table_of_relevant_peaks = filtered_da_table.sort_values(
+                    "padj", ascending=True
+                ).head(MAX_RELEVANT_GENES_PER_DA)
+                relevant_peak_ids.extend(table_of_relevant_peaks.index)
+                relevant_gene_symbols.extend(table_of_relevant_peaks["Gene Name"])
+    relevant_peaks = OrderedDict(zip(relevant_peak_ids, relevant_gene_symbols))
     print(f"Selected {len(relevant_peaks)} relevant peaks...", flush=True)
 
     print("Plotting clustermap...", flush=True)
@@ -165,7 +179,7 @@ def plot_count_clustermap():
         column_colours[name_col] = colour_mapping[count_matrix_conditions[index_col]]
 
     plot = sns.clustermap(
-        count_matrix.loc[sorted(relevant_peaks)],
+        count_matrix.loc[list(relevant_peaks.keys())],
         cmap="vlag",
         col_colors=pd.Series(column_colours, name="Sample type"),
         cbar_kws={"label": "standardised rlog counts"},
@@ -191,6 +205,28 @@ def plot_count_clustermap():
             MOUNT_PATHS["output"],
             "clustermap.svg",
         )
+    )
+
+    print("Saving clustermap peak annotation...", flush=True)
+    key_list = list(relevant_peaks.keys())
+    value_list = list(relevant_peaks.values())
+    reordered_dataframe = pd.DataFrame(
+        data={
+            "Peak ID": [
+                key_list[i] for i in plot.dendrogram_row.reordered_ind
+            ],
+            "Gene Name": [
+                value_list[i] for i in plot.dendrogram_row.reordered_ind
+            ],
+        }
+    )
+    reordered_dataframe.to_csv(
+        os.path.join(
+            MOUNT_PATHS["output"],
+            "clustermap_peak_annotation.csv",
+        ),
+        sep=",",
+        encoding="utf-8",
     )
     plt.close()
 
@@ -300,17 +336,24 @@ def plot_genomic_region_barplots():
                 stacked_barplot_handle_map = dict(
                     zip(stacked_barplot_labels, stacked_barplot_handles)
                 )
-                ordered_handles = list(map(stacked_barplot_handle_map.get, LOCATION_PLOT_LABEL_ORDER_LEGEND))
+                ordered_handles = list(
+                    map(
+                        stacked_barplot_handle_map.get, LOCATION_PLOT_LABEL_ORDER_LEGEND
+                    )
+                )
                 stacked_barplot_ax.legend(
                     handles=ordered_handles, labels=LOCATION_PLOT_LABEL_ORDER_LEGEND
                 )
                 # Converts negative Y axis labels to positve counts.
-                stacked_barplot_ax.set_yticklabels([f"{abs(x):0.0f}" for x in stacked_barplot_ax.get_yticks()])
+                stacked_barplot_ax.set_yticklabels(
+                    [f"{abs(x):0.0f}" for x in stacked_barplot_ax.get_yticks()]
+                )
                 # Saves the plot.
                 stacked_barplot_figure = stacked_barplot_ax.get_figure()
                 stacked_barplot_figure.savefig(output_path)
                 plt.close(stacked_barplot_figure)
 
 
-# plot_count_clustermap()
+# Runs the visualisation functions.
+plot_count_clustermap()
 plot_genomic_region_barplots()
