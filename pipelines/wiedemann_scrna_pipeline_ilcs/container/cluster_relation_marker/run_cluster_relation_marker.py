@@ -34,7 +34,7 @@ sc.settings.set_figure_params(
     # Remove frames.
     frameon=False,
 )
-sc.settings.figdir = MOUNT_PATHS["output"]
+sc.settings.figdir = ""
 
 
 def parse_dge_csv(dge_csv_path) -> set[str]:
@@ -147,30 +147,26 @@ for directory_path in directory_paths:
             encoding="utf-8",
         )
 
-        print("\t\tNormalising gene expression...", flush=True)
-        minimums = median_dataframe.min(axis=1)
-        maximums = median_dataframe.max(axis=1)
-        normalised_dataframe = median_dataframe.sub(minimums, axis=0).div(
-            maximums - minimums, axis=0
-        )
-
-        normalised_dataframe.to_csv(
-            os.path.join(
-                output_folder_path,
-                "differentially_expressed_genes_normalised_means.csv",
+        plot = sns.clustermap(
+            median_dataframe,
+            cbar_kws={"label": "scaled normalised mean counts"},
+            cmap="vlag",
+            standard_scale=0,
+            center=0.5,
+            figsize=(
+                6.0 + 0.6 * len(median_dataframe.columns),
+                4.0 + 0.3 * len(median_dataframe.index),
             ),
-            sep=",",
-            encoding="utf-8",
         )
-
-        plot = sns.clustermap(normalised_dataframe, cmap="vlag", center=0.5)
+        plot.ax_row_dendrogram.set_visible(False)
+        plot.ax_heatmap.grid(False)
         plot.savefig(
             os.path.join(
                 output_folder_path,
                 "clustermap_normalised.svg",
             )
         )
-        reordered_dataframe = normalised_dataframe.iloc[
+        reordered_dataframe = median_dataframe.iloc[
             plot.dendrogram_row.reordered_ind, plot.dendrogram_col.reordered_ind
         ]
         reordered_dataframe.to_csv(
@@ -182,3 +178,32 @@ for directory_path in directory_paths:
             encoding="utf-8",
         )
         plt.close()
+
+        # fig = sc.pl.stacked_violin(
+        #     adata,
+        #     sorted_gene_set,
+        #     groupby=adata_cluster_key,
+        #     swap_axes=False,
+        #     dendrogram=True,
+        #     show=False,
+        #     return_fig=True,
+        # )
+        # fig.savefig(
+        #     os.path.join(output_folder_path, "violine.svg"),
+        #     format="svg",
+        # )
+        # plt.close()
+
+        # fig = sc.pl.dotplot(
+        #     adata,
+        #     sorted_gene_set,
+        #     groupby=adata_cluster_key,
+        #     dendrogram=True,
+        #     show=False,
+        #     return_fig=True,
+        # )
+        # fig.savefig(
+        #     os.path.join(output_folder_path, "dotplot.svg"),
+        #     format="svg",
+        # )
+        # plt.close()
