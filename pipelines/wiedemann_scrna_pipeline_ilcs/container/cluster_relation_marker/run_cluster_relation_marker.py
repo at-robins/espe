@@ -15,14 +15,8 @@ from matplotlib import pyplot as plt
 from pathlib import PurePath
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
-
-GROUPING_VERY_LOW = "very low"
-GROUPING_LOW = "low"
-GROUPING_MEDIUM = "medium"
-GROUPING_HIGH = "high"
-GROUPING_VERY_HIGH = "very high"
-
+INPUT_FOLDER_DGE = MOUNT_PATHS["dependencies"]["cluster_relation_dge"]
+INPUT_FOLDER_DGE_MERGE = MOUNT_PATHS["dependencies"]["cluster_relation_dge_merge"]
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
@@ -47,27 +41,28 @@ def parse_dge_csv(dge_csv_path) -> set[str]:
     """
     Parses a CSV file containing differential gene expression data.
     """
-    with open(dge_csv_path, newline="", encoding="utf-8") as csvfile:
-        dge_reader = csv.DictReader(
-            csvfile, dialect="unix", delimiter=",", quotechar='"'
-        )
-        genes = []
-        for row in dge_reader:
-            if float(row["FDR"]) <= 0.05:
-                genes.append(row.pop(""))
-
-        return set(genes)
+    dge_file = pd.read_csv(
+        dge_csv_path,
+        sep=",",
+        header=0,
+        index_col=0,
+        encoding="utf-8",
+    )
+    return set(dge_file.head(3).index.to_list())
 
 
 print("Searching for data...")
 directory_paths = set()
 dge_tree = {}
 # Iterates over all sample directories and processes them conserving the directory structure.
-for root, dirs, files in os.walk(INPUT_FOLDER):
+for root, dirs, files in os.walk(INPUT_FOLDER_DGE_MERGE):
     for file in files:
-        if file.casefold() == "differential_gene_expression.csv":
+        if file.endswith("_merged_dge_filtered.csv"):
             file_path_dge = os.path.join(root, file)
-            cluster_number_path = PurePath(root).parent
+            relative_root = os.path.normpath(
+                os.path.relpath(root, INPUT_FOLDER_DGE_MERGE)
+            )
+            cluster_number_path = PurePath(relative_root)
             super_directory_path = cluster_number_path.parent
             directory_paths.add(str(super_directory_path))
             print(
@@ -97,28 +92,12 @@ def path_key_to_adata_key(path_key) -> int:
     return f"number_of_clusters_{PurePath(path_key).name}"
 
 
-def group_values(value) -> str:
-    """
-    Groups normalised values.
-    """
-    if value <= 0.2:
-        return GROUPING_VERY_LOW
-    elif value <= 0.4:
-        return GROUPING_LOW
-    elif value <= 0.6:
-        return GROUPING_MEDIUM
-    elif value <= 0.8:
-        return GROUPING_HIGH
-    else:
-        return GROUPING_VERY_HIGH
-
-
 for directory_path in directory_paths:
     print(f"Processing directory {directory_path}...", flush=True)
-    adata_path = os.path.join(directory_path, "cluster_relation.h5ad")
+    adata_path = os.path.join(INPUT_FOLDER_DGE, directory_path, "cluster_relation.h5ad")
     print(f"\tLoading {adata_path}...", flush=True)
     adata = anndata.read_h5ad(adata_path)
-    # Filters and sorts keys (cluster relation splitoffs) that 
+    # Filters and sorts keys (cluster relation splitoffs) that
     # belong to the currently processed directory.
     dge_set = set()
     keys = [x for x in dge_tree.keys() if x.startswith(directory_path)]
@@ -128,7 +107,7 @@ for directory_path in directory_paths:
         print(f"\t\tProcessing {key}...", flush=True)
         output_folder_path = os.path.join(
             MOUNT_PATHS["output"],
-            os.path.normpath(os.path.relpath(key, INPUT_FOLDER)),
+            os.path.normpath(key),
         )
         os.makedirs(output_folder_path, exist_ok=True)
         dge_set = dge_set | dge_tree[key]
@@ -203,20 +182,3 @@ for directory_path in directory_paths:
             encoding="utf-8",
         )
         plt.close()
-
-        print("\t\tGrouping genes by expression...", flush=True)
-        grouping_dataframe = pd.DataFrame(
-            np.empty((len(sorted_gene_set), len(clusters)), dtype=pd.Int64Dtype),
-            columns=clusters,
-            index=sorted_gene_set,
-        )
-
-        grouping_dataframe = reordered_dataframe.map(group_values)
-
-        grouping_dataframe.to_csv(
-            os.path.join(
-                output_folder_path, "differentially_expressed_genes_groupings.csv"
-            ),
-            sep=",",
-            encoding="utf-8",
-        )

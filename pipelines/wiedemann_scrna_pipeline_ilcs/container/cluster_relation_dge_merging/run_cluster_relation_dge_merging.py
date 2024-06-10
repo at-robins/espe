@@ -255,10 +255,29 @@ for root, dirs, files in os.walk(INPUT_FOLDER_TREE):
                     os.makedirs(final_output_folder, exist_ok=True)
                     final_output_file = os.path.join(
                         final_output_folder,
-                        pathvalidate.sanitize_filename(f"{cluster_id}_merged_dge.csv"),
+                        pathvalidate.sanitize_filename(
+                            f"{cluster_id}_merged_dge_raw.csv"
+                        ),
                     )
                     merged_dge_file.to_csv(
                         final_output_file,
+                        sep=",",
+                        encoding="utf-8",
+                    )
+                    print("\t\tWriting filtered and sorted output to file...")
+                    final_output_file_filtered = os.path.join(
+                        final_output_folder,
+                        pathvalidate.sanitize_filename(
+                            f"{cluster_id}_merged_dge_filtered.csv"
+                        ),
+                    )
+                    merged_dge_file_filtered = merged_dge_file[
+                        merged_dge_file[KEY_SIGNIFICANCE_DEPTH] >= 0
+                    ].sort_values(
+                        by=KEY_ENRICHMENT_SCORE_WEIGHTED, key=abs, ascending=False
+                    )
+                    merged_dge_file_filtered.to_csv(
+                        final_output_file_filtered,
                         sep=",",
                         encoding="utf-8",
                     )
