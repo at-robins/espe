@@ -535,7 +535,7 @@ pub async fn post_execute_experiment_step(
                     &pipeline_id,
                     &mut connection,
                 )?;
-                // Submit execution step.
+                // Submits execution step.
                 if let Some(existing_execution) =
                     executions.iter().find(|s| s.pipeline_step_id == step_id)
                 {
@@ -551,21 +551,6 @@ pub async fn post_execute_experiment_step(
                             format!("The experiment {} pipeline {} step {} is already scheduled for execution and can thus not be restarted.", experiment_id, pipeline.id(), step.id()),
                             "The requested run parameters are invalid.",
                         ));
-                    }
-                    // Remove resources related to the pipeline step.
-                    let step_path =
-                        app_config.experiment_step_path(experiment_id.to_string(), &step_id);
-                    if step_path.exists() {
-                        std::fs::remove_dir_all(step_path)?;
-                    }
-                    for log_path in app_config.experiment_log_paths_all(
-                        experiment_id.to_string(),
-                        &pipeline_id,
-                        &step_id,
-                    ) {
-                        if log_path.exists() {
-                            std::fs::remove_file(log_path)?;
-                        }
                     }
                     connection.immediate_transaction(|connection| {
                         let clear_time: Option<NaiveDateTime> = None;
