@@ -168,17 +168,25 @@ def get_branching_dges(number_of_clusters, cluster, cluster_tree, sub_folder):
                     )
                     cluster_size_weightings.append(size_weighting)
                     # Determines DGE file path.
-                    dge_file_paths.append(
-                        os.path.join(
-                            INPUT_FOLDER_DGE,
-                            sub_folder,
-                            pathvalidate.sanitize_filename(str(current_noc)),
-                            pathvalidate.sanitize_filename(
-                                f"{current_cluster}__vs__{'_'.join(map(str, reference_cluster_ids))}"
-                            ),
-                            "differential_gene_expression.csv",
-                        )
+                    potential_dge_path = os.path.join(
+                        INPUT_FOLDER_DGE,
+                        sub_folder,
+                        pathvalidate.sanitize_filename(str(current_noc)),
+                        pathvalidate.sanitize_filename(
+                            f"{current_cluster}__vs__{'_'.join(map(str, reference_cluster_ids))}"
+                        ),
+                        "differential_gene_expression.csv",
                     )
+                    if os.path.isfile(potential_dge_path):
+                        dge_file_paths.append(potential_dge_path)
+                    else:
+                        print(
+                            (
+                                f"\t\t{potential_dge_path} does not exist. This means not enough cells "
+                                "/ replicates were present to correctly assess differential gene expression."
+                            ),
+                            flush=True,
+                        )
                 current_cluster = node["cluster_id"]
                 break
         current_noc = cluster_entry["number_of_clusters"]
