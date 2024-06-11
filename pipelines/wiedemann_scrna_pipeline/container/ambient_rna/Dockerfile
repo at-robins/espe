@@ -10,7 +10,6 @@ RUN yes | pip install pathvalidate==3.2.0 --exists-action i
 RUN yes | pip install rpy2[all]==3.5.14 --exists-action i
 RUN yes | pip install anndata2ri==1.3.1 --exists-action i
 
-
 # Install R dependencies.
 # The library calls verify that the installation worked.
 ENV R_REPO="\"https://cloud.r-project.org/\""

@@ -1,0 +1,781 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.71kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.9.18-bookworm
+#2 DONE 0.6s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [ 1/18] FROM docker.io/library/python:3.9.18-bookworm@sha256:e730f8ac1ff165f22c88b5fc9d3e53668ee3e80ea1aefe06c7f06f69da14e83d
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 50.83kB done
+#5 DONE 0.0s
+
+#6 [ 6/18] RUN yes | pip install scanpy[leiden]==1.9.6 --exists-action i
+#6 CACHED
+
+#7 [ 3/18] RUN apt-get install -y autoconf automake make gcc g++ pkg-config libhdf5-dev llvm-14-dev libssl-dev libcurl4-openssl-dev less locales wget ca-certificates fonts-texgyre libharfbuzz-dev libfribidi-dev r-base gfortran libglpk-dev libgmp-dev libxml2-dev
+#7 CACHED
+
+#8 [12/18] RUN Rscript -e "remotes::install_version("renv", version = "1.0.7", repos = "https://cloud.r-project.org/")" && Rscript -e "library(renv)"
+#8 CACHED
+
+#9 [14/18] COPY r_sc_base.lock /renv/
+#9 CACHED
+
+#10 [13/18] RUN Rscript -e "renv::init(project = "/renv/", repos = "https://cloud.r-project.org/", bioconductor = "3.16")"
+#10 CACHED
+
+#11 [ 7/18] RUN yes | pip install seaborn==0.12.2 --exists-action i
+#11 CACHED
+
+#12 [ 4/18] RUN yes | pip install --upgrade pip
+#12 CACHED
+
+#13 [ 9/18] RUN yes | pip install anndata2ri==1.3.1 --exists-action i
+#13 CACHED
+
+#14 [11/18] RUN Rscript -e "remotes::install_version("BiocManager", version = "1.30.23", repos = "https://cloud.r-project.org/")"
+#14 CACHED
+
+#15 [ 5/18] RUN yes | pip install numpy==1.26.1 --exists-action i
+#15 CACHED
+
+#16 [ 8/18] RUN yes | pip install rpy2[all]==3.5.14 --exists-action i
+#16 CACHED
+
+#17 [10/18] RUN Rscript -e "install.packages("remotes", repos = "https://cloud.r-project.org/")" && Rscript -e "library(remotes)"
+#17 CACHED
+
+#18 [ 2/18] RUN apt-get update && apt-get upgrade -y
+#18 CACHED
+
+#19 [15/18] RUN Rscript -e "renv::restore(    project = "/renv/",     lockfile = "/renv/r_sc_base.lock",     repos = "https://cloud.r-project.org/",     prompt = FALSE )"
+#19 CACHED
+
+#20 [16/18] RUN Rscript -e "renv::install("bioc::scry", prompt = FALSE, repos = "https://cloud.r-project.org/", lock = TRUE, project = "/renv/")"
+#20 12.75 # Downloading packages -------------------------------------------------------
+#20 12.77 - Downloading scry from BioCsoft ...            OK [4.5 Mb in 5.2s]
+#20 27.03 - Downloading DelayedArray from BioCsoft ...    OK [627.9 Kb in 2.2s]
+#20 29.44 - Downloading BiocGenerics from BioCsoft ...    OK [46.6 Kb in 1.1s]
+#20 30.75 - Downloading BiocVersion from BioCsoft ...     OK [965 bytes in 0.95s]
+#20 31.86 - Downloading MatrixGenerics from BioCsoft ...  OK [27.9 Kb in 1.2s]
+#20 33.25 - Downloading S4Vectors from BioCsoft ...       OK [608.9 Kb in 2.2s]
+#20 35.57 - Downloading IRanges from BioCsoft ...         OK [445.4 Kb in 1.5s]
+#20 37.27 - Downloading glmpca from CRAN ...              OK [163.2 Kb in 0.57s]
+#20 37.95 - Downloading HDF5Array from BioCsoft ...       OK [7.7 Mb in 3.3s]
+#20 41.56 - Downloading rhdf5 from BioCsoft ...           OK [1.2 Mb in 2.2s]
+#20 43.97 - Downloading Rhdf5lib from BioCsoft ...        OK [14 Mb in 3.9s]
+#20 48.29 - Downloading rhdf5filters from BioCsoft ...    OK [926.1 Kb in 1.8s]
+#20 50.26 - Downloading SingleCellExperiment from BioCsoft ... OK [917.3 Kb in 1.8s]
+#20 52.24 - Downloading SummarizedExperiment from BioCsoft ... OK [1.5 Mb in 2.1s]
+#20 54.57 - Downloading GenomicRanges from BioCsoft ...   OK [1.1 Mb in 1.9s]
+#20 56.73 - Downloading GenomeInfoDb from BioCsoft ...    OK [3.3 Mb in 5.1s]
+#20 62.11 - Downloading RCurl from CRAN ...               OK [714.2 Kb in 1.0s]
+#20 63.39 - Downloading GenomeInfoDbData from BioCann ... OK [11.2 Mb in 3.8s]
+#20 67.64 - Downloading XVector from BioCsoft ...         OK [66.2 Kb in 44s]
+#20 112.1 - Downloading zlibbioc from BioCsoft ...        OK [209.2 Kb in 1.5s]
+#20 113.8 - Downloading Biobase from BioCsoft ...         OK [1.7 Mb in 2.0s]
+#20 116.0 - Downloading BiocSingular from BioCsoft ...    OK [570.1 Kb in 2.2s]
+#20 118.4 - Downloading BiocParallel from BioCsoft ...    OK [956 Kb in 2.8s]
+#20 121.4 - Downloading futile.logger from CRAN ...       OK [17 Kb in 0.24s]
+#20 121.8 - Downloading lambda.r from CRAN ...            OK [25.1 Kb in 0.24s]
+#20 122.2 - Downloading formatR from CRAN ...             OK [93.8 Kb in 0.24s]
+#20 122.6 - Downloading futile.options from CRAN ...      OK [3.8 Kb in 0.22s]
+#20 123.0 - Downloading snow from CRAN ...                OK [20 Kb in 0.19s]
+#20 123.3 - Downloading ScaledMatrix from BioCsoft ...    OK [291.1 Kb in 1.5s]
+#20 125.0 - Downloading rsvd from CRAN ...                OK [3.3 Mb in 0.9s]
+#20 126.0 - Downloading beachmat from BioCsoft ...        OK [1.2 Mb in 1.7s]
+#20 127.9 Successfully downloaded 31 packages in 130 seconds.
+#20 127.9 
+#20 127.9 The following package(s) will be installed:
+#20 127.9 - beachmat             [2.14.2]
+#20 127.9 - Biobase              [2.58.0]
+#20 127.9 - BiocGenerics         [0.44.0]
+#20 127.9 - BiocParallel         [1.32.6]
+#20 127.9 - BiocSingular         [1.14.0]
+#20 127.9 - BiocVersion          [3.16.0]
+#20 127.9 - DelayedArray         [0.24.0]
+#20 127.9 - formatR              [1.14]
+#20 127.9 - futile.logger        [1.4.3]
+#20 127.9 - futile.options       [1.0.1]
+#20 127.9 - GenomeInfoDb         [1.34.9]
+#20 127.9 - GenomeInfoDbData     [1.2.9]
+#20 127.9 - GenomicRanges        [1.50.2]
+#20 127.9 - glmpca               [0.2.0]
+#20 127.9 - HDF5Array            [1.26.0]
+#20 127.9 - IRanges              [2.32.0]
+#20 127.9 - lambda.r             [1.2.4]
+#20 127.9 - MatrixGenerics       [1.10.0]
+#20 127.9 - RCurl                [1.98-1.14]
+#20 127.9 - rhdf5                [2.42.1]
+#20 127.9 - rhdf5filters         [1.10.1]
+#20 127.9 - Rhdf5lib             [1.20.0]
+#20 127.9 - rsvd                 [1.0.5]
+#20 127.9 - S4Vectors            [0.36.2]
+#20 127.9 - ScaledMatrix         [1.6.0]
+#20 127.9 - scry                 [1.10.0]
+#20 127.9 - SingleCellExperiment [1.20.1]
+#20 127.9 - snow                 [0.4-4]
+#20 127.9 - SummarizedExperiment [1.28.0]
+#20 127.9 - XVector              [0.38.0]
+#20 127.9 - zlibbioc             [1.44.0]
+#20 127.9 These packages will be installed into "/usr/local/lib/R/site-library".
+#20 127.9 
+#20 127.9 # Installing packages --------------------------------------------------------
+#20 128.0 - Installing BiocVersion ...                    OK [built from source and cached in 1.6s]
+#20 129.6 - Installing BiocGenerics ...                   OK [built from source and cached in 7.1s]
+#20 136.7 - Installing MatrixGenerics ...                 OK [built from source and cached in 5.9s]
+#20 142.7 - Installing S4Vectors ...                      OK [built from source and cached in 44s]
+#20 186.8 - Installing IRanges ...                        OK [built from source and cached in 1.7m]
+#20 286.8 - Installing DelayedArray ...                   OK [built from source and cached in 1.5m]
+#20 374.5 - Installing glmpca ...                         OK [built from source and cached in 3.1s]
+#20 377.7 - Installing Rhdf5lib ...                       OK [built from source and cached in 5.7m]
+#20 722.0 - Installing rhdf5filters ...                   OK [built from source and cached in 1.3m]
+#20 800.2 - Installing rhdf5 ...                          OK [built from source and cached in 17s]
+#20 817.8 - Installing HDF5Array ...                      OK [built from source and cached in 1.4m]
+#20 903.6 - Installing RCurl ...                          OK [built from source and cached in 21s]
+#20 925.1 - Installing GenomeInfoDbData ...               OK [built from source and cached in 1.9s]
+#20 927.1 - Installing GenomeInfoDb ...                   OK [built from source and cached in 46s]
+#20 973.3 - Installing zlibbioc ...                       OK [built from source and cached in 2.4s]
+#20 975.7 - Installing XVector ...                        OK [built from source and cached in 53s]
+#20 1029.1 - Installing GenomicRanges ...                  OK [built from source and cached in 16m]
+#20 2006.2 - Installing Biobase ...                        OK [built from source and cached in 11s]
+#20 2017.0 - Installing SummarizedExperiment ...           OK [built from source and cached in 1.1m]
+#20 2080.4 - Installing SingleCellExperiment ...           OK [built from source and cached in 1.4m]
+#20 2162.3 - Installing formatR ...                        OK [built from source and cached in 1.8s]
+#20 2164.2 - Installing lambda.r ...                       OK [built from source and cached in 2.2s]
+#20 2166.4 - Installing futile.options ...                 OK [built from source and cached in 1.3s]
+#20 2167.7 - Installing futile.logger ...                  OK [built from source and cached in 2.0s]
+#20 2169.7 - Installing snow ...                           OK [built from source and cached in 1.9s]
+#20 2171.6 - Installing BiocParallel ...                   OK [built from source and cached in 15s]
+#20 2187.1 - Installing ScaledMatrix ...                   OK [built from source and cached in 49s]
+#20 2236.4 - Installing rsvd ...                           OK [built from source and cached in 30s]
+#20 2266.6 - Installing beachmat ...                       OK [built from source and cached in 25s]
+#20 2291.2 - Installing BiocSingular ...                   OK [built from source and cached in 1.0m]
+#20 2354.1 - Installing scry ...                           OK [built from source and cached in 31s]
+#20 2385.3 Successfully installed 31 packages in 38 minutes.
+#20 2385.7 - Lockfile written to "/renv/renv.lock".
+#20 DONE 2385.8s
+
+#21 [17/18] RUN cat /renv/renv.lock
+{
+  "R": {
+    "Version": "4.2.2",
+    "Repositories": [
+      {
+        "Name": "BioCsoft",
+        "URL": "https://bioconductor.org/packages/3.16/bioc"
+      },
+      {
+        "Name": "BioCann",
+        "URL": "https://bioconductor.org/packages/3.16/data/annotation"
+      },
+      {
+        "Name": "BioCexp",
+        "URL": "https://bioconductor.org/packages/3.16/data/experiment"
+      },
+      {
+        "Name": "BioCworkflows",
+        "URL": "https://bioconductor.org/packages/3.16/workflows"
+      },
+      {
+        "Name": "BioCbooks",
+        "URL": "https://bioconductor.org/packages/3.16/books"
+      },
+      {
+        "Name": "CRAN",
+        "URL": "https://cloud.r-project.org"
+      }
+    ]
+  },
+  "Bioconductor": {
+    "Version": "3.16"
+  },
+  "Packages": {
+    "BH": {
+      "Package": "BH",
+      "Version": "1.84.0-0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "a8235afbcd6316e6e91433ea47661013"
+    },
+    "Biobase": {
+      "Package": "Biobase",
+      "Version": "2.58.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocGenerics",
+        "R",
+        "methods",
+        "utils"
+      ],
+      "Hash": "96e8b620897cc9a03deff4097fa8b265"
+    },
+    "BiocGenerics": {
+      "Package": "BiocGenerics",
+      "Version": "0.44.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "R",
+        "graphics",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "0de19224c2cd94f48fbc0d0bc663ce3b"
+    },
+    "BiocManager": {
+      "Package": "BiocManager",
+      "Version": "1.30.23",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "utils"
+      ],
+      "Hash": "47e968dfe563c1b22c2e20a067ec21d5"
+    },
+    "BiocParallel": {
+      "Package": "BiocParallel",
+      "Version": "1.32.6",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BH",
+        "R",
+        "codetools",
+        "cpp11",
+        "futile.logger",
+        "methods",
+        "parallel",
+        "snow",
+        "stats",
+        "utils"
+      ],
+      "Hash": "bcdac842fb312bb25f9f82bc141889e5"
+    },
+    "BiocSingular": {
+      "Package": "BiocSingular",
+      "Version": "1.14.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocGenerics",
+        "BiocParallel",
+        "DelayedArray",
+        "Matrix",
+        "Rcpp",
+        "S4Vectors",
+        "ScaledMatrix",
+        "beachmat",
+        "irlba",
+        "methods",
+        "rsvd",
+        "utils"
+      ],
+      "Hash": "0a4d96a26e7482c2806cb8c9e1175734"
+    },
+    "BiocVersion": {
+      "Package": "BiocVersion",
+      "Version": "3.16.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "44c5824508b9a10e52dbb505c34fa880"
+    },
+    "DelayedArray": {
+      "Package": "DelayedArray",
+      "Version": "0.24.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocGenerics",
+        "IRanges",
+        "Matrix",
+        "MatrixGenerics",
+        "R",
+        "S4Vectors",
+        "methods",
+        "stats",
+        "stats4"
+      ],
+      "Hash": "51da2aa8f52a4f3f08b65a8f1c62530e"
+    },
+    "GenomeInfoDb": {
+      "Package": "GenomeInfoDb",
+      "Version": "1.34.9",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocGenerics",
+        "GenomeInfoDbData",
+        "IRanges",
+        "R",
+        "RCurl",
+        "S4Vectors",
+        "methods",
+        "stats",
+        "stats4",
+        "utils"
+      ],
+      "Hash": "c8adcafcf06ec6681c35eafa837c69bb"
+    },
+    "GenomeInfoDbData": {
+      "Package": "GenomeInfoDbData",
+      "Version": "1.2.9",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/data/annotation",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "618b1efac0f8b8c130afac3e0eafd47c"
+    },
+    "GenomicRanges": {
+      "Package": "GenomicRanges",
+      "Version": "1.50.2",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocGenerics",
+        "GenomeInfoDb",
+        "IRanges",
+        "R",
+        "S4Vectors",
+        "XVector",
+        "methods",
+        "stats",
+        "stats4",
+        "utils"
+      ],
+      "Hash": "24a5b855811e94b5bd9365a11fe5b2a8"
+    },
+    "HDF5Array": {
+      "Package": "HDF5Array",
+      "Version": "1.26.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocGenerics",
+        "DelayedArray",
+        "IRanges",
+        "Matrix",
+        "R",
+        "Rhdf5lib",
+        "S4Vectors",
+        "methods",
+        "rhdf5",
+        "rhdf5filters",
+        "stats",
+        "tools",
+        "utils"
+      ],
+      "Hash": "47551501a292037411c49c38d236ff24"
+    },
+    "IRanges": {
+      "Package": "IRanges",
+      "Version": "2.32.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocGenerics",
+        "R",
+        "S4Vectors",
+        "methods",
+        "stats",
+        "stats4",
+        "utils"
+      ],
+      "Hash": "c4d63bc50829c9d3ac6d4500bea17b06"
+    },
+    "MASS": {
+      "Package": "MASS",
+      "Version": "7.3-58.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "grDevices",
+        "graphics",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "e02d1a0f6122fd3e634b25b433704344"
+    },
+    "Matrix": {
+      "Package": "Matrix",
+      "Version": "1.6-5",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "grDevices",
+        "graphics",
+        "grid",
+        "lattice",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "8c7115cd3a0e048bda2a7cd110549f7a"
+    },
+    "MatrixGenerics": {
+      "Package": "MatrixGenerics",
+      "Version": "1.10.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "matrixStats",
+        "methods"
+      ],
+      "Hash": "0e510b9ce6c89e37c2ed562a624afbe0"
+    },
+    "RCurl": {
+      "Package": "RCurl",
+      "Version": "1.98-1.14",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "bitops",
+        "methods"
+      ],
+      "Hash": "47f648d288079d0c696804ad4e55197e"
+    },
+    "Rcpp": {
+      "Package": "Rcpp",
+      "Version": "1.0.12",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "methods",
+        "utils"
+      ],
+      "Hash": "5ea2700d21e038ace58269ecdbeb9ec0"
+    },
+    "Rhdf5lib": {
+      "Package": "Rhdf5lib",
+      "Version": "1.20.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "66fbe0c49a27fe0a17182554f14f7fbc"
+    },
+    "S4Vectors": {
+      "Package": "S4Vectors",
+      "Version": "0.36.2",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocGenerics",
+        "R",
+        "methods",
+        "stats",
+        "stats4",
+        "utils"
+      ],
+      "Hash": "8f371bac4b09106b66aeff10b85bd933"
+    },
+    "ScaledMatrix": {
+      "Package": "ScaledMatrix",
+      "Version": "1.6.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "DelayedArray",
+        "Matrix",
+        "S4Vectors",
+        "methods"
+      ],
+      "Hash": "ab2ab2756dfa8a7b3ac5dc6671bf2438"
+    },
+    "SingleCellExperiment": {
+      "Package": "SingleCellExperiment",
+      "Version": "1.20.1",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocGenerics",
+        "DelayedArray",
+        "GenomicRanges",
+        "S4Vectors",
+        "SummarizedExperiment",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "4215e703af8f32ea5c1d5015a479ea09"
+    },
+    "SummarizedExperiment": {
+      "Package": "SummarizedExperiment",
+      "Version": "1.28.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "Biobase",
+        "BiocGenerics",
+        "DelayedArray",
+        "GenomeInfoDb",
+        "GenomicRanges",
+        "IRanges",
+        "Matrix",
+        "MatrixGenerics",
+        "R",
+        "S4Vectors",
+        "methods",
+        "stats",
+        "tools",
+        "utils"
+      ],
+      "Hash": "ae913ff30bce222686e66e45448fcfb6"
+    },
+    "XVector": {
+      "Package": "XVector",
+      "Version": "0.38.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocGenerics",
+        "IRanges",
+        "R",
+        "S4Vectors",
+        "methods",
+        "tools",
+        "utils",
+        "zlibbioc"
+      ],
+      "Hash": "83b80e46ac75044bc7516d0dc8116165"
+    },
+    "beachmat": {
+      "Package": "beachmat",
+      "Version": "2.14.2",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocGenerics",
+        "DelayedArray",
+        "Matrix",
+        "Rcpp",
+        "methods"
+      ],
+      "Hash": "784f8d8a92d594873d803900790d439a"
+    },
+    "bitops": {
+      "Package": "bitops",
+      "Version": "1.0-7",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "b7d8d8ee39869c18d8846a184dd8a1af"
+    },
+    "codetools": {
+      "Package": "codetools",
+      "Version": "0.2-19",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "c089a619a7fae175d149d89164f8c7d8"
+    },
+    "cpp11": {
+      "Package": "cpp11",
+      "Version": "0.4.7",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "5a295d7d963cc5035284dcdbaf334f4e"
+    },
+    "formatR": {
+      "Package": "formatR",
+      "Version": "1.14",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "63cb26d12517c7863f5abb006c5e0f25"
+    },
+    "futile.logger": {
+      "Package": "futile.logger",
+      "Version": "1.4.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "futile.options",
+        "lambda.r",
+        "utils"
+      ],
+      "Hash": "99f0ace8c05ec7d3683d27083c4f1e7e"
+    },
+    "futile.options": {
+      "Package": "futile.options",
+      "Version": "1.0.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "0d9bf02413ddc2bbe8da9ce369dcdd2b"
+    },
+    "glmpca": {
+      "Package": "glmpca",
+      "Version": "0.2.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "MASS",
+        "R",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "ec62f514be9ff6a313568a424bfc66a4"
+    },
+    "irlba": {
+      "Package": "irlba",
+      "Version": "2.3.5.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "Matrix",
+        "R",
+        "methods",
+        "stats"
+      ],
+      "Hash": "acb06a47b732c6251afd16e19c3201ff"
+    },
+    "lambda.r": {
+      "Package": "lambda.r",
+      "Version": "1.2.4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "formatR"
+      ],
+      "Hash": "b1e925c4b9ffeb901bacf812cbe9a6ad"
+    },
+    "lattice": {
+      "Package": "lattice",
+      "Version": "0.20-45",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "grDevices",
+        "graphics",
+        "grid",
+        "stats",
+        "utils"
+      ],
+      "Hash": "b64cdbb2b340437c4ee047a1f4c4377b"
+    },
+    "matrixStats": {
+      "Package": "matrixStats",
+      "Version": "1.3.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "4b3ea27a19d669c0405b38134d89a9d1"
+    },
+    "renv": {
+      "Package": "renv",
+      "Version": "1.0.7",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "utils"
+      ],
+      "Hash": "397b7b2a265bc5a7a06852524dabae20"
+    },
+    "rhdf5": {
+      "Package": "rhdf5",
+      "Version": "2.42.1",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "R",
+        "Rhdf5lib",
+        "methods",
+        "rhdf5filters"
+      ],
+      "Hash": "5c03978672acd1d85ce56f9d12f5fe5b"
+    },
+    "rhdf5filters": {
+      "Package": "rhdf5filters",
+      "Version": "1.10.1",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "Rhdf5lib"
+      ],
+      "Hash": "63806aa966d50f02b18aba6d0d34e3c8"
+    },
+    "rsvd": {
+      "Package": "rsvd",
+      "Version": "1.0.5",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "Matrix",
+        "R"
+      ],
+      "Hash": "b462187d887abc519894874486dbd6fd"
+    },
+    "scry": {
+      "Package": "scry",
+      "Version": "1.10.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Requirements": [
+        "BiocSingular",
+        "DelayedArray",
+        "HDF5Array",
+        "Matrix",
+        "R",
+        "SingleCellExperiment",
+        "SummarizedExperiment",
+        "glmpca",
+        "methods",
+        "stats"
+      ],
+      "Hash": "ef7ab530407c559c58ce2a49bd4614b7"
+    },
+    "snow": {
+      "Package": "snow",
+      "Version": "0.4-4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "utils"
+      ],
+      "Hash": "40b74690debd20c57d93d8c246b305d4"
+    },
+    "zlibbioc": {
+      "Package": "zlibbioc",
+      "Version": "1.44.0",
+      "Source": "Repository",
+      "Repository": "https://bioconductor.org/packages/3.16/bioc",
+      "Hash": "6f578730acbdfc7ce2ca49df29bb5352"
+    }
+  }
+}
