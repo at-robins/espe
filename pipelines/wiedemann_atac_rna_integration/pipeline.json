@@ -1,0 +1,17 @@
+{
+  "id": "wiedemann_atac_rna_integration",
+  "name": "Wiedemann ATAC-RNA-Seq integration",
+  "version": "0.1.22",
+  "description": "<espe-import>pipeline_description.html</espe-import>",
+  "global_variables": [],
+  "steps": [
+    {
+      "id": "dge_integraion",
+      "name": "DGE integration",
+      "description": "<espe-import>step_dge_integration_description.html</espe-import>",
+      "container": "dge_integration",
+      "dependencies": [],
+      "variables": []
+    }
+  ]
+}
