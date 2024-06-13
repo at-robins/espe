@@ -1,5 +1,5 @@
 use crate::{
-    application::{config::Configuration, error::SeqError, database::DatabaseManager},
+    application::{config::Configuration, database::DatabaseManager, error::SeqError},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     model::{
         db::global_data::{GlobalData, NewGlobalData},

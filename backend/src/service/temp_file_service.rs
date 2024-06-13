@@ -69,7 +69,7 @@ impl TemporaryFileManager {
                         SeqErrorType::InternalServerError,
                         combined_error,
                         "An unforseen error occured during temporary file management. Please consult the logs.",
-                    ))
+                    ));
             }
         }
         // Returns if successful.

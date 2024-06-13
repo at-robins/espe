@@ -1,5 +1,6 @@
 use crate::{
-    application::{config::Configuration, database::DatabaseManager, environment::LOG_LEVEL}, controller::routing::routing_config,
+    application::{config::Configuration, database::DatabaseManager, environment::LOG_LEVEL},
+    controller::routing::routing_config,
     service::pipeline_service::LoadedPipelines,
 };
 use actix_web::{
@@ -36,7 +37,8 @@ pub fn create_test_app(
     dotenv().unwrap();
     env_logger::try_init_from_env(env_logger::Env::new().filter(LOG_LEVEL)).ok();
     let app_config = &web::Data::<Configuration>::new(context.into());
-    let database_manager = web::Data::new(DatabaseManager::new(web::Data::clone(&app_config)).unwrap());
+    let database_manager =
+        web::Data::new(DatabaseManager::new(web::Data::clone(&app_config)).unwrap());
     App::new()
         .wrap(middleware::Logger::default())
         .app_data(web::Data::clone(&app_config))
@@ -56,7 +58,10 @@ impl TestContext {
     /// Creates a new `TestContext`.
     pub fn new() -> TestContext {
         let id = Uuid::new_v4();
-        let context = TestContext { id, pipeline_folder_override: None };
+        let context = TestContext {
+            id,
+            pipeline_folder_override: None,
+        };
         std::fs::create_dir_all(context.context_folder()).unwrap();
         std::fs::create_dir_all(context.pipeline_folder()).unwrap();
         let con = &mut context.get_connection();
@@ -87,9 +92,9 @@ impl TestContext {
     }
 
     /// Overrides the default testing pipeline folder with a custom one.
-    /// 
+    ///
     /// # Parameters
-    /// 
+    ///
     /// * `pipeline_folder` - the custom testing pipeline folder
     pub fn set_pipeline_folder<T: Into<String>>(&mut self, pipeline_folder: T) {
         self.pipeline_folder_override = Some(pipeline_folder.into());
