@@ -1,13 +1,6 @@
-use std::path::PathBuf;
-
 use serde::{Deserialize, Serialize};
 
 use crate::application::error::{SeqError, SeqErrorType};
-
-pub trait PipelineStep {
-    fn output(&self) -> PathBuf;
-    //fn input()
-}
 
 /// The current status of a [`PipelineStep`].
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Serialize, Deserialize)]

@@ -481,7 +481,6 @@ pub async fn post_execute_experiment(
 
 pub async fn post_execute_experiment_step(
     database_manager: web::Data<DatabaseManager>,
-    app_config: web::Data<Configuration>,
     experiment_id: web::Path<i32>,
     step_id: web::Json<String>,
     pipelines: web::Data<LoadedPipelines>,
