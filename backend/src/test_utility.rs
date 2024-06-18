@@ -145,9 +145,3 @@ impl From<&TestContext> for Configuration {
         )
     }
 }
-
-impl From<TestContext> for Configuration {
-    fn from(context: TestContext) -> Self {
-        (&context).into()
-    }
-}

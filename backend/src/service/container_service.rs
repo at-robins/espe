@@ -30,7 +30,10 @@ use crate::{
     },
 };
 
-use super::pipeline_service::LoadedPipelines;
+use super::{
+    experiment_service::{open_step_log, prepare_context_for_build, prepare_context_for_run},
+    pipeline_service::LoadedPipelines,
+};
 
 /// The container environment variable specifying all mounts.
 const CONTAINER_ENV_MOUNT: &str = "MOUNT_PATHS";
@@ -53,6 +56,12 @@ pub fn build_pipeline_step<P: AsRef<Path>, T: AsRef<str>>(
     experiment_id: i32,
     app_config: web::Data<Configuration>,
 ) -> Result<Child, SeqError> {
+    prepare_context_for_build(
+        &pipeline_id,
+        step.id(),
+        experiment_id,
+        web::Data::clone(&app_config),
+    )?;
     let mut pipeline_step_path = context.as_ref().to_path_buf();
     pipeline_step_path.push("container");
     pipeline_step_path.push(step.container());
@@ -61,41 +70,23 @@ pub fn build_pipeline_step<P: AsRef<Path>, T: AsRef<str>>(
     let name_arg: OsString = format_container_name(&pipeline_id, step.id()).into();
     let progress_arg: OsString = "--progress=plain".into();
 
-    // Create log directory.
-    let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
-    std::fs::create_dir_all(&logs_path)?;
-    // Open stdout log file.
-    let log_path_stdout = app_config.experiment_log_path(
-        experiment_id.to_string(),
-        &pipeline_id,
-        step.id(),
-        LogProcessType::Build,
-        LogOutputType::StdOut,
-    );
-    let log_file_stdout = std::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .append(false)
-        .truncate(true)
-        .open(log_path_stdout)?;
-    // Open stderr log file.
-    let log_path_stderr = app_config.experiment_log_path(
-        experiment_id.to_string(),
-        &pipeline_id,
-        step.id(),
-        LogProcessType::Build,
-        LogOutputType::StdErr,
-    );
-    let log_file_stderr = std::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .append(false)
-        .truncate(true)
-        .open(log_path_stderr)?;
-
     let child = Command::new("docker")
-        .stdout(log_file_stdout)
-        .stderr(log_file_stderr)
+        .stdout(open_step_log(
+            &pipeline_id,
+            step.id(),
+            experiment_id,
+            LogProcessType::Build,
+            LogOutputType::StdOut,
+            web::Data::clone(&app_config),
+        )?)
+        .stderr(open_step_log(
+            &pipeline_id,
+            step.id(),
+            experiment_id,
+            LogProcessType::Build,
+            LogOutputType::StdErr,
+            app_config,
+        )?)
         .args([
             build_arg.as_os_str(),
             name_spec.as_os_str(),
@@ -122,18 +113,14 @@ pub fn run_pipeline_step(
     experiment_id: i32,
     app_config: web::Data<Configuration>,
 ) -> Result<Child, SeqError> {
-    let experiment_id = experiment_id.to_string();
-    // Create input directory in case an empty pipeline is run.
-    std::fs::create_dir_all(app_config.experiment_input_path(experiment_id.to_string()))?;
-    // Create the output directory.
-    let output_path = app_config.experiment_step_path(&experiment_id, step.id());
-    // Clear the output folder if the step has been run before.
-    if output_path.exists() {
-        std::fs::remove_dir_all(&output_path)?;
-    }
-    // Then create the output directory.
-    std::fs::create_dir_all(&output_path)?;
-    // Set basic arguments.
+    prepare_context_for_run(
+        pipeline.id(),
+        step.id(),
+        experiment_id,
+        web::Data::clone(&app_config),
+    )?;
+    let experiment_id_string = experiment_id.to_string();
+    let output_path = app_config.experiment_step_path(&experiment_id_string, step.id());
     let mut arguments: Vec<OsString> = vec![
         "run".into(),
         "--name".into(),
@@ -144,7 +131,7 @@ pub fn run_pipeline_step(
     arguments.extend(pipeline_step_mount(output_path, "/output", false));
     // Set initial sample input mount.
     arguments.extend(pipeline_step_mount(
-        app_config.experiment_input_path(&experiment_id),
+        app_config.experiment_input_path(&experiment_id_string),
         "/input/base",
         true,
     ));
@@ -155,7 +142,7 @@ pub fn run_pipeline_step(
         mount_map_dependencies
             .insert(dependency_id.to_string(), serde_json::Value::String(target.clone()));
         arguments.extend(pipeline_step_mount(
-            app_config.experiment_step_path(&experiment_id, dependency_id),
+            app_config.experiment_step_path(&experiment_id_string, dependency_id),
             target,
             true,
         ));
@@ -208,41 +195,23 @@ pub fn run_pipeline_step(
     // Set container to run.
     arguments.push(format_container_name(pipeline.id(), step.id()).into());
 
-    // Create log directory.
-    let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
-    std::fs::create_dir_all(&logs_path)?;
-    // Open stdout log file.
-    let log_path_stdout = app_config.experiment_log_path(
-        experiment_id.to_string(),
-        pipeline.id(),
-        step.id(),
-        LogProcessType::Run,
-        LogOutputType::StdOut,
-    );
-    let log_file_stdout = std::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .append(false)
-        .truncate(true)
-        .open(log_path_stdout)?;
-    // Open stderr log file.
-    let log_path_stderr = app_config.experiment_log_path(
-        experiment_id.to_string(),
-        pipeline.id(),
-        step.id(),
-        LogProcessType::Run,
-        LogOutputType::StdErr,
-    );
-    let log_file_stderr = std::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .append(false)
-        .truncate(true)
-        .open(log_path_stderr)?;
-
     let output = Command::new("docker")
-        .stdout(log_file_stdout)
-        .stderr(log_file_stderr)
+        .stdout(open_step_log(
+            pipeline.id(),
+            step.id(),
+            experiment_id,
+            LogProcessType::Run,
+            LogOutputType::StdOut,
+            web::Data::clone(&app_config),
+        )?)
+        .stderr(open_step_log(
+            pipeline.id(),
+            step.id(),
+            experiment_id,
+            LogProcessType::Run,
+            LogOutputType::StdErr,
+            app_config,
+        )?)
         .args(arguments)
         .spawn()?;
     Ok(output)
@@ -313,7 +282,7 @@ fn should_build<
         &pipeline_version,
         connection,
     )? {
-        log::info!("Container image {} for pipeline {} step {} version {} is present in the database. Checking physical image.", 
+        log::info!("Container image {} for pipeline {} step {} version {} is present in the database. Checking physical image.",
                     format_container_name(&pipeline_id, &pipeline_step_id),
                     &pipeline_id,
                     &pipeline_step_id,
@@ -348,7 +317,7 @@ fn should_build<
                     // image physically exists.
                     return Ok(false);
                 } else {
-                    log::warn!("Database inconsistency. Container image {} for pipeline {} step {} version {} is present in the database, but not as physical image.", 
+                    log::warn!("Database inconsistency. Container image {} for pipeline {} step {} version {} is present in the database, but not as physical image.",
                         format_container_name(&pipeline_id, &pipeline_step_id),
                         &pipeline_id,
                         &pipeline_step_id,
@@ -358,7 +327,7 @@ fn should_build<
             },
             // Kills the process if still running.
             None => {
-                log::warn!("Checking existance of container image {} for pipeline {} step {} version {} timed out. The process is killed.", 
+                log::warn!("Checking existance of container image {} for pipeline {} step {} version {} timed out. The process is killed.",
                     format_container_name(&pipeline_id, &pipeline_step_id),
                     &pipeline_id,
                     &pipeline_step_id,
