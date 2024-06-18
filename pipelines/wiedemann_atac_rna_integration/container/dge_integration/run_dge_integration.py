@@ -72,7 +72,6 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
 
             # Loads and prefilters the data.
             da_table = parse_csv_file(da_file)
-            # da_table = da_table[da_table["FDR"] <= 0.05].copy()
             dge_table = parse_csv_file(dge_file)
 
             print("\tMerging data...", flush=True)
@@ -84,15 +83,43 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 suffixes=[KEY_SUFFIX_ATAC, KEY_SUFFIX_RNA],
             )
 
+            reduced_accessibility_table = merged_table[
+                merged_table[KEY_LFC + KEY_SUFFIX_ATAC] < 0.0
+            ]
+            increased_accessibility_table = merged_table[
+                merged_table[KEY_LFC + KEY_SUFFIX_ATAC] > 0.0
+            ]
+            # Deduplicates peaks assigned to the same gene
+            # by using maximum / minimum values.
+            reduced_accessibility_indices_deduplicated = (
+                reduced_accessibility_table.groupby(KEY_GENE_SYMBOL)[
+                    KEY_LFC + KEY_SUFFIX_ATAC
+                ].idxmin()
+            )
+
+            increased_accessibility_indices_deduplicated = (
+                increased_accessibility_table.groupby(KEY_GENE_SYMBOL)[
+                    KEY_LFC + KEY_SUFFIX_ATAC
+                ].idxmax()
+            )
+            merged_deduplicated_indices = []
+            merged_deduplicated_indices.extend(
+                reduced_accessibility_indices_deduplicated
+            )
+            merged_deduplicated_indices.extend(
+                increased_accessibility_indices_deduplicated
+            )
+
+            merged_table = merged_table.loc[merged_deduplicated_indices].copy()
             # Skips samples if no overlapping features.
             overlapping_features = len(merged_table.index)
             if overlapping_features > 0:
                 print(
-                    f"Detected {overlapping_features} overlapping features...",
+                    f"\tDetected {overlapping_features} overlapping features...",
                     flush=True,
                 )
             else:
-                print("No overlap detected. Skipping samples...", flush=True)
+                print("\tNo overlap detected. Skipping samples...", flush=True)
                 continue
 
             # Sets data point colour variable.
@@ -102,14 +129,14 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 ordered=True,
             )
 
-            print("Plotting data...", flush=True)
+            print("\tPlotting data...", flush=True)
             lfc_axis_scale_rna = (
                 merged_table[KEY_LFC + KEY_SUFFIX_RNA].abs().max() * 1.1
             )
             lfc_axis_scale_atac = (
                 merged_table[KEY_LFC + KEY_SUFFIX_ATAC].abs().max() * 1.1
             )
-            fig, ax = plt.subplots(figsize=(10, 10))
+            fig, ax = plt.subplots(figsize=(6, 6))
             sns.scatterplot(
                 data=merged_table,
                 x=KEY_LFC + KEY_SUFFIX_ATAC,
@@ -142,8 +169,8 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 """
                 if df_row[KEY_ENRICHMENT] == ENRICHMENT_VALUE_TRUE:
                     ax.text(
-                        df_row[KEY_LFC + KEY_SUFFIX_ATAC] + 0.01 * lfc_axis_scale_atac,
-                        df_row[KEY_LFC + KEY_SUFFIX_RNA],
+                        df_row[KEY_LFC + KEY_SUFFIX_ATAC] + 0.02 * lfc_axis_scale_atac,
+                        df_row[KEY_LFC + KEY_SUFFIX_RNA] + 0.005 * lfc_axis_scale_rna,
                         df_row[KEY_GENE_SYMBOL],
                     )
 

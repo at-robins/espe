@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_atac_rna_integration",
   "name": "Wiedemann ATAC-RNA-Seq integration",
-  "version": "0.1.22",
+  "version": "0.1.34",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [],
   "steps": [
