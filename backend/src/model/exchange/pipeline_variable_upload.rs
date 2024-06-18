@@ -16,4 +16,3 @@ pub struct PipelineGlobalVariableUpload {
     pub variable_id: String,
     pub variable_value: Option<String>,
 }
-

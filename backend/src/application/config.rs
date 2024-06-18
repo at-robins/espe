@@ -25,7 +25,13 @@ pub const PATH_FILES_GLOBAL_DATA: &str = "globals";
 /// The folder where pipeline attachments are stored.
 pub const PATH_PIPELINE_ATTACHMENTS: &str = "attachments";
 
-use std::{fmt::Display, hash::Hash, hash::Hasher, path::PathBuf, time::SystemTime};
+use std::{
+    collections::HashSet,
+    fmt::Display,
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    time::SystemTime,
+};
 
 use getset::Getters;
 use serde::{Deserialize, Serialize};
@@ -161,21 +167,25 @@ impl Configuration {
     }
 
     /// The context path where a specific pipeline is located.
-    /// 
+    ///
     /// # Parameters
-    /// 
+    ///
     /// * `pipeline_directory` - the directory the pipeline is located at
     pub fn pipeline_path<T: Into<String>>(&self, pipeline_directory: T) -> PathBuf {
         self.pipeline_folder.join(pipeline_directory.into())
     }
 
     /// The context path where a specific attachment of the specified pipeline is stored.
-    /// 
+    ///
     /// # Parameters
-    /// 
+    ///
     /// * `pipeline_directory` - the directory the pipeline is located at
     /// * `attachment_name` - the file name of the attachment
-    pub fn pipeline_attachment_path<S: Into<String>, T: Into<String>>(&self, pipeline_directory: T, attachment_name: S) -> PathBuf {
+    pub fn pipeline_attachment_path<S: Into<String>, T: Into<String>>(
+        &self,
+        pipeline_directory: T,
+        attachment_name: S,
+    ) -> PathBuf {
         let mut path = self.pipeline_path(pipeline_directory);
         path.push(PATH_PIPELINE_ATTACHMENTS);
         path.push(attachment_name.into());
@@ -292,32 +302,35 @@ impl Configuration {
         path
     }
 
-    /// All potential context paths of pipeline log files.
+    /// The context paths of pipeline log files of the specified types.
     ///
     /// # Parameters
     ///
     /// * `experiment_id` - the ID of the experiment
     /// * `pipeline_id` - the ID of the pipeline
     /// * `step_id` - the ID of the pipeline step
-    pub fn experiment_log_paths_all<P: AsRef<str>, Q: AsRef<str>, R: AsRef<str>>(
+    /// * `log_types` - the [`LogProcessType`]s to get the log files for
+    pub fn experiment_log_paths<P: AsRef<str>, Q: AsRef<str>, R: AsRef<str>>(
         &self,
         experiment_id: P,
         pipeline_id: Q,
         step_id: R,
-    ) -> Vec<PathBuf> {
-        let mut paths = Vec::new();
-        for process_type in &[LogProcessType::Build, LogProcessType::Run] {
-            for output_type in &[
-                LogOutputType::StdOut,
-                LogOutputType::StdErr,
-                LogOutputType::ExitCode,
-            ] {
-                paths.push(self.experiment_log_path(
+        log_types: &[LogProcessType],
+    ) -> HashSet<PathBuf> {
+        let log_sub_types = [
+            LogOutputType::StdOut,
+            LogOutputType::StdErr,
+            LogOutputType::ExitCode,
+        ];
+        let mut paths = HashSet::with_capacity(log_types.len() * log_sub_types.len());
+        for process_type in log_types {
+            for output_type in log_sub_types {
+                paths.insert(self.experiment_log_path(
                     experiment_id.as_ref(),
                     pipeline_id.as_ref(),
                     step_id.as_ref(),
                     *process_type,
-                    *output_type,
+                    output_type,
                 ));
             }
         }
@@ -447,14 +460,16 @@ mod tests {
 
     #[test]
     fn test_pipeline_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "./application/pipelines");
+        let config =
+            Configuration::new("", "", "", "", "./application/context", "./application/pipelines");
         let path: PathBuf = "./application/pipelines/test".into();
         assert_eq!(config.pipeline_path("test"), path);
     }
 
     #[test]
     fn test_pipeline_attachment_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "./application/pipelines");
+        let config =
+            Configuration::new("", "", "", "", "./application/context", "./application/pipelines");
         let path: PathBuf = "./application/pipelines/test/attachments/test.txt".into();
         assert_eq!(config.pipeline_attachment_path("test", "test.txt"), path);
     }

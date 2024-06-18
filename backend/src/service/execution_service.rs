@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use actix_web::web;
 
 use crate::{
-    application::{config::Configuration, error::SeqError, database::DatabaseManager},
+    application::{config::Configuration, database::DatabaseManager, error::SeqError},
     model::{
         db::experiment_execution::{ExecutionStatus, ExperimentExecution},
         internal::pipeline_blueprint::PipelineBlueprint,
@@ -21,9 +21,9 @@ pub struct ExecutionScheduler {
 
 impl ExecutionScheduler {
     /// Creates a new `ExecutionScheduler`.
-    /// 
+    ///
     /// # Parameters
-    /// 
+    ///
     /// * `config` - the application's [`Configuration`]
     /// * `database_manager` - the application's [`DatabaseManager`]
     /// * `loaded_pipelines` - the pipelines loaded by the application
@@ -129,18 +129,20 @@ impl ExecutionScheduler {
     }
 
     /// Aborts the currently running pipeline.
-    /// 
+    ///
     /// # Parameters
-    /// 
+    ///
     /// * `experiment_id` - the ID of the experiment to abort
     pub fn abort(&mut self, experiment_id: i32) -> Result<(), SeqError> {
-        self.database_manager.database_connection()?.immediate_transaction(|connection| {
-            ExperimentExecution::update_scheduled_status_by_experiment(
-                experiment_id,
-                ExecutionStatus::Aborted,
-                connection,
-            )
-        })?;
+        self.database_manager
+            .database_connection()?
+            .immediate_transaction(|connection| {
+                ExperimentExecution::update_scheduled_status_by_experiment(
+                    experiment_id,
+                    ExecutionStatus::Aborted,
+                    connection,
+                )
+            })?;
         self.handler.abort(experiment_id)
     }
 }

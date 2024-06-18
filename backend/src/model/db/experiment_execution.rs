@@ -568,9 +568,9 @@ mod tests {
 
         let finished_records =
             ExperimentExecution::get_by_status(ExecutionStatus::Finished, &mut connection).unwrap();
-            assert_eq!(finished_records.len(), 2);
-            assert_eq!(finished_records[0], new_records_expected[2]);
-            assert_eq!(finished_records[1], new_records_expected[4]);
+        assert_eq!(finished_records.len(), 2);
+        assert_eq!(finished_records[0], new_records_expected[2]);
+        assert_eq!(finished_records[1], new_records_expected[4]);
     }
 
     #[test]

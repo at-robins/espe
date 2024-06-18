@@ -231,7 +231,7 @@ async fn test_delete_experiment_files_by_path_super() {
     let experiment_path = app_config.experiment_input_path(id.to_string());
     std::fs::create_dir_all(&experiment_path).unwrap();
     std::fs::create_dir_all(experiment_path.parent().unwrap().join("1")).unwrap();
-    
+
     let file_in_super_directory = "../test_file_1.txt";
     std::fs::write(experiment_path.join(file_in_super_directory), "test_content").unwrap();
     // Assert that all files and folder exist.

@@ -395,7 +395,7 @@ pub async fn get_pipeline_attachment(
 ) -> Result<NamedFile, SeqError> {
     let (pipeline_directory, attachment_name) = info.into_inner();
 
-    // If the attachment name or pipeline folder contain a path seperator 
+    // If the attachment name or pipeline folder contain a path seperator
     // return an error as this allows attacks by using relative components.
     if PathBuf::from(&pipeline_directory).iter().count() != 1 {
         return Err(SeqError::new(
