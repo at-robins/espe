@@ -114,6 +114,12 @@ def run_cell_communication(
             set.seed(42)
             rownames(data_matrix) <- genes
             colnames(data_matrix) <- cells
+            if (future::supportsMulticore()) {
+                cat("\\tUsing ", n_threads, " worker threads.", "\\n", sep="")
+                future::plan(future::multicore, workers = n_threads)
+            } else {
+                future::plan(future::multisession)
+            }
 
             # Creates the CellChat object.
             meta = data.frame(labels = clusters, row.names = colnames(data_matrix))
@@ -132,10 +138,13 @@ def run_cell_communication(
             cellchat@DB <- subsetDB(CellChatDB, search = "Secreted Signaling", key = "annotation")
 
             # Subsets relevant genes.
-            cat("\\Filtering relevant genes...", "\\n", sep="")
+            cat("\\tFiltering relevant genes...", "\\n", sep="")
             cellchat <- subsetData(cellchat)
-            future::plan("multisession", workers = n_threads)
+
+            cat("\\tIdentifying overexpressed genes...", "\\n", sep="")
             cellchat <- identifyOverExpressedGenes(cellchat)
+
+            cat("\\tIdentifying overexpressed interactions...", "\\n", sep="")
             cellchat <- identifyOverExpressedInteractions(cellchat)
 
             cat("\\tComputing communication probability...", "\\n", sep="")
@@ -182,8 +191,11 @@ def run_cell_communication(
             # With a single cluster there cannot be any communication.
             if int(cluster) > 1:
                 print(f"\tProcessing {cluster} clusters...", flush=True)
-                cluster_labels = list(map(prepare_cluster_name_for_R, adata.obs[obs_name]))
+                cluster_labels = list(
+                    map(prepare_cluster_name_for_R, adata.obs[obs_name])
+                )
                 final_output_folder = os.path.join(output_path, cluster)
+                os.makedirs(final_output_folder, exist_ok=True)
                 cell_chat_function(
                     adata.layers["log1p_norm"].T,
                     ro.StrVector(cells),
