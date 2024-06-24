@@ -105,6 +105,8 @@ def run_cell_communication(
     print("\tLoading R dependencies...")
     importr("CellChat")
     importr("patchwork")
+    importr("ggplot2")
+    importr("ComplexHeatmap")
     print("\tRunning R...")
     cell_chat_function = ro.r(
         """
@@ -173,12 +175,45 @@ def run_cell_communication(
             cat("\\tAggregating communication network...", "\\n", sep="")
             cellchat <- aggregateNet(cellchat)
 
-            groupSize <- as.numeric(table(cellchat@idents))
-            svg(paste(output_path, "aggregated_network.svg", sep = "/"))
-            par(mfrow = c(1,2), xpd=TRUE)
-            netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
-            netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
-            dev.off()
+            # cat("\\tPlotting weights...", "\\n", sep="")
+            # svg(paste(output_path, "aggregated_network.svg", sep = "/"))
+            # groupSize <- as.numeric(table(cellchat@idents))
+            # mat <- cellchat@net$weight
+            # subplot_count = ceiling(sqrt(nrow(mat)))
+            # par(mfrow = c(subplot_count,subplot_count), xpd=TRUE)
+            # cat("\\tPlotting subplots: ", nrow(mat), "\\n", sep="")
+            # for (i in 1:nrow(mat)) {
+            #     cat("\\tPlotting subplot: ", i, "\\n", sep="")
+            #     mat2 <- matrix(0, nrow = nrow(mat), ncol = ncol(mat), dimnames = dimnames(mat))
+            #     mat2[i, ] <- mat[i, ]
+            #     netVisual_circle(mat2, vertex.weight = groupSize, weight.scale = T, edge.weight.max = max(mat), title.name = rownames(mat)[i])
+            # }
+
+            # svg(paste(output_path, "aggregated_network.svg", sep = "/"))
+            # par(mfrow = c(1,2), xpd=TRUE)
+            # netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
+            # netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
+            # dev.off()
+
+            cat("\\tPlotting communication heatmaps...", "\\n", sep="")
+            # Access all the signaling pathways showing significant communications
+            all_pathways <- cellchat@netP$pathways
+            for (pathwat in all_pathways) {
+                # Plots the interaction probability heatmap.
+                svg(paste(output_path, "/heatmap_", pathway, ".svg", sep = ""))
+                draw(netVisual_heatmap(cellchat, signaling = pathway, color.heatmap = "Reds"))
+                dev.off()
+                # Computes and visualize the contribution of 
+                # each ligand-receptor pair to the overall signaling pathway.
+                contribution_plot <- netAnalysis_contribution(cellchat, signaling = pathway)
+                ggsave(
+                    filename=paste(output_path, "/contribution_", pathway, ".svg", sep = ""),
+                    plot=contribution_plot,
+                    width = 3,
+                    height = 2,
+                    units = 'in'
+                )
+            }
         }
         """
     )
