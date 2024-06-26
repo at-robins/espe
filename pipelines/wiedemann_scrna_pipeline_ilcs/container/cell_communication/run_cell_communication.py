@@ -23,7 +23,6 @@ from rpy2.robjects.packages import importr
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
-VALID_R_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
 
 # Loads environment /system variables.
 ENV_ORGANISM = os.environ.get("GLOBAL_ORGANISM")
@@ -58,20 +57,6 @@ sc.settings.set_figure_params(
 sc.settings.figdir = MOUNT_PATHS["output"]
 
 
-def convert_string_to_r(val: str) -> str:
-    """
-    Converts a string to a valid R string.
-    """
-    return "".join(
-        list(
-            map(
-                lambda letter: letter if letter in VALID_R_CHARACTERS else ".",
-                val.replace(" ", "_"),
-            )
-        )
-    )
-
-
 def is_cluster_obs(obs_name):
     """
     Returns True if the observation name contains cluster information.
@@ -91,7 +76,7 @@ def prepare_cluster_name_for_R(cluster_number):
     Returns a valid R / CellChat cluster name.
     This is needed because CellChat does not support '0' as cluster name.
     """
-    return f"C{cluster_number}"
+    return f"C{cluster_number:0>2}"
 
 
 def run_cell_communication(
@@ -107,6 +92,8 @@ def run_cell_communication(
     importr("patchwork")
     importr("ggplot2")
     importr("ComplexHeatmap")
+    importr("NMF")
+    importr("ggalluvial")
     print("\tRunning R...")
     cell_chat_function = ro.r(
         """
@@ -175,27 +162,10 @@ def run_cell_communication(
             cat("\\tAggregating communication network...", "\\n", sep="")
             cellchat <- aggregateNet(cellchat)
 
+            cat("\\tComputing centrality score...", "\\n", sep="")
+            cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP")
+            
             cat("\\tPlotting...", "\\n", sep="")
-
-            # Plots the bubble diagram.
-            cluster_identities <- cellchat@idents
-            for (identity_index in 1:length(cluster_identities)) {
-                bubble_plot <- netVisual_bubble(
-                    cellchat,
-                    sources.use = identity_index,
-                    remove.isolate = FALSE
-                )
-                ggsave(
-                    filename=paste(
-                        output_path,
-                        "/bubble_",
-                        cluster_identities[identity_index],
-                        ".svg",
-                        sep = ""
-                    ),
-                    plot=bubble_plot,
-                )
-            }
 
             # Accesses all the signaling pathways showing significant communications.
             all_pathways <- cellchat@netP$pathways
@@ -217,6 +187,91 @@ def run_cell_communication(
                     filename=paste(output_path, "/contribution_", pathway, ".svg", sep = ""),
                     plot=contribution_plot
                 )
+
+                # Plots centrality score.
+                svg(paste(output_path, "/centrality_", pathway, ".svg", sep = ""))
+                netAnalysis_signalingRole_network(cellchat, signaling = pathway)
+                dev.off()
+            }
+
+            # Plots signal contribution
+            svg(paste(output_path, "/heatmap_contribution_outgoing.svg", sep = ""))
+            draw(netAnalysis_signalingRole_heatmap(cellchat, pattern = "outgoing"))
+            dev.off()
+            svg(paste(output_path, "/heatmap_contribution_incoming.svg", sep = ""))
+            draw(netAnalysis_signalingRole_heatmap(cellchat, pattern = "incoming"))
+            dev.off()
+
+            cat("\\tInferring patterns...", "\\n", sep="")
+            pattern_min = 2
+            pattern_max = 10
+            outgoing_pattern_plot = selectK(
+                cellchat,
+                k.range = seq(pattern_min, pattern_max),
+                pattern = "outgoing"
+            )
+            ggsave(
+                filename=paste(output_path, "/outgoing_pattern_inference.svg", sep = ""),
+                plot=outgoing_pattern_plot
+            )  
+            incoming_pattern_plot = selectK(
+                cellchat,
+                k.range = seq(pattern_min, pattern_max),
+                pattern = "incoming"
+            )
+            ggsave(
+                filename=paste(output_path, "/incoming_pattern_inference.svg", sep = ""),
+                plot=incoming_pattern_plot
+            )
+            for (pattern_count in pattern_min:(pattern_max - 1)) {
+                cat("\\tPlotting ", pattern_count, " patterns...", "\\n", sep="")
+                svg(paste(output_path, "/communication_pattern_heatmap_outgoing_", pattern_count, ".svg", sep = ""))
+                cellchat <- identifyCommunicationPatterns(cellchat, pattern = "outgoing", k = pattern_count)
+                dev.off()
+                ggsave(
+                    filename=paste(
+                        output_path,
+                        "/communication_pattern_river_outgoing_",
+                        pattern_count,
+                        ".svg",
+                        sep = ""
+                    ),
+                    plot=netAnalysis_river(cellchat, pattern = "outgoing")
+                )
+                ggsave(
+                    filename=paste(
+                        output_path,
+                        "/communication_pattern_dot_outgoing_",
+                        pattern_count,
+                        ".svg",
+                        sep = ""
+                    ),
+                    plot=netAnalysis_dot(cellchat, pattern = "outgoing")
+                )
+
+                svg(paste(output_path, "/communication_pattern_heatmap_incoming_", pattern_count, ".svg", sep = ""))
+                cellchat <- identifyCommunicationPatterns(cellchat, pattern = "incoming", k = pattern_count)
+                dev.off()
+                ggsave(
+                    filename=paste(
+                        output_path,
+                        "/communication_pattern_river_incoming_",
+                        pattern_count,
+                        ".svg",
+                        sep = ""
+                    ),
+                    plot=netAnalysis_river(cellchat, pattern = "incoming")
+                )
+                ggsave(
+                    filename=paste(
+                        output_path,
+                        "/communication_pattern_dot_incoming_",
+                        pattern_count,
+                        ".svg",
+                        sep = ""
+                    ),
+                    plot=netAnalysis_dot(cellchat, pattern = "incoming")
+                )
             }
         }
         """
@@ -234,8 +289,6 @@ def run_cell_communication(
                     map(prepare_cluster_name_for_R, adata.obs[obs_name])
                 )
                 final_output_folder = os.path.join(output_path, cluster)
-                if not "liver/17" in final_output_folder:
-                    continue
                 os.makedirs(final_output_folder, exist_ok=True)
                 cell_chat_function(
                     adata.layers["log1p_norm"].T,
