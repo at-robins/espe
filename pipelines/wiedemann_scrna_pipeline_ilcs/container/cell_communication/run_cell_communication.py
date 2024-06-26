@@ -223,55 +223,66 @@ def run_cell_communication(
                 filename=paste(output_path, "/incoming_pattern_inference.svg", sep = ""),
                 plot=incoming_pattern_plot
             )
-            for (pattern_count in pattern_min:(pattern_max - 1)) {
+            for (pattern_count in pattern_min:pattern_max) {
                 cat("\\tPlotting ", pattern_count, " patterns...", "\\n", sep="")
-                svg(paste(output_path, "/communication_pattern_heatmap_outgoing_", pattern_count, ".svg", sep = ""))
-                cellchat <- identifyCommunicationPatterns(cellchat, pattern = "outgoing", k = pattern_count)
-                dev.off()
-                ggsave(
-                    filename=paste(
-                        output_path,
-                        "/communication_pattern_river_outgoing_",
-                        pattern_count,
-                        ".svg",
-                        sep = ""
-                    ),
-                    plot=netAnalysis_river(cellchat, pattern = "outgoing")
-                )
-                ggsave(
-                    filename=paste(
-                        output_path,
-                        "/communication_pattern_dot_outgoing_",
-                        pattern_count,
-                        ".svg",
-                        sep = ""
-                    ),
-                    plot=netAnalysis_dot(cellchat, pattern = "outgoing")
-                )
+                tryCatch({
+                    svg(paste(output_path, "/communication_pattern_heatmap_outgoing_", pattern_count, ".svg", sep = ""))
+                    cellchat <- identifyCommunicationPatterns(cellchat, pattern = "outgoing", k = pattern_count)
+                    dev.off()
+                    ggsave(
+                        filename=paste(
+                            output_path,
+                            "/communication_pattern_river_outgoing_",
+                            pattern_count,
+                            ".svg",
+                            sep = ""
+                        ),
+                        plot=netAnalysis_river(cellchat, pattern = "outgoing")
+                    )
+                    ggsave(
+                        filename=paste(
+                            output_path,
+                            "/communication_pattern_dot_outgoing_",
+                            pattern_count,
+                            ".svg",
+                            sep = ""
+                        ),
+                        plot=netAnalysis_dot(cellchat, pattern = "outgoing")
+                    )
 
-                svg(paste(output_path, "/communication_pattern_heatmap_incoming_", pattern_count, ".svg", sep = ""))
-                cellchat <- identifyCommunicationPatterns(cellchat, pattern = "incoming", k = pattern_count)
-                dev.off()
-                ggsave(
-                    filename=paste(
-                        output_path,
-                        "/communication_pattern_river_incoming_",
-                        pattern_count,
-                        ".svg",
-                        sep = ""
-                    ),
-                    plot=netAnalysis_river(cellchat, pattern = "incoming")
-                )
-                ggsave(
-                    filename=paste(
-                        output_path,
-                        "/communication_pattern_dot_incoming_",
-                        pattern_count,
-                        ".svg",
-                        sep = ""
-                    ),
-                    plot=netAnalysis_dot(cellchat, pattern = "incoming")
-                )
+                    svg(paste(output_path, "/communication_pattern_heatmap_incoming_", pattern_count, ".svg", sep = ""))
+                    cellchat <- identifyCommunicationPatterns(cellchat, pattern = "incoming", k = pattern_count)
+                    dev.off()
+                    ggsave(
+                        filename=paste(
+                            output_path,
+                            "/communication_pattern_river_incoming_",
+                            pattern_count,
+                            ".svg",
+                            sep = ""
+                        ),
+                        plot=netAnalysis_river(cellchat, pattern = "incoming")
+                    )
+                    ggsave(
+                        filename=paste(
+                            output_path,
+                            "/communication_pattern_dot_incoming_",
+                            pattern_count,
+                            ".svg",
+                            sep = ""
+                        ),
+                        plot=netAnalysis_dot(cellchat, pattern = "incoming")
+                    )
+                }, warning = function(w) {
+                    # Just forwards any warnings.
+                    print(w)
+                }, error = function(e) {
+                    # The pattern count might be too high for the amount of clusters present,
+                    # thus execution is skipped and the error logged.
+                    cat("\\t\\tThe pattern count is too high. Ignoring expected error:\\n", e, "\\n", sep="")
+                }, finally = {
+                    # Nothing to do here.
+                })
             }
         }
         """
