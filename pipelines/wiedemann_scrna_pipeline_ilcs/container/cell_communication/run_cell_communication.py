@@ -276,7 +276,8 @@ def run_cell_communication(
                 }, error = function(e) {
                     # The pattern count might be too high for the amount of clusters present,
                     # thus execution is skipped and the error logged.
-                    cat("\\t\\tThe pattern count is too high. Ignoring expected error:\\n", e, "\\n", sep="")
+                    cat("\\t\\tThe pattern count is too high. Ignoring expected error:", "\\n", sep="")
+                    message(e, "\\n")
                 })
             }
         }
