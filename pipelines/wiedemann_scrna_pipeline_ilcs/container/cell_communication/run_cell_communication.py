@@ -273,15 +273,10 @@ def run_cell_communication(
                         ),
                         plot=netAnalysis_dot(cellchat, pattern = "incoming")
                     )
-                }, warning = function(w) {
-                    # Just forwards any warnings.
-                    print(w)
                 }, error = function(e) {
                     # The pattern count might be too high for the amount of clusters present,
                     # thus execution is skipped and the error logged.
                     cat("\\t\\tThe pattern count is too high. Ignoring expected error:\\n", e, "\\n", sep="")
-                }, finally = {
-                    # Nothing to do here.
                 })
             }
         }
