@@ -29,6 +29,13 @@ ENV_ORGANISM = os.environ.get("GLOBAL_ORGANISM")
 THREADS = math.floor(multiprocessing.cpu_count() * 0.8)
 if THREADS < 1:
     THREADS = 1
+elif THREADS > 4:
+    # Limits the number of concurrent threads as the
+    # R code that is executed in parallel runs relatively
+    # fast even on a low number of threads, while execssive
+    # parallelisation induces a hugh memory overhead
+    # that might get the process killed.
+    THREADS = 4
 
 # Setup of rpy2.
 rcb.logger.setLevel(logging.INFO)
@@ -108,6 +115,17 @@ def run_cell_communication(
                 future::plan(future::multicore, workers = n_threads)
             } else {
                 future::plan(future::multisession)
+            }
+            cluster_count = length(clusters)
+            if (cluster_count < 2) {
+                cat(
+                    "\\tNot enough cell populations (",
+                    cluster_count,
+                    ") to calculate communication. Skipping the sample...",
+                    "\\n",
+                    sep=""
+                )
+                return()
             }
 
             # Creates the CellChat object.
@@ -205,6 +223,14 @@ def run_cell_communication(
             cat("\\tInferring patterns...", "\\n", sep="")
             pattern_min = 2
             pattern_max = 10
+            # Reduces the number of inferred patterns if uninformative.
+            if (pattern_max >= cluster_count) {
+                if (cluster_count > pattern_min) {
+                    pattern_max = cluster_count - 1
+                } else {
+                    pattern_max = pattern_min
+                }
+            }
             outgoing_pattern_plot = selectK(
                 cellchat,
                 k.range = seq(pattern_min, pattern_max),
@@ -276,8 +302,12 @@ def run_cell_communication(
                 }, error = function(e) {
                     # The pattern count might be too high for the amount of clusters present,
                     # thus execution is skipped and the error logged.
-                    cat("\\t\\tThe pattern count is too high. Ignoring expected error:", "\\n", sep="")
+                    cat("\\t\\tThe pattern count is too high. Ignoring expected error.", "\\n", sep="")
                     message(e, "\\n")
+                    cat("\\t\\tClosing open graphics devices after error...", "\\n", sep="")
+                    while (dev.cur() > 1) {
+                        dev.off()
+                    }
                 })
             }
         }
