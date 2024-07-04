@@ -116,7 +116,7 @@ def run_cell_communication(
             } else {
                 future::plan(future::multisession)
             }
-            cluster_count = length(clusters)
+            cluster_count = length(unique(clusters))
             if (cluster_count < 2) {
                 cat(
                     "\\tNot enough cell populations (",
@@ -189,7 +189,11 @@ def run_cell_communication(
             all_pathways <- cellchat@netP$pathways
             for (pathway in all_pathways) {
                 # Plots the interaction probability heatmap.
-                svg(paste(output_path, "/heatmap_", pathway, ".svg", sep = ""))
+                svg(
+                    paste(output_path, "/heatmap_probability_", pathway, ".svg", sep = ""),
+                    width = 0.28 * cluster_count,
+                    height = 0.28 * cluster_count,
+                )
                 draw(netVisual_heatmap(cellchat, signaling = pathway, color.heatmap = "Reds"))
                 dev.off()
 
@@ -207,17 +211,43 @@ def run_cell_communication(
                 )
 
                 # Plots centrality score.
-                svg(paste(output_path, "/centrality_", pathway, ".svg", sep = ""))
-                netAnalysis_signalingRole_network(cellchat, signaling = pathway)
+                svg(
+                    paste(output_path, "/centrality_", pathway, ".svg", sep = ""),
+                    width = 1.1 + 0.15 * cluster_count,
+                    height = 1.8
+                )
+                # Function uses metric system internally.
+                netAnalysis_signalingRole_network(
+                    cellchat,
+                    signaling = pathway,
+                    width = 0.15 * cluster_count * 2.54,
+                    height = 1.0 * 2.54
+                )
                 dev.off()
             }
 
             # Plots signal contribution
-            svg(paste(output_path, "/heatmap_contribution_outgoing.svg", sep = ""))
-            draw(netAnalysis_signalingRole_heatmap(cellchat, pattern = "outgoing"))
+            svg(
+                paste(output_path, "/heatmap_contribution_outgoing.svg", sep = ""),
+                width = (1.6 + 0.235 * cluster_count) * 2.54
+            )
+            # Function uses metric system internally.
+            draw(netAnalysis_signalingRole_heatmap(
+                cellchat,
+                pattern = "outgoing",
+                width = (1.6 + 0.235 * cluster_count) * 2.54
+            ))
             dev.off()
-            svg(paste(output_path, "/heatmap_contribution_incoming.svg", sep = ""))
-            draw(netAnalysis_signalingRole_heatmap(cellchat, pattern = "incoming"))
+            svg(
+                paste(output_path, "/heatmap_contribution_incoming.svg", sep = ""),
+                width = (1.6 + 0.235 * cluster_count) * 2.54
+            )
+            # Function uses metric system internally.
+            draw(netAnalysis_signalingRole_heatmap(
+                cellchat,
+                pattern = "incoming",
+                width = (1.6 + 0.235 * cluster_count) * 2.54
+            ))
             dev.off()
 
             cat("\\tInferring patterns...", "\\n", sep="")
@@ -252,8 +282,18 @@ def run_cell_communication(
             for (pattern_count in pattern_min:pattern_max) {
                 cat("\\tPlotting ", pattern_count, " patterns...", "\\n", sep="")
                 tryCatch({
-                    svg(paste(output_path, "/communication_pattern_heatmap_outgoing_", pattern_count, ".svg", sep = ""))
-                    cellchat <- identifyCommunicationPatterns(cellchat, pattern = "outgoing", k = pattern_count)
+                    svg(
+                        paste(output_path, "/communication_pattern_heatmap_outgoing_", pattern_count, ".svg", sep = ""),
+                        height = 1.3 + 0.3 * cluster_count
+                    )
+                    # The function internally plots two plots next to
+                    # each other using metric units.
+                    cellchat <- identifyCommunicationPatterns(
+                        cellchat,
+                        pattern = "outgoing",
+                        k = pattern_count,
+                        height = 0.14 * cluster_count * 2.54
+                    )
                     dev.off()
                     ggsave(
                         filename=paste(
@@ -263,7 +303,9 @@ def run_cell_communication(
                             ".svg",
                             sep = ""
                         ),
-                        plot=netAnalysis_river(cellchat, pattern = "outgoing")
+                        plot=netAnalysis_river(cellchat, pattern = "outgoing"),
+                        width = 7,
+                        height = 1.4 + 0.224 * cluster_count
                     )
                     ggsave(
                         filename=paste(
@@ -273,11 +315,23 @@ def run_cell_communication(
                             ".svg",
                             sep = ""
                         ),
-                        plot=netAnalysis_dot(cellchat, pattern = "outgoing")
+                        plot=netAnalysis_dot(cellchat, pattern = "outgoing"),
+                        width = 7,
+                        height = 1.4 + 0.224 * cluster_count
                     )
 
-                    svg(paste(output_path, "/communication_pattern_heatmap_incoming_", pattern_count, ".svg", sep = ""))
-                    cellchat <- identifyCommunicationPatterns(cellchat, pattern = "incoming", k = pattern_count)
+                    svg(
+                        paste(output_path, "/communication_pattern_heatmap_incoming_", pattern_count, ".svg", sep = ""),
+                        height = 1.3 + 0.3 * cluster_count
+                    )
+                    # The function internally plots two plots next to
+                    # each other using metric units.
+                    cellchat <- identifyCommunicationPatterns(
+                        cellchat,
+                        pattern = "incoming",
+                        k = pattern_count,
+                        height = 0.14 * cluster_count * 2.54
+                    )
                     dev.off()
                     ggsave(
                         filename=paste(
@@ -285,7 +339,9 @@ def run_cell_communication(
                             "/communication_pattern_river_incoming_",
                             pattern_count,
                             ".svg",
-                            sep = ""
+                            sep = "",
+                            width = 7,
+                            height = 1.4 + 0.224 * cluster_count
                         ),
                         plot=netAnalysis_river(cellchat, pattern = "incoming")
                     )
