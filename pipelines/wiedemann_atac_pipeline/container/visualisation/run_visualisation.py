@@ -212,12 +212,8 @@ def plot_count_clustermap():
     value_list = list(relevant_peaks.values())
     reordered_dataframe = pd.DataFrame(
         data={
-            "Peak ID": [
-                key_list[i] for i in plot.dendrogram_row.reordered_ind
-            ],
-            "Gene Name": [
-                value_list[i] for i in plot.dendrogram_row.reordered_ind
-            ],
+            "Peak ID": [key_list[i] for i in plot.dendrogram_row.reordered_ind],
+            "Gene Name": [value_list[i] for i in plot.dendrogram_row.reordered_ind],
         }
     )
     reordered_dataframe.to_csv(
@@ -309,6 +305,12 @@ def plot_genomic_region_barplots():
                     (filtered_da_table["plot_annotation"].notnull())
                     & (filtered_da_table["lfc_category"].notnull())
                 ]
+                if len(filtered_da_table.index) == 0:
+                    print(
+                        "\tNo differentially accessible peaks found. Skipping sample...",
+                        flush=True,
+                    )
+                    continue
                 # Creates columns that contain the counts of
                 # all the log2-fold-change cutoff categories.
                 count_dictionary = {}

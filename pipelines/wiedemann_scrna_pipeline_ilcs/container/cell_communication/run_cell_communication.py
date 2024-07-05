@@ -142,7 +142,7 @@ def run_cell_communication(
             }
             # Subsets to only use secreted signalling.
             cat("\\tSubsetting database...", "\\n", sep="")
-            cellchat@DB <- subsetDB(CellChatDB, search = "Secreted Signaling", key = "annotation")
+            cellchat@DB <- subsetDB(CellChatDB)
 
             # Subsets relevant genes.
             cat("\\tFiltering relevant genes...", "\\n", sep="")
@@ -315,9 +315,7 @@ def run_cell_communication(
                             ".svg",
                             sep = ""
                         ),
-                        plot=netAnalysis_dot(cellchat, pattern = "outgoing"),
-                        width = 7,
-                        height = 1.4 + 0.224 * cluster_count
+                        plot=netAnalysis_dot(cellchat, pattern = "outgoing")
                     )
 
                     svg(
@@ -339,11 +337,11 @@ def run_cell_communication(
                             "/communication_pattern_river_incoming_",
                             pattern_count,
                             ".svg",
-                            sep = "",
-                            width = 7,
-                            height = 1.4 + 0.224 * cluster_count
+                            sep = ""
                         ),
-                        plot=netAnalysis_river(cellchat, pattern = "incoming")
+                        plot=netAnalysis_river(cellchat, pattern = "incoming"),
+                        width = 7,
+                        height = 1.4 + 0.224 * cluster_count
                     )
                     ggsave(
                         filename=paste(
