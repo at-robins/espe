@@ -31,6 +31,15 @@ sc.settings.set_figure_params(
 sc.settings.figdir = MOUNT_PATHS["output"]
 
 
+def load_anndata(file_path):
+    """
+    Loads the data.
+    """
+    if file_path.casefold().endswith("h5"):
+        return sc.read_10x_h5(filename=file_path)
+    else:
+        return sc.read_h5ad(filename=file_path)
+
 def is_outlier(data, metric: str, n_mad: int):
     """
     Detects outliers according to the defined metric by
@@ -59,7 +68,7 @@ def process_data(file_path, output_folder_path, metrics_writer):
     """
     print(f"Processing file {file_path}", flush=True)
     print("\tReading data...")
-    adata = sc.read_10x_h5(filename=file_path)
+    adata = load_anndata(file_path=file_path)
     print("\tMaking variable names unique...")
     adata.var_names_make_unique()
 
@@ -174,7 +183,7 @@ with open(
     # Iterates over all sample directories and processes them conserving the directory structure.
     for root, dirs, files in os.walk(INPUT_FOLDER):
         for file in files:
-            if file.casefold().endswith("filtered_feature_bc_matrix.h5"):
+            if "filtered_feature_bc_matrix.h5" in file.casefold():
                 input_file_path = os.path.join(root, file)
                 output_folder_path = os.path.join(
                     MOUNT_PATHS["output"], root.removeprefix(INPUT_FOLDER)

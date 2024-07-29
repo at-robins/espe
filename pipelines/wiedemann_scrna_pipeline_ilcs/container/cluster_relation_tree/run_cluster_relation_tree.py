@@ -16,7 +16,7 @@ def process_data(file_path_input, output_folder_path):
     """
     print(f"Processing file {file_path_input}", flush=True)
     subprocess.run(
-        f"leiden-optimisation -s 0.85 -o {output_folder_path} {file_path_input}",
+        f"leiden-optimisation -s 0.85 -o \"{output_folder_path}\" \"{file_path_input}\"",
         shell=True,
         check=True,
     )

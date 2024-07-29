@@ -22,8 +22,8 @@ KEY_SUFFIX_RNA = " RNA"
 KEY_SUFFIX_ATAC = " ATAC"
 ENRICHMENT_CATEGORY_CUTOFF = 1.0
 KEY_ENRICHMENT = "enrichment"
-ENRICHMENT_VALUE_TRUE = "log2 fold changes ≥ 1.0"
-ENRICHMENT_VALUE_FALSE = "log2 fold changes < 1.0"
+ENRICHMENT_VALUE_TRUE = "log₂ fold changes ≥ 1.0"
+ENRICHMENT_VALUE_FALSE = "log₂ fold changes < 1.0"
 
 
 def parse_csv_file(csv_path) -> pd.DataFrame:
