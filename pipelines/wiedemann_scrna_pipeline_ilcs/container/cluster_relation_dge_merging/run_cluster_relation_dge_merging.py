@@ -244,6 +244,11 @@ for root, dirs, files in os.walk(INPUT_FOLDER_TREE):
                         cluster_tree=relation_tree,
                         sub_folder=relative_sub_directory,
                     )
+
+                    if len(dge_files) == 0:
+                        print("\t\tNo DGE files have been detected. Skipping...", flush=True)
+                        continue
+
                     print(
                         f"\t\tThe following DGE files have been selected: {dge_files}"
                     )

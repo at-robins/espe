@@ -227,7 +227,7 @@ def aggregate_pseudobulk_data(adata, mask):
             print(
                 (
                     f"\t\tLess than {MINIMUM_SUBSET_OBSERVATIONS} observations found."
-                    "Removing subset..."
+                    " Removing subset..."
                 )
             )
 
@@ -247,7 +247,7 @@ def aggregate_pseudobulk_data(adata, mask):
         pseudo_replicates = [adata_subset]
         pseudo_replicate_names = [batch]
 
-        if valid_replicates < MINIMUM_REPLICATE_COUNT and batch == batch_for_splitting:
+        if valid_replicates < MINIMUM_REPLICATE_COUNT and batch == batch_for_splitting["batch"]:
             print(f"\t\tGenerating {pseudo_replicates_to_generate} pseudo-replicates.")
             print(f"\t\tObservations before splitting: {adata_subset.n_obs}")
             pseudo_replicates = split_into_pseudo_replicates(

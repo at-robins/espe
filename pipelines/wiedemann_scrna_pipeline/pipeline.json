@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_scrna_pipeline",
   "name": "Wiedemann single cell RNA-Seq pipeline",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [],
   "steps": [

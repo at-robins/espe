@@ -7,7 +7,9 @@ import numpy as np
 import os
 import scanpy as sc
 import seaborn as sns
+from scipy import sparse
 from scipy.stats import median_abs_deviation
+
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["input"] + "/"
@@ -71,6 +73,8 @@ def process_data(file_path, output_folder_path, metrics_writer):
     adata = load_anndata(file_path=file_path)
     print("\tMaking variable names unique...")
     adata.var_names_make_unique()
+    print("\tEnsuring the matrix is sparse...")
+    adata.X = sparse.csr_matrix(adata.X)
 
     print("\tCalculating QC metrics...")
     # Marking mitochondrial genes.
