@@ -7,6 +7,7 @@ import csv
 import functools
 import json
 import logging
+import math
 import numpy as np
 import os
 import pandas as pd
@@ -34,7 +35,10 @@ KEY_PSEUDOBULK_N_CELLS = "cellcount"
 VALUE_PSEUDOBULK_SAMPLE_TEST = "test"
 VALUE_PSEUDOBULK_SAMPLE_REFERENCE = "reference"
 VALID_R_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
-MINIMUM_SUBSET_OBSERVATIONS = 3
+# The minimum cell number allowed per replicate.
+MINIMUM_SUBSET_OBSERVATIONS = 5
+# The minimum number of valid replicates required.
+MINIMUM_REPLICATE_COUNT = 3
 
 # Setup of rpy2.
 rcb.logger.setLevel(logging.INFO)
@@ -123,6 +127,37 @@ def n_cluster_obs_name(number_of_clusters):
     return f"number_of_clusters_{number_of_clusters}"
 
 
+def split_into_pseudo_replicates(data, n_replicates):
+    """
+    Splits the data into the specified number of pseudo-replicates.
+    """
+    observations_per_replicate = math.floor(data.n_obs / n_replicates)
+    non_divisible_observations = data.n_obs % n_replicates
+    cursor = 0
+    splits = []
+    for _i in range(n_replicates):
+        cursor_end = cursor + observations_per_replicate
+        # If there are additional observations that cannot be split
+        # equally, distributes them on first come first serve basis.
+        if non_divisible_observations > 0:
+            cursor_end += 1
+            non_divisible_observations -= 1
+
+        splits.append(data[cursor:cursor_end])
+        cursor = cursor_end
+    return splits
+
+
+def generate_pseudo_replicate_names(replicate_name, n_replicates):
+    """
+    Generates unique names for the specified number of pseudo-replicates.
+    """
+    replicate_names = []
+    for i in range(n_replicates):
+        replicate_names.append(f"{replicate_name}_pseudo_{i}")
+    return replicate_names
+
+
 def load_counts(counts_path, tree, output_folder):
     """
     Loads the count matrix and plots the sampled clusters.
@@ -157,32 +192,88 @@ def aggregate_pseudobulk_data(adata, mask):
     """
     Aggregates pseudobulk data.
     """
-    batches = adata.obs[KEY_COUNTS_REPLICATE].cat.categories
+    print(f"\tNumber of total observations: {adata.n_obs}")
+    batches_all = adata.obs[KEY_COUNTS_REPLICATE].cat.categories
     pseudobulk_dataframe = pd.DataFrame()
     replicate_array = []
     n_obs_array = []
 
-    print(f"\tNumber of total observations: {adata.n_obs}")
-    for batch in batches:
-        print(f"\tProcessing replicate {batch}")
+    batches_filtered = []
+    batch_for_splitting = {"batch": None, "observations": None}
+    valid_replicates = 0
+
+    print("\tDetermining replicate properties...")
+    for batch in batches_all:
+        print(f"\t\tProcessing replicate {batch}", flush=True)
         batch_mask = adata.obs[KEY_COUNTS_REPLICATE] == batch
         final_mask = np.logical_and(batch_mask, mask)
         adata_subset = adata[final_mask]
         n_obs_subset = adata_subset.n_obs
-        print(f"\t\tNumber of subset observations: {n_obs_subset}")
         if n_obs_subset >= MINIMUM_SUBSET_OBSERVATIONS:
-            # A single batch / replicate there can only have one sample type.
-            aggregated_row = adata_subset.to_df().agg(np.sum)
-            replicate_array.append(batch)
-            n_obs_array.append(n_obs_subset)
+            valid_replicates += 1
+            batches_filtered.append(batch)
+
+            # Marks the largest actual replicate for potentially
+            # splitting it into pseudo-replicates.
+            if (
+                n_obs_subset >= MINIMUM_REPLICATE_COUNT * MINIMUM_SUBSET_OBSERVATIONS
+                and (
+                    batch_for_splitting["batch"] is None
+                    or batch_for_splitting["observations"] < n_obs_subset
+                )
+            ):
+                batch_for_splitting = {"batch": batch, "observations": n_obs_subset}
+        else:
+            print(
+                (
+                    f"\t\tLess than {MINIMUM_SUBSET_OBSERVATIONS} observations found."
+                    "Removing subset..."
+                )
+            )
+
+    # The number of pseudo replicates to generate.
+    # The additional one compensates the fact that one of the valid
+    # replicates will be split into pseudo-replicates.
+    pseudo_replicates_to_generate = 1 + MINIMUM_REPLICATE_COUNT - valid_replicates
+
+    print("\tAggregating pseudobulk...")
+    for batch in batches_filtered:
+        print(f"\t\tPre-processing replicate {batch}", flush=True)
+        batch_mask = adata.obs[KEY_COUNTS_REPLICATE] == batch
+        final_mask = np.logical_and(batch_mask, mask)
+        adata_subset = adata[final_mask]
+
+        # The default is to use no pseudo-replicates.
+        pseudo_replicates = [adata_subset]
+        pseudo_replicate_names = [batch]
+
+        if valid_replicates < MINIMUM_REPLICATE_COUNT and batch == batch_for_splitting:
+            print(f"\t\tGenerating {pseudo_replicates_to_generate} pseudo-replicates.")
+            print(f"\t\tObservations before splitting: {adata_subset.n_obs}")
+            pseudo_replicates = split_into_pseudo_replicates(
+                adata_subset, pseudo_replicates_to_generate
+            )
+            pseudo_replicate_names = generate_pseudo_replicate_names(
+                batch, pseudo_replicates_to_generate
+            )
+
+        n_obs_subset = adata_subset.n_obs
+        for pseudo_index, adata_subset_pseudo in enumerate(pseudo_replicates):
+            adata_subset_pseudo = pseudo_replicates[pseudo_index]
+            batch_pseudo = pseudo_replicate_names[pseudo_index]
+            print(f"\t\tAggregating replicate {batch_pseudo}", flush=True)
+            print(
+                f"\t\tNumber of observations in subset: {adata_subset_pseudo.n_obs}",
+                flush=True,
+            )
+            # A single batch / replicate can only have one sample type.
+            aggregated_row = adata_subset_pseudo.to_df().agg(np.sum)
+            replicate_array.append(batch_pseudo)
+            n_obs_array.append(adata_subset_pseudo.n_obs)
             pseudobulk_dataframe = pd.concat(
                 [pseudobulk_dataframe, aggregated_row.to_frame().T],
                 ignore_index=False,
                 join="outer",
-            )
-        else:
-            print(
-                f"\t\tLess than {MINIMUM_SUBSET_OBSERVATIONS} observations found. Skipping subset..."
             )
 
     return (
@@ -217,15 +308,21 @@ def dge_for_split(
         tmp_n_cells_reference,
     ) = aggregate_pseudobulk_data(adata=adata, mask=reference_cluster_mask)
 
-    if len(tmp_pseudobulk_test) < 2:
+    if len(tmp_pseudobulk_test) < MINIMUM_REPLICATE_COUNT:
         print(
-            f"\tThe test sample has only {len(tmp_pseudobulk_test)} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
+            (
+                f"\tThe test sample has only {len(tmp_pseudobulk_test)} replicates. "
+                "This is not enough to properly measure dispersion. Skipping cluster comparison..."
+            )
         )
         return
 
-    if len(tmp_pseudobulk_reference) < 2:
+    if len(tmp_pseudobulk_reference) < MINIMUM_REPLICATE_COUNT:
         print(
-            f"\tThe reference sample has only {len(tmp_pseudobulk_reference)} replicates. This is not enough to measure dispersion. Skipping cluster comparison..."
+            (
+                f"\tThe reference sample has only {len(tmp_pseudobulk_reference)} replicates. "
+                "This is not enough to properly measure dispersion. Skipping cluster comparison..."
+            )
         )
         return
 
