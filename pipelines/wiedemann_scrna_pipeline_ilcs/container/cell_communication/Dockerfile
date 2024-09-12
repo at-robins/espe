@@ -33,6 +33,7 @@ RUN apt-get install -y cmake && \
     repos = $R_REPO, \
     prompt = FALSE \
 )"
+# RUN Rscript -e "renv::install(\"at-robins/CellChat@5cee4762acd6ea2bbc073a1924110f3d7a0ce4a2\", prompt = FALSE, repos = $R_REPO, library = \"/usr/local/lib/R/site-library\")"
 RUN Rscript -e "library(Seurat); library(Biobase); library(anndata); library(NMF); library(ComplexHeatmap); library(BiocNeighbors); library(CellChat)"
 
 

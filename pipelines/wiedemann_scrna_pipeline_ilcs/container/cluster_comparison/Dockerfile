@@ -34,8 +34,9 @@ RUN Rscript -e "renv::restore(\
 )"
 RUN Rscript -e "library(Seurat); library(scater); library(edgeR)"
 
-RUN yes | pip install scvi-tools==0.20.3 --exists-action i
-RUN yes | pip install pertpy==0.6.0 --exists-action i
+# RUN yes | pip install scvi-tools==1.1.5 --exists-action i
+# RUN yes | pip install pertpy==0.7.0 --exists-action i
+# RUN yes | pip install jax==0.4.30 --exists-action i
 
 COPY run_cluster_comparison.py /run.py
 ENTRYPOINT ["python", "run.py"]

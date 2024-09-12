@@ -191,8 +191,8 @@ def run_cell_communication(
                 # Plots the interaction probability heatmap.
                 svg(
                     paste(output_path, "/heatmap_probability_", pathway, ".svg", sep = ""),
-                    width = 0.28 * cluster_count,
-                    height = 0.28 * cluster_count,
+                    width = 3.0 + 0.28 * cluster_count,
+                    height = 3.0 + 0.28 * cluster_count
                 )
                 draw(netVisual_heatmap(cellchat, signaling = pathway, color.heatmap = "Reds"))
                 dev.off()

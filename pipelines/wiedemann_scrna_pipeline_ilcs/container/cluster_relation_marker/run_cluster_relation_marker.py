@@ -179,31 +179,60 @@ for directory_path in directory_paths:
         )
         plt.close()
 
-        # fig = sc.pl.stacked_violin(
-        #     adata,
-        #     sorted_gene_set,
-        #     groupby=adata_cluster_key,
-        #     swap_axes=False,
-        #     dendrogram=True,
-        #     show=False,
-        #     return_fig=True,
-        # )
-        # fig.savefig(
-        #     os.path.join(output_folder_path, "violine.svg"),
-        #     format="svg",
-        # )
-        # plt.close()
+        fig = sc.pl.stacked_violin(
+            adata,
+            sorted_gene_set,
+            groupby=adata_cluster_key,
+            swap_axes=False,
+            dendrogram=True,
+            show=False,
+            return_fig=True,
+        )
+        fig.savefig(
+            os.path.join(output_folder_path, "violine.svg"),
+            format="svg",
+        )
+        plt.close()
 
-        # fig = sc.pl.dotplot(
-        #     adata,
-        #     sorted_gene_set,
-        #     groupby=adata_cluster_key,
-        #     dendrogram=True,
-        #     show=False,
-        #     return_fig=True,
-        # )
-        # fig.savefig(
-        #     os.path.join(output_folder_path, "dotplot.svg"),
-        #     format="svg",
-        # )
-        # plt.close()
+        fig = sc.pl.dotplot(
+            adata,
+            sorted_gene_set,
+            groupby=adata_cluster_key,
+            dendrogram=True,
+            show=False,
+            return_fig=True,
+        )
+        fig.savefig(
+            os.path.join(output_folder_path, "dotplot.svg"),
+            format="svg",
+        )
+        plt.close()
+
+        # The replicates.
+        REPLICATE_KEY = "replicate_name"
+        # The samples that consists of different replicates.
+        SAMPLE_TYPE_KEY = "sample_type"
+        # The clustering information.
+        CLUSTER_KEY = "leiden_clustering"
+
+        print("\tPlotting data...")
+        all_umap_samples = [
+            adata_cluster_key,
+            REPLICATE_KEY,
+            SAMPLE_TYPE_KEY,
+            *sorted_gene_set,
+        ]
+        # Plots
+        chunk_size = 4 * 8
+        for chunk_index in range(0, len(all_umap_samples), chunk_size):
+            fig = sc.pl.umap(
+                adata,
+                color=all_umap_samples[chunk_index : chunk_index + chunk_size],
+                wspace=1,
+                show=False,
+                return_fig=True,
+            )
+            fig.savefig(
+                os.path.join(output_folder_path, f"marker_expression_{chunk_index}.svg")
+            )
+            plt.close(fig)
