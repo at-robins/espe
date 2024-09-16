@@ -63,7 +63,11 @@
                       <q-spinner-orbit color="primary" class="on-left" />
                     </div>
                     <div v-else-if="step.status == PipelineStepStatus.Waiting">
-                      <q-spinner-hourglass color="primary" class="on-left" />
+                      <q-icon
+                        :name="symOutlinedSchedule"
+                        color="primary"
+                        left
+                      />
                     </div>
                     <div class="text-center">{{ step.name }}</div>
                   </q-btn>
@@ -177,6 +181,7 @@ import {
   symOutlinedCheckCircle,
   symOutlinedError,
   symOutlinedNotStarted,
+  symOutlinedSchedule,
   symOutlinedStopCircle,
   symOutlinedTerminal,
 } from "@quasar/extras/material-symbols-outlined";

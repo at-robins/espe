@@ -10,8 +10,8 @@ import sys
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["trimming"]
 
-# If a specific environment variable is set, appends the respective option.
-options_bowtie = ("--end-to-end --no-mixed --dovetail --very-sensitive "
+# The max fragment length of 615 bp allows to detect trinucleosomal regions.
+options_bowtie = ("--end-to-end --no-mixed --dovetail --very-sensitive -X 615 "
 f"-x {MOUNT_PATHS['globals']['GENOME']}/genome "
 f"--met 10")
 
@@ -26,8 +26,8 @@ print("Specified bowtie2 options:" + options_bowtie)
 print("Specified samtools options:" + options_sort)
 
 # Iterates over all sample directories and processes them conserving the directory structure.
-INPUT_SUFFIX_FORWARD = "_1_paired.fq.gz"
-INPUT_SUFFIX_REVERSE = "_2_paired.fq.gz"
+INPUT_SUFFIX_FORWARD = "1_paired.fq.gz"
+INPUT_SUFFIX_REVERSE = "2_paired.fq.gz"
 for root, dirs, files in os.walk(INPUT_FOLDER):
     if len(files) > 0:
         for file in files:
@@ -38,7 +38,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                     MOUNT_PATHS["output"],
                     file_base_input_path.removeprefix(INPUT_FOLDER + "/")
                 )
-                full_command = (f"/bowtie2/bowtie2 {options_bowtie} "
+                full_command = (f"bowtie2 {options_bowtie} "
                 f"--met-file {file_base_output_path}_metrics.txt "
                 f"-1 {file_base_input_path}{INPUT_SUFFIX_FORWARD} "
                 f"-2 {file_base_input_path}{INPUT_SUFFIX_REVERSE} | "

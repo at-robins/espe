@@ -10,6 +10,7 @@ import numpy as np
 import os
 import scanpy as sc
 import seaborn as sns
+import scipy as sp
 import rpy2.rinterface_lib.callbacks as rcb
 import rpy2.robjects as ro
 import warnings
@@ -72,6 +73,26 @@ def analytic_pearson_residuals(data, output_folder_path):
         data, inplace=False
     )
     data.layers["analytic_pearson_residuals"] = csr_matrix(analytic_pearson["X"])
+
+
+def proportional_fitting(data_matrix):
+    """
+    Performs proportional fitting on the input matrix.
+    """
+    sum_array = data_matrix.sum(axis=1).A.ravel()
+    array_mean = sum_array.mean()
+    return sp.sparse.diags(array_mean / sum_array) @ data_matrix
+
+
+def pf_log1p_pf(data, output_folder_path):
+    """
+    Normalises the data using the proportional-fitting-log1p-proportional-fitting algorithm.
+    Useful if the sequencing depth is very different between samples.
+    """
+    print("\tApplying PFlog1pPF normalisation...")
+    data.layers["PFlog1pPF"] = csr_matrix(
+        proportional_fitting(np.log1p(proportional_fitting(data.X)))
+    )
 
 
 def scran(data, output_folder_path):
@@ -163,6 +184,7 @@ def plot_normalised_data(data, output_folder_path):
 
     fig.tight_layout()
     fig.savefig(f"{output_folder_path}/histo_normalised_total_counts.svg")
+    plt.close(fig)
 
 
 def normalise_data(file_path_filtered, output_folder_path):
@@ -175,6 +197,7 @@ def normalise_data(file_path_filtered, output_folder_path):
     shifted_logarithm(adata_filtered, output_folder_path)
     analytic_pearson_residuals(adata_filtered, output_folder_path)
     scran(adata_filtered, output_folder_path)
+    pf_log1p_pf(adata_filtered, output_folder_path)
     plot_normalised_data(adata_filtered, output_folder_path)
     print("\tWriting filtered data to file...")
     adata_filtered.write(

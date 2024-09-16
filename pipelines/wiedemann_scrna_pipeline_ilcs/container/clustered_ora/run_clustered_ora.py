@@ -112,21 +112,17 @@ def perform_ora(gene_set, pathway_db, output_folder, specifier):
         return
 
     fig, ax = plt.subplots(figsize=(15, 5))
-    # colour_palette = sns.color_palette(["#7497F5", "#EA7B60"])
     sns.barplot(
         data=ora_results_filtered,
         x="-log10(pval)",
         y="Term",
-        # hue=None,
+        color="#4DBBD5",
         orient="h",
-        # palette=colour_palette,
+        width=0.75,
         saturation=1.0,
         ax=ax,
     )
     ax.set(xlabel="-log₁₀(FDR)", ylabel=None)
-    # legend = ax.get_legend()
-    # legend.set_title("Regulation")
-    # sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
     fig.tight_layout()
     fig.savefig(
         os.path.join(
@@ -139,7 +135,7 @@ def perform_ora(gene_set, pathway_db, output_folder, specifier):
 
 print("Loading pathway database...")
 organism_env = os.environ.get("GLOBAL_ORGANISM")
-if organism_env is not None and skip_env == "human":
+if organism_env is not None and organism_env == "human":
     print("\tUsing human data...", flush=True)
     pathway_database = parse_gmt(GMT_PATH_HUMAN)
 else:

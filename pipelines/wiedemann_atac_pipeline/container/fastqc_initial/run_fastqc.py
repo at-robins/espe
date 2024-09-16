@@ -32,18 +32,18 @@ else:
 
 # Iterates over all sample directories and processes them conserving the directory structure.
 for root, dirs, files in os.walk(INPUT_FOLDER):
-    if len(files) > 0:
-        for file in files:
-            if file.casefold().endswith(".fq.gz") or file.casefold().endswith(".fastq.gz"):
-                file_input_path = os.path.join(root, file)
-                folder_output_path = os.path.join(
-                    MOUNT_PATHS["output"],
-                    root.removeprefix(INPUT_FOLDER)
-                )
-                full_command = (f"{BASE_COMMAND}{options} "
-                f"--outdir={folder_output_path} "
-                f"{file_input_path}")
-                os.makedirs(folder_output_path, exist_ok = True)
-                exit_code = os.waitstatus_to_exitcode(os.system(full_command))
-                if exit_code != 0:
-                    sys.exit(exit_code)
+    for file in files:
+        if file.casefold().endswith(".fq.gz") or file.casefold().endswith(".fastq.gz"):
+            file_input_path = os.path.join(root, file)
+            print(f"Processing file {file_input_path}...")
+            folder_output_path = os.path.join(
+                MOUNT_PATHS["output"],
+                root.removeprefix(INPUT_FOLDER)
+            )
+            full_command = (f"{BASE_COMMAND}{options} "
+            f"--outdir={folder_output_path} "
+            f"{file_input_path}")
+            os.makedirs(folder_output_path, exist_ok = True)
+            exit_code = os.waitstatus_to_exitcode(os.system(full_command))
+            if exit_code != 0:
+                sys.exit(exit_code)

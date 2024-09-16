@@ -7,9 +7,12 @@ import json
 import logging
 import numpy as np
 import os
+import pathvalidate
 import scanpy as sc
 import seaborn as sns
 import sys
+
+from matplotlib import pyplot as plt
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["dependencies"]["clustering_cell_type"] + "/"
@@ -62,15 +65,41 @@ def process_data(file_path_input, output_folder_path):
                 adata.obs[gene] = [np.nan] * adata.n_obs
     print(f"\tUsing  markers: {genes}")
 
+    print("\tPlotting samples...")
+    samples = adata.obs[SAMPLE_TYPE_KEY].cat.categories
+    for sample in samples:
+        fig = sc.pl.umap(
+            adata,
+            color=[SAMPLE_TYPE_KEY],
+            groups=sample,
+            wspace=1,
+            show=False,
+            return_fig=True,
+        )
+        fig.savefig(
+            os.path.join(
+                output_folder_path,
+                pathvalidate.sanitize_filename(f"sample_{sample}.svg"),
+            )
+        )
+        plt.close(fig)
+
     print("\tPlotting data...")
-    fig = sc.pl.umap(
-        adata,
-        color=[CLUSTER_KEY, REPLICATE_KEY, SAMPLE_TYPE_KEY, *genes],
-        legend_loc="on data",
-        show=False,
-        return_fig=True,
-    )
-    fig.savefig(f"{output_folder_path}/marker_expression.svg")
+    all_umap_samples = [CLUSTER_KEY, REPLICATE_KEY, SAMPLE_TYPE_KEY, *genes]
+    # Plots
+    chunk_size = 4 * 8
+    for chunk_index in range(0, len(all_umap_samples), chunk_size):
+        fig = sc.pl.umap(
+            adata,
+            color=all_umap_samples[chunk_index : chunk_index + chunk_size],
+            wspace=1,
+            show=False,
+            return_fig=True,
+        )
+        fig.savefig(
+            os.path.join(output_folder_path, f"marker_expression_{chunk_index}.svg")
+        )
+        plt.close(fig)
 
 
 if not os.path.isfile(MARKER_FILE):

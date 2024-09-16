@@ -18,7 +18,7 @@
     <template v-slot:append>
       <q-icon
         v-if="!!name"
-        name="close"
+        :name="matClose"
         @click="name = ''"
         class="cursor-pointer"
       />
@@ -32,7 +32,7 @@
       <q-btn
         round
         color="primary"
-        icon="add"
+        :icon="matAdd"
         :disable="isUploadingGlobalData || !name"
         @click="uploadGlobalData"
       />
@@ -44,7 +44,7 @@
 import axios from "axios";
 import { ref, type Ref } from "vue";
 import { useRouter } from "vue-router";
-import { matPublic } from "@quasar/extras/material-icons";
+import { matAdd, matClose, matPublic } from "@quasar/extras/material-icons";
 
 const router = useRouter();
 const name: Ref<string> = ref("");

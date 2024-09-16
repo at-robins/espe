@@ -143,8 +143,11 @@ def process_data(file_path_input, output_folder_path):
     ax.set_ylim(None, 4)
     ax.set(xlabel="Means", ylabel="Dispersion")
     legend = ax.get_legend()
-    legend.get_texts()[0].set_text("No")
-    legend.get_texts()[1].set_text("Yes")
+    # Check prevents index out of bound errors if any one category is absent.
+    legend_label_count = len(legend.get_texts())
+    if legend_label_count == 2:
+        legend.get_texts()[0].set_text("No")
+        legend.get_texts()[1].set_text("Yes")
     legend.set_title("Highly deviant")
     fig.tight_layout()
     fig.savefig(f"{output_folder_path}/scatter_dispersion.svg")

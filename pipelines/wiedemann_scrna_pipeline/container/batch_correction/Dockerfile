@@ -9,22 +9,29 @@ RUN yes | pip install seaborn==0.12.2 --exists-action i
 RUN yes | pip install rpy2[all]==3.5.14 --exists-action i
 RUN yes | pip install anndata2ri==1.3.1 --exists-action i
 
-
 # Install R dependencies.
 # The library calls verify that the installation worked.
-WORKDIR /
 ENV R_REPO="\"https://cloud.r-project.org/\""
-RUN Rscript -e "install.packages(\"remotes\", repos = $R_REPO)"
-RUN Rscript -e "library(remotes)"
-RUN Rscript -e "remotes::install_version(\"BiocManager\", version = \"1.30.22\", repos = $R_REPO)"
-RUN Rscript -e "remotes::install_version(\"Seurat\", version = \"5.0.0\", repos = $R_REPO)"
-RUN Rscript -e "library(Seurat)"
-RUN Rscript -e "remotes::install_version(\"SCIBER\", version = \"0.2.2\", repos = $R_REPO)"
-RUN Rscript -e "library(SCIBER)"
-# Reinstalling irlba to prevent Matrix error.
-# See: https://github.com/bwlewis/irlba/issues/70
-RUN Rscript -e "remotes::install_version(\"irlba\", version = \"2.3.5.1\", repos = $R_REPO)"
-RUN Rscript -e "library(irlba)"
+ENV BIOCONDUCTOR_VERSION="\"3.16\""
+ENV R_PROJECT_PATH="/renv/"
+RUN Rscript -e "install.packages(\"remotes\", repos = $R_REPO)" && Rscript -e "library(remotes)"
+RUN Rscript -e "remotes::install_version(\"BiocManager\", version = \"1.30.23\", repos = $R_REPO)"
+RUN Rscript -e "remotes::install_version(\"renv\", version = \"1.0.7\", repos = $R_REPO)" && Rscript -e "library(renv)"
+COPY r_sc_base.lock $R_PROJECT_PATH
+RUN Rscript -e "renv::restore(\
+    lockfile = \"${R_PROJECT_PATH}r_sc_base.lock\", \
+    library = \"/usr/local/lib/R/site-library\", \
+    repos = $R_REPO, \
+    prompt = FALSE \
+)"
+COPY r_sc_batch_correction.lock $R_PROJECT_PATH
+RUN Rscript -e "renv::restore(\
+    lockfile = \"${R_PROJECT_PATH}r_sc_batch_correction.lock\", \
+    library = \"/usr/local/lib/R/site-library\", \
+    repos = $R_REPO, \
+    prompt = FALSE \
+)"
+RUN Rscript -e "library(Seurat); library(SCIBER)"
 
 COPY run_batch_correction.py /run.py
-ENTRYPOINT ["python", "run.py"]
+ENTRYPOINT ["python", "/run.py"]

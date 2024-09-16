@@ -23,7 +23,7 @@ use actix_multipart::Multipart;
 use actix_web::{web, HttpResponse};
 use diesel::SqliteConnection;
 use serde::{Deserialize, Serialize};
-use zip_extensions::zip_create_from_directory;
+use zip_extensions::zip_create_from_directory_with_options;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -320,7 +320,11 @@ pub async fn post_experiment_archive_step_results(
         std::fs::create_dir_all(target_parent)?;
     }
     // Creates the archive.
-    zip_create_from_directory(&target, &source).map_err(|err| {
+    let options = zip::write::FileOptions::default()
+        .large_file(true)
+        .compression_method(zip::CompressionMethod::Stored)
+        .compression_level(None);
+    zip_create_from_directory_with_options(&target, &source, options).map_err(|err| {
         SeqError::new(
             "Archiving error",
             SeqErrorType::InternalServerError,

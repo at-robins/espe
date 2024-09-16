@@ -7,7 +7,9 @@ import numpy as np
 import os
 import scanpy as sc
 import seaborn as sns
+from scipy import sparse
 from scipy.stats import median_abs_deviation
+
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["input"] + "/"
@@ -30,6 +32,15 @@ sc.settings.set_figure_params(
 )
 sc.settings.figdir = MOUNT_PATHS["output"]
 
+
+def load_anndata(file_path):
+    """
+    Loads the data.
+    """
+    if file_path.casefold().endswith("h5"):
+        return sc.read_10x_h5(filename=file_path)
+    else:
+        return sc.read_h5ad(filename=file_path)
 
 def is_outlier(data, metric: str, n_mad: int):
     """
@@ -59,9 +70,11 @@ def process_data(file_path, output_folder_path, metrics_writer):
     """
     print(f"Processing file {file_path}", flush=True)
     print("\tReading data...")
-    adata = sc.read_10x_h5(filename=file_path)
+    adata = load_anndata(file_path=file_path)
     print("\tMaking variable names unique...")
     adata.var_names_make_unique()
+    print("\tEnsuring the matrix is sparse...")
+    adata.X = sparse.csr_matrix(adata.X)
 
     print("\tCalculating QC metrics...")
     # Marking mitochondrial genes.
@@ -135,6 +148,8 @@ def process_data(file_path, output_folder_path, metrics_writer):
     )
 
     print("\tWriting filtered data to file...")
+    # Backup the raw counts in a separate layer.
+    adata.layers["counts"] = adata.X
     adata.write(f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip")
 
     print("\tPlotting filtered data...")
@@ -172,7 +187,7 @@ with open(
     # Iterates over all sample directories and processes them conserving the directory structure.
     for root, dirs, files in os.walk(INPUT_FOLDER):
         for file in files:
-            if file.casefold().endswith("filtered_feature_bc_matrix.h5"):
+            if "filtered_feature_bc_matrix.h5" in file.casefold():
                 input_file_path = os.path.join(root, file)
                 output_folder_path = os.path.join(
                     MOUNT_PATHS["output"], root.removeprefix(INPUT_FOLDER)

@@ -1,19 +1,9 @@
-FROM python:3.11.6-alpine3.18
-RUN apk -U upgrade && apk add --no-cache autoconf automake make gcc musl-dev perl bash zlib-dev bzip2-dev xz-dev curl-dev openssl-dev ncurses-dev g++ zlib unzip
-RUN wget 'https://github.com/samtools/samtools/archive/refs/tags/1.18.zip' -O samtools.zip && unzip 'samtools.zip' && rm 'samtools.zip'
-RUN wget 'https://github.com/samtools/htslib/releases/download/1.18/htslib-1.18.tar.bz2' -O htslib.tar.bz2 && tar -xf 'htslib.tar.bz2' && rm 'htslib.tar.bz2'
+FROM python:3.9.18-bookworm
+RUN apt-get update && apt-get upgrade -y
+RUN apt-get install -y samtools 
 
-WORKDIR /htslib-1.18
-RUN autoreconf -i
-RUN ./configure
-RUN make
-RUN make install
-WORKDIR /samtools-1.18
-RUN autoreconf -i
-RUN ./configure
-RUN make
-RUN make install
+RUN yes | pip install --upgrade pip
+RUN yes | pip install pysam==0.22.0 --exists-action i
 
-WORKDIR /
 COPY run_alignment_filtering.py /run.py
 ENTRYPOINT ["python", "run.py"]

@@ -1,0 +1,42 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: 0.05rem;
+    border-radius: 0.2rem;
+  }
+</style>
+<p>This pipeline processes paired end ATAC data.</p>
+<p>
+  <b>Input specifications</b>
+  <br />
+  The input is expected as gzipped FASTQ files (<code>.fq.gz</code> /
+  <code>.fastq.gz</code>). Pairs of read files must always reside in the same
+  sub-folder and end with <code>1</code> or <code>2</code> respectively.
+  Additionally, the following comma delimeted and UTF-8 encoded CSV files are
+  required at the experiment's root directory:
+</p>
+<ul>
+  <li>
+    <code>sample_information.csv</code>: This file defines sample naming,
+    replicate detection and batch correction. An example can be downloaded
+    <a
+      href="/api/pipelines/attachments/wiedemann_atac_pipeline/sample_information.csv"
+      >here</a
+    >.
+  </li>
+  <li>
+    <code>sample_comparison.csv</code>: This file defines which samples are
+    compared to each other. An example can be downloaded
+    <a
+      href="/api/pipelines/attachments/wiedemann_atac_pipeline/sample_comparison.csv"
+      >here</a
+    >.
+  </li>
+</ul>
+<br />
+<p>
+  <b>System requirements</b><br />
+  64 GB of RAM are recommended for pipeline execution.
+</p>

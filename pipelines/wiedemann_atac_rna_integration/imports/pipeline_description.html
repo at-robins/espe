@@ -1,0 +1,31 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: 0.05rem;
+    border-radius: 0.2rem;
+  }
+</style>
+<p>This pipeline integrates ATAC and RNA-Seq data.</p>
+<p>
+  <b>Input specifications</b>
+  <br />
+  The pipeline expects sub-folders, that each contain two following comma
+  delimeted and UTF-8 encoded differential gene expression / differential accessibility CSV files:
+</p>
+<ul>
+  <li>
+    <code>atac_da.csv</code>: The respective ATAC-Seq DA information. Must contain the following columns:
+    <code>Peak ID</code>, <code>Gene symbol</code>, <code>Annotation</code>, <code>log2FC</code>, <code>FDR</code>
+  </li>
+  <li>
+    <code>rna_dge.csv</code>: The respective RNA-Seq DGE information. Must contain the following columns:
+    <code>Gene symbol</code>, <code>log2FC</code>, <code>FDR</code>
+  </li>
+</ul>
+<br />
+<p>
+  <b>System requirements</b><br />
+  No specific requirements.
+</p>

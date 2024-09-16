@@ -59,32 +59,31 @@ else:
 
 # Iterates over all sample directories and processes them conserving the directory structure.
 for root, dirs, files in os.walk(INPUT_FOLDER):
-    if len(files) > 0:
-        for file in files:
-            input_files = ""
-            file_base_name = ""
-            file_base_input_path = ""
-            if file.casefold().endswith("_1.fq.gz"):
-                file_base_name = file.removesuffix("_1.fq.gz")
-                file_base_input_path = os.path.join(root, file_base_name)
-                input_files = f"{file_base_input_path}_1.fq.gz {file_base_input_path}_2.fq.gz"
-            elif file.casefold().endswith("_1.fastq.gz"):
-                file_base_name = file.removesuffix("_1.fastq.gz")
-                file_base_input_path = os.path.join(root, file_base_name)
-                input_files = f"{file_base_input_path}_1.fastq.gz {file_base_input_path}_2.fastq.gz"
+    for file in files:
+        input_files = ""
+        file_base_name = ""
+        file_base_input_path = ""
+        if file.casefold().endswith("1.fq.gz"):
+            file_base_name = file.removesuffix("1.fq.gz")
+            file_base_input_path = os.path.join(root, file_base_name)
+            input_files = f"{file_base_input_path}1.fq.gz {file_base_input_path}2.fq.gz"
+        elif file.casefold().endswith("1.fastq.gz"):
+            file_base_name = file.removesuffix("1.fastq.gz")
+            file_base_input_path = os.path.join(root, file_base_name)
+            input_files = f"{file_base_input_path}1.fastq.gz {file_base_input_path}2.fastq.gz"
 
-            if input_files:
-                file_base_output_path = os.path.join(
-                    MOUNT_PATHS["output"],
-                    file_base_input_path.removeprefix(INPUT_FOLDER)
-                )
-                full_command = (f"{BASE_COMMAND}{options} {input_files} "
-                f"{file_base_output_path}_1_paired.fq.gz "
-                f"{file_base_output_path}_1_unpaired.fq.gz "
-                f"{file_base_output_path}_2_paired.fq.gz "
-                f"{file_base_output_path}_2_unpaired.fq.gz"
-                f"{step_options}")
-                os.makedirs(os.path.dirname(file_base_output_path), exist_ok = True)
-                exit_code = os.waitstatus_to_exitcode(os.system(full_command))
-                if exit_code != 0:
-                    sys.exit(exit_code)
+        if input_files:
+            file_base_output_path = os.path.join(
+                MOUNT_PATHS["output"],
+                file_base_input_path.removeprefix(INPUT_FOLDER)
+            )
+            full_command = (f"{BASE_COMMAND}{options} {input_files} "
+            f"{file_base_output_path}1_paired.fq.gz "
+            f"{file_base_output_path}1_unpaired.fq.gz "
+            f"{file_base_output_path}2_paired.fq.gz "
+            f"{file_base_output_path}2_unpaired.fq.gz"
+            f"{step_options}")
+            os.makedirs(os.path.dirname(file_base_output_path), exist_ok = True)
+            exit_code = os.waitstatus_to_exitcode(os.system(full_command))
+            if exit_code != 0:
+                sys.exit(exit_code)
