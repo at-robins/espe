@@ -10,10 +10,32 @@ import subprocess
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
+MERGED_MOTIF_FILE_NAME = "merged.motif"
+MOTIF_ANNOTATED_PEAK_FILE_NAME = "motif_annotated_peaks.tsv"
 
 threads = math.floor(multiprocessing.cpu_count() * 0.8)
 if threads < 1:
     threads = 1
+
+
+def merge_motifs(motif_input_folder):
+    """
+    Merges motif files.
+    """
+    print("\tMerging motif files...", flush=True)
+    for root, dirs, files in os.walk(motif_input_folder):
+        for file in files:
+            if file.endswith(".motif"):
+                subprocess.run(
+                    (
+                        f'cat "{os.path.join(root, file)}" >> '
+                        f'"{os.path.join(root, MERGED_MOTIF_FILE_NAME)}"'
+                    ),
+                    cwd=motif_input_folder,
+                    shell=True,
+                    check=True,
+                )
+
 
 print("Loading genome database...")
 organism_env = os.environ.get("GLOBAL_ORGANISM")
@@ -84,10 +106,62 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
             print("\tRunning motif discovery...", flush=True)
             subprocess.run(
                 (
-                    f"findMotifsGenome.pl \"{file_path_peaks}\" {genome_id} "
-                    f"\"{directory_path_output}\" -size given -mask -p {threads}"
+                    f'findMotifsGenome.pl "{file_path_peaks}" {genome_id} '
+                    f'"{directory_path_output}" -size given -mask -p {threads}'
                 ),
                 cwd=directory_path_output,
                 shell=True,
                 check=True,
             )
+
+            print("\tMerging known motifs...", flush=True)
+            directory_known_motifs = os.path.join(directory_path_output, "knownResults")
+            file_known_motifs = os.path.join(
+                directory_known_motifs, MERGED_MOTIF_FILE_NAME
+            )
+            file_known_motifs_annotated = os.path.join(
+                directory_known_motifs, MOTIF_ANNOTATED_PEAK_FILE_NAME
+            )
+            merge_motifs(directory_known_motifs)
+
+            print("\tMerging de novo motifs...", flush=True)
+            directory_denovo_motifs = os.path.join(
+                directory_path_output, "homerResults"
+            )
+            file_denovo_motifs = os.path.join(
+                directory_denovo_motifs, MERGED_MOTIF_FILE_NAME
+            )
+            file_denovo_motifs_annotated = os.path.join(
+                directory_denovo_motifs, MOTIF_ANNOTATED_PEAK_FILE_NAME
+            )
+            merge_motifs(directory_denovo_motifs)
+
+            if os.path.isfile(file_known_motifs):
+                print("\tAnnotating peaks with discovered known motifs...", flush=True)
+                subprocess.run(
+                    (
+                        f'findMotifsGenome.pl "{file_path_peaks}" {genome_id} '
+                        f'"{directory_path_output}" -size given -mask -p {threads} '
+                        f'-find "{file_known_motifs}" > "{file_known_motifs_annotated}"'
+                    ),
+                    cwd=directory_path_output,
+                    shell=True,
+                    check=True,
+                )
+            else:
+                print("\tNo known motifs discovered. Skipping peak annotation...", flush=True)
+ 
+            if os.path.isfile(file_denovo_motifs):
+                print("\tAnnotating peaks with discovered de novo motifs...", flush=True)
+                subprocess.run(
+                    (
+                        f'findMotifsGenome.pl "{file_path_peaks}" {genome_id} '
+                        f'"{directory_path_output}" -size given -mask -p {threads} '
+                        f'-find "{file_denovo_motifs}" > "{file_denovo_motifs_annotated}"'
+                    ),
+                    cwd=directory_path_output,
+                    shell=True,
+                    check=True,
+                )
+            else:
+                print("\tNo de novo motifs discovered. Skipping peak annotation...", flush=True)
