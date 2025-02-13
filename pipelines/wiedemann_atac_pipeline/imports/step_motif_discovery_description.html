@@ -1,6 +1,31 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: 0.05rem;
+    border-radius: 0.2rem;
+  }
+</style>
 <p>
   Finds enriched motifs known and <i>de novo</i> in differentially accessible
   peak regions.
+</p>
+<p>
+  <b>Output</b><br />
+  For every differantial accesibility comparison motif detection using HOMER is
+  run. For details on the output see HOMER's documentation section
+  <a
+    href="http://homer.ucsd.edu/homer/ngs/peakMotifs.html#:~:text=findMotifsGenome.pl%20Output"
+    >findMotifsGenome.pl Output</a
+  >. Additionally, the dicovered motifs are mapped back on the respective peaks.
+  This information can be found in the according
+  <code>motif_annotated_peaks.tsv</code> files (UTF-8 encoded; tab delimited).
+  For details on the output format see HOMER's documentation section
+  <a
+    href="http://homer.ucsd.edu/homer/ngs/peakMotifs.html#:~:text=Finding%20Instance%20of%20Specific%20Motifs"
+    >Finding Instance of Specific Motifs</a
+  >.
 </p>
 <p>
   <b>References</b>

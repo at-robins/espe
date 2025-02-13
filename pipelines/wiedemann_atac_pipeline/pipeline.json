@@ -309,6 +309,14 @@
       "variables": []
     },
     {
+      "id": "motif_association",
+      "name": "Motif association",
+      "description": "<espe-import>step_motif_association_description.html</espe-import>",
+      "container": "motif_association",
+      "dependencies": ["peak_annotation", "motif_discovery"],
+      "variables": []
+    },
+    {
       "id": "da_gsea",
       "name": "GSEA",
       "description": "<espe-import>step_da_gsea_description.html</espe-import>",
