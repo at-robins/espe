@@ -22,7 +22,7 @@ from scipy.sparse import issparse
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER_BATCHED = MOUNT_PATHS["dependencies"]["integration"] + "/"
-INPUT_FOLDER_UNBATCHED = MOUNT_PATHS["dependencies"]["doublet_detection"] + "/"
+INPUT_FOLDER_UNBATCHED = MOUNT_PATHS["dependencies"]["doublet_removal"] + "/"
 
 # Setup of rpy2.
 rcb.logger.setLevel(logging.INFO)
@@ -154,7 +154,7 @@ def plot_normalised_data(data, output_folder_path):
     fig, ((axes_1, axes_2), (axes_3, axes_4)) = plt.subplots(2, 2, figsize=(10, 10))
 
     axes_1.set_title("Before normalisation")
-    sns.histplot(data.obs["total_counts"], bins=100, kde=False, ax=axes_1)
+    sns.histplot(data.obs["n_counts"], bins=100, kde=False, ax=axes_1)
     axes_1.set(xlabel="Total counts per cell", ylabel="Number of cells")
 
     axes_2.set_title("Shifted logarithm")

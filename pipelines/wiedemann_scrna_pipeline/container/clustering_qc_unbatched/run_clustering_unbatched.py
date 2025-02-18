@@ -33,6 +33,7 @@ sc.settings.set_figure_params(
 )
 sc.settings.figdir = MOUNT_PATHS["output"]
 
+
 def process_data(file_path_input, output_folder_path):
     """
     Performs clustering.
@@ -52,13 +53,17 @@ def process_data(file_path_input, output_folder_path):
     print("\tPlotting data...")
     fig = sc.pl.umap(
         adata,
-        color=["total_counts", "pct_counts_mt", "doublet_score", "doublet_class"],
+        color=[
+            "n_counts",
+            "percent_mito",
+            "percent_ribo",
+            "doublet_score",
+        ],
         show=False,
         return_fig=True,
     )
     fig.tight_layout()
     fig.savefig(f"{output_folder_path}/umap_qc.svg")
-
 
 
 # Iterates over all sample directories and processes them conserving the directory structure.

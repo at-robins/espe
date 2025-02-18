@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_scrna_pipeline",
   "name": "Wiedemann single cell RNA-Seq pipeline",
-  "version": "0.1.26",
+  "version": "0.1.29",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [],
   "steps": [
@@ -59,7 +59,7 @@
       "name": "Normalisation",
       "description": "<espe-import>step_normalisation_description.html</espe-import>",
       "container": "normalisation",
-      "dependencies": ["doublet_detection", "integration"],
+      "dependencies": ["doublet_removal", "integration"],
       "variables": []
     },
     {
