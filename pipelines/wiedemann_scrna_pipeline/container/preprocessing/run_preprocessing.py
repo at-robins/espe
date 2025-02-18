@@ -2,17 +2,20 @@
 """This module runs data preprocessing."""
 
 import csv
+import ddqc
 import json
-import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
 import os
+import pegasus as pg
+import pegasusio as pgio
 import scanpy as sc
-import seaborn as sns
 from scipy import sparse
-from scipy.stats import median_abs_deviation
 
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["input"] + "/"
+MITOCHONDRIAL_BASE_PREFIX = "MT-"
 
 # Setup of scanpy.
 sc.settings.verbosity = 2
@@ -23,14 +26,14 @@ sc.settings.set_figure_params(
     dpi_save=300,
     # Export as SVG.
     format="svg",
-    vector_friendly=False,
+    vector_friendly=True,
     # Use transparent background.
     transparent=True,
     facecolor=None,
     # Remove frames.
     frameon=False,
 )
-sc.settings.figdir = MOUNT_PATHS["output"]
+sc.settings.figdir = ""
 
 
 def load_anndata(file_path):
@@ -41,22 +44,6 @@ def load_anndata(file_path):
         return sc.read_10x_h5(filename=file_path)
     else:
         return sc.read_h5ad(filename=file_path)
-
-def is_outlier(data, metric: str, n_mad: int):
-    """
-    Detects outliers according to the defined metric by
-    checking their distance from the median
-    of the metric over the whole dataset.
-
-    Keyword arguments:
-    data -- the dataset
-    metric -- the metric to use for outlier detection
-    n_mad -- a datapoint is defined as outlier if its distance from
-    the metric median is more than n_mad times the
-    median absolute deviation (MAD)
-    """
-    m = data.obs[metric]
-    return np.abs(m - np.median(m)) > n_mad * median_abs_deviation(m)
 
 
 def process_data(file_path, output_folder_path, metrics_writer):
@@ -75,102 +62,81 @@ def process_data(file_path, output_folder_path, metrics_writer):
     adata.var_names_make_unique()
     print("\tEnsuring the matrix is sparse...")
     adata.X = sparse.csr_matrix(adata.X)
-
-    print("\tCalculating QC metrics...")
-    # Marking mitochondrial genes.
-    adata.var["mt"] = adata.var_names.str.lower().str.startswith("mt-")
-    # Marking ribosomal genes.
-    adata.var["ribo"] = adata.var_names.str.lower().str.startswith(("rps", "rpl"))
-    # Marking hemoglobin genes.
-    adata.var["hb"] = adata.var_names.str.lower().str.contains(("^hb[^(p)]"))
-
-    sc.pp.calculate_qc_metrics(
-        adata, qc_vars=["mt", "ribo", "hb"], inplace=True, percent_top=[20], log1p=True
-    )
-
-    print("\tGenerating QC plots...")
-    sns.displot(data=adata.obs["total_counts"], bins=100, kde=False).set(
-        xlabel="Total counts per cell", ylabel="Number of cells"
-    ).savefig(f"{output_folder_path}/histo_raw_total_counts.svg")
-    relative_mt_counts_plot = sc.pl.violin(
-        adata=adata,
-        xlabel="",
-        ylabel="Percentage of mitochondrial\ngene counts",
-        keys="pct_counts_mt",
-        show=False,
-    )
-    relative_mt_counts_plot.figure.savefig(
-        f"{output_folder_path}/violin_raw_mitochondiral_counts.svg"
-    )
-    n_genes_plot_raw = sc.pl.scatter(
-        adata=adata,
-        x="total_counts",
-        y="n_genes_by_counts",
-        color="pct_counts_mt",
-        title="Percentage of mitochondrial gene counts",
-        show=False,
-    )
-    n_genes_plot_raw.set(
-        xlabel="Number of genes per cell", ylabel="Total counts per cell"
-    )
-    n_genes_plot_raw.figure.savefig(
-        f"{output_folder_path}/scatter_raw_number_of_genes.svg"
-    )
-
-    print("\tCalculating outliers...")
-    adata.obs["outlier"] = (
-        is_outlier(adata, "log1p_total_counts", 5)
-        | is_outlier(adata, "log1p_n_genes_by_counts", 5)
-        | is_outlier(adata, "pct_counts_in_top_20_genes", 5)
-    )
-    n_outliers = adata.obs.outlier[adata.obs.outlier].count()
-
-    adata.obs["mt_outlier"] = is_outlier(adata, "pct_counts_mt", 3) | (
-        adata.obs["pct_counts_mt"] > 8
-    )
-    n_outliers_mt = adata.obs.mt_outlier[adata.obs.mt_outlier].count()
-
     n_cells_raw = adata.n_obs
-    print(f"\tNumber of cells before filtering: {n_cells_raw}")
-    adata = adata[(~adata.obs.outlier) & (~adata.obs.mt_outlier)].copy()
+
+    print("\tConverting to MultimodalData...", flush=True)
+    mmdata = pgio.MultimodalData(adata)
+    print("\tDetermining mitochondrial prefix...", flush=True)
+    # The casing of the mitochondrial gene prefix is undefined
+    # and the QC function does not allow regex, so we use the first
+    # gene hit to intrapolate the prefix or use the default if none is found.
+    mitochondiral_prefix = MITOCHONDRIAL_BASE_PREFIX
+    for gene_name in adata.var_names:
+        if gene_name.casefold().startswith(mitochondiral_prefix.casefold()):
+            mitochondiral_prefix = gene_name[0 : len(MITOCHONDRIAL_BASE_PREFIX)]
+            print(f'\tDetected mitochondrial prefix: "{mitochondiral_prefix}"')
+            break
+    print("\tRunning QC...", flush=True)
+    qc_df = ddqc.ddqc_metrics(
+        mmdata,
+        clustering_method="leiden",
+        method="mad",
+        return_df_qc=True,
+        random_state=42,
+        mito_prefix=mitochondiral_prefix,
+    )
+    print("\tExporting QC plots...", flush=True)
+    plt.savefig(os.path.join(output_folder_path, "ddqc_line_plot_relative.svg"))
+    plt.close()
+    plt.savefig(os.path.join(output_folder_path, "ddqc_line_plot_absolute.svg"))
+    plt.close()
+    plt.savefig(
+        os.path.join(output_folder_path, "ddqc_box_plot_mitochondrial_reads.svg")
+    )
+    plt.close()
+    plt.savefig(os.path.join(output_folder_path, "ddqc_box_plot_genes.svg"))
+    plt.close()
+    print("\tExporting QC table...", flush=True)
+    qc_df.to_csv(
+        os.path.join(output_folder_path, "ddqc_table.csv"),
+        sep=",",
+        encoding="utf-8",
+    )
+    print("\tFiltering QC outliers...")
+    print(f"\tNumber of cells before filtering: {n_cells_raw}", flush=True)
+    pg.filter_data(mmdata)
+    print("\tConverting back to AnnData...", flush=True)
+    adata = mmdata.to_anndata()
     n_cells_filtered = adata.n_obs
     print(f"\tNumber of cells after filtering: {n_cells_filtered}")
 
-    print("\tWriting metrics to file...")
+    print("\tWriting metrics to file...", flush=True)
     metrics_writer.writerow(
         [
             file_path.removeprefix(INPUT_FOLDER),
             n_cells_raw,
             n_cells_filtered,
-            n_outliers,
-            n_outliers_mt,
+            len(qc_df[qc_df["percent_mito_passed_qc"] == False].index),
+            len(qc_df[qc_df["percent_ribo_passed_qc"] == False].index),
+            len(qc_df[qc_df["n_counts_passed_qc"] == False].index),
+            len(qc_df[qc_df["n_genes_passed_qc"] == False].index),
         ]
     )
 
     print("\tWriting filtered data to file...")
     # Backup the raw counts in a separate layer.
     adata.layers["counts"] = adata.X
-    adata.write(f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip")
-
-    print("\tPlotting filtered data...")
-    n_genes_plot_filtered = sc.pl.scatter(
-        adata=adata,
-        x="total_counts",
-        y="n_genes_by_counts",
-        color="pct_counts_mt",
-        title="Percentage of mitochondrial gene counts",
-        show=False,
-    )
-    n_genes_plot_filtered.set(
-        xlabel="Number of genes per cell", ylabel="Total counts per cell"
-    )
-    n_genes_plot_filtered.figure.savefig(
-        f"{output_folder_path}/scatter_filtered_number_of_genes.svg"
+    adata.write(
+        os.path.join(output_folder_path, "filtered_feature_bc_matrix.h5ad"),
+        compression="gzip",
     )
 
 
 with open(
-    f"{MOUNT_PATHS['output']}/metrics.csv", mode="w", newline="", encoding="utf-8"
+    os.path.join(MOUNT_PATHS["output"], "metrics.csv"),
+    mode="w",
+    newline="",
+    encoding="utf-8",
 ) as csvfile:
     metrics_writer = csv.writer(
         csvfile, dialect="unix", delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
@@ -180,8 +146,10 @@ with open(
             "Sample",
             "Number of cells before filtering",
             "Number of cells after filtering",
-            "Number of QC outlier cells",
-            "Number of mitochondiral count outlier cells",
+            "Number of mitochondiral gene count outlier cells",
+            "Number of ribosomal gene count outlier cells",
+            "Number of total count outlier cells",
+            "Number of gene variance outlier cells",
         ]
     )
     # Iterates over all sample directories and processes them conserving the directory structure.
