@@ -18,13 +18,26 @@
   Each sample needs to be provided as a separate folder containing the filtered
   and raw H5 count matrices that are output by
   <a href="https://www.10xgenomics.com/support/software/cell-ranger/analysis/outputs/cr-outputs-overview">CellRanger</a>
-  . The files need to end with <code>filtered_feature_bc_matrix.h5</code> and
-  <code>raw_feature_bc_matrix.h5</code> respectively.<br />
+  . The files need to contain the characters <code>filtered_feature_bc_matrix.h5</code> and
+  <code>raw_feature_bc_matrix.h5</code> respectively. H5AD files are also supported.
+  <code>raw_feature_bc_matrix.h5</code> is only needed if ambient RNA removal is required. If no raw data is available
+  or the data is expected to contain very low amounts of ambient RNA, please skip the ambient RNA removal step (see
+  the varibles section) otherwise errors are to be expected.<br />
   Additionally, a <code>sample_information.csv</code> (comma delimeted and UTF-8 encoded) at the
   directory root is needed that is used for sample naming, replicate
   detection and batch correction. An example can be downloaded
-  <a href="/api/pipelines/attachments/wiedemann_scrna_pipeline/sample_information.csv">here</a>.
+  <a href="/api/pipelines/attachments/wiedemann_scrna_pipeline/sample_information.csv">here</a>. The following columns
+  must be specified:
 </p>
+<ul>
+  <li>
+    <code>sample directory</code>: the name of the directory the sample files reside in.
+  </li>
+  <li>
+    <code>sample type</code>: the type of sample used to form comparable conditions, e.g. treatment and control
+  </li>
+</ul>
+</br>
 <p>
   <b>System requirements</b><br />
   64 GB of RAM are recommended for pipeline execution.<br />
