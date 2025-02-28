@@ -20,7 +20,9 @@ MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = MOUNT_PATHS["input"] + "/"
 CLUSTERING_INFO_FILE = os.path.join(MOUNT_PATHS["input"], "sample_clustering.csv")
 MINIMUM_CELL_NUMBER = 20
-DEFAULT_PCS = 50
+PCS_MINIMUM_INFERENCE = 50
+PCS_MINIMUM_NEIGHBOURS = 30
+
 
 # The replicates.
 REPLICATE_KEY = "replicate_name"
@@ -112,15 +114,15 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
     else:
         sc.pp.pca(adata_pool, svd_solver="arpack", use_highly_variable=True)
         n_pcs_max = adata_pool.obsm["X_pca"].shape[1]
-        if n_pcs_max < DEFAULT_PCS:
-            n_pcs = n_pcs_max
+        if n_pcs_max < PCS_MINIMUM_INFERENCE:
+            n_pcs_inference = n_pcs_max
         else:
-            n_pcs = DEFAULT_PCS
+            n_pcs_inference = PCS_MINIMUM_INFERENCE
 
         # Plots PCA variance.
         sc.pl.pca_variance_ratio(
             adata_pool,
-            n_pcs=n_pcs,
+            n_pcs=n_pcs_inference,
             show=True,
             save=False,
         )
@@ -148,14 +150,29 @@ def cluster_pool(sample_id: str, sample_pool: [str]):
             """
         )
         # R returns a matrix with single float value so some conversion is needed.
-        optimal_number_of_pcs = int(np.asmatrix(find_pc_function(
+        inferred_number_of_pcs = int(np.asmatrix(find_pc_function(
             ro.FloatVector(pca_sds.tolist()),
-            n_pcs,
+            n_pcs_inference,
         ))[0,0])
-        print(f"\tUsing {optimal_number_of_pcs} PCs for clustering...", flush=True)
+        print(f"\tInferred number of PCs: {inferred_number_of_pcs}", flush=True)
+        
+        # The inferred number of PCs might be too low,
+        # so a minimum of PCs to use for clustering
+        # was defined.
+        if n_pcs_max < PCS_MINIMUM_NEIGHBOURS:
+            pcs_neighbours = n_pcs_max
+        else:
+            pcs_neighbours = PCS_MINIMUM_NEIGHBOURS
+
+        if inferred_number_of_pcs >= pcs_neighbours:
+            pcs_neighbours = inferred_number_of_pcs
+        else:
+           print(f"\tInferred PC number is smaller than the defined minimum and is thus ignored.")
+
+        print(f"\tUsing {pcs_neighbours} PCs for clustering...", flush=True)
 
         # Generates UMAP and default clustering.
-        sc.pp.neighbors(adata_pool, n_pcs=optimal_number_of_pcs)
+        sc.pp.neighbors(adata_pool, n_pcs=pcs_neighbours)
         sc.tl.umap(adata_pool)
         sc.tl.leiden(adata_pool, key_added=CLUSTER_KEY, resolution=1.0)
 

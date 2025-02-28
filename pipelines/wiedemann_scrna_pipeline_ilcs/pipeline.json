@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_scrna_pipeline_ilcs",
   "name": "Wiedemann single cell RNA-Seq pipeline for group 1 ILC analysis",
-  "version": "0.1.253",
+  "version": "0.1.277",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {
