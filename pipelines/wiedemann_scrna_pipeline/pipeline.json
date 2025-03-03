@@ -69,14 +69,6 @@
       "container": "feature_selection",
       "dependencies": ["normalisation"],
       "variables": []
-    },
-    {
-      "id": "batch_correction",
-      "name": "Batch correction",
-      "description": "<espe-import>step_batch_correction_description.html</espe-import>",
-      "container": "batch_correction",
-      "dependencies": ["feature_selection"],
-      "variables": []
     }
   ]
 }
