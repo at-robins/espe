@@ -7,39 +7,15 @@
     border-radius: .2rem;
   }
 </style>
-<p>Performs an initial quality control of sequenced reads and removes low quality cells.</p>
+<p>Merges all samples and labels them with according sample information.</p>
 <p>
   <b>Output</b><br />
-  For each sample the preprocessed <code>filtered_feature_bc_matrix.h5ad</code> file is generated.
-  Metrics are summed up in the <code>metrics.csv</code> file. Additionally the following files are generated per sample:
+  A single <code>merged.h5ad</code> file is generated containing all relevant sample information.
 </p>
-<ul>
-  <li><code>ddqc_box_plot_genes.svg</code>: Boxplot of the number of genes per QC cluster. The conventionally used
-    thershold of 200 genes is marked with a red line.</li>
-  <li><code>ddqc_box_plot_mitochondrial_reads.svg</code>: Boxplot of the percentage of mitochondiral reads per QC
-    cluster. The conventionally used thershold of 10 % is marked with a red line.</li>
-  <li><code>ddqc_line_plot_absolute.svg</code>: Line plot of the number of cells per QC cluster that would be filtered
-    out when setting the MAD threashold to the respective x-axis value. The threshold is marked with a dotted line.</li>
-  <li><code>ddqc_line_plot_relative.svg</code>: Line plot of the percentage of cells per QC cluster that would be
-    filtered out when setting the MAD threashold to the respective x-axis value. The threshold is marked with a dotted
-    line.</li>
-  <li><code>ddqc_table.csv</code>: Table containg the QC results. For further information see the <a
-      href="https://github.com/ayshwaryas/ddqc/tree/master">ddqc documentation</a>.</li>
-</ul>
-</br>
 <p>
   <b>References</b>
 </p>
 <ol>
-  <li>Subramanian, A., Alperovich, M., Yang, Y., & Li, B. (2022). Biology-inspired data-driven quality control for
-    scientific discovery in single-cell transcriptomics. Genome Biology, 23, 267. <a
-      href="https://doi.org/10.1186/s13059-022-02820-w">https://doi.org/10.1186/s13059-022-02820-w</a>
-  </li>
-  <li>Li, B., Gould, J., Yang, Y., Sarkizova, S., Tabaka, M., Ashenberg, O., Rosen, Y., Slyper, M., Kowalczyk, M. S.,
-    Villani, A. C., Tickle, T., Hacohen, N., Rozenblatt-Rosen, O., & Regev, A. (2020). Cumulus provides cloud-based data
-    analysis for large-scale single-cell and single-nucleus RNA-seq. Nature methods, 17(8), 793–798. <a
-      href="https://doi.org/10.1038/s41592-020-0905-x">https://doi.org/10.1038/s41592-020-0905-x</a>
-  </li>
   <li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev
     Genet (2023). <a href="https://doi.org/10.1038/s41576-023-00586-w">https://doi.org/10.1038/s41576-023-00586-w</a>
   </li>

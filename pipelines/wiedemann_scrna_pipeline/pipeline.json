@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_scrna_pipeline",
   "name": "Wiedemann single cell RNA-Seq pipeline",
-  "version": "0.1.29",
+  "version": "0.1.35",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [],
   "steps": [
@@ -49,7 +49,7 @@
     {
       "id": "integration",
       "name": "Integration",
-      "description": "<p>Integrates different samples of the same type with each other.</p><p><b>References</b><ol><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "description": "<espe-import>step_integration_description.html</espe-import>",
       "container": "integration",
       "dependencies": ["doublet_removal"],
       "variables": []
@@ -59,15 +59,7 @@
       "name": "Normalisation",
       "description": "<espe-import>step_normalisation_description.html</espe-import>",
       "container": "normalisation",
-      "dependencies": ["doublet_removal", "integration"],
-      "variables": []
-    },
-    {
-      "id": "clustering_qc_batched",
-      "name": "Batched QC clustering",
-      "description": "<p>Selects relevant features for downstream analysis.</p><p><b>References</b><ol><li>Street K, Townes F, Risso D, Hicks S (2023). scry: Small-Count Analysis Methods for High-Dimensional Data. doi:10.18129/B9.bioc.scry, R package version 1.14.0, <a href=\"https://bioconductor.org/packages/scry\">https://bioconductor.org/packages/scry</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
-      "container": "clustering_qc_batched",
-      "dependencies": ["normalisation"],
+      "dependencies": ["integration"],
       "variables": []
     },
     {
@@ -79,27 +71,11 @@
       "variables": []
     },
     {
-      "id": "clustering_qc_unbatched",
-      "name": "Unbatched QC clustering",
-      "description": "<p>Clusters unbatched samples for quality control.</p><p><b>References</b><ol><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
-      "container": "clustering_qc_unbatched",
-      "dependencies": ["feature_selection"],
-      "variables": []
-    },
-    {
       "id": "batch_correction",
       "name": "Batch correction",
       "description": "<espe-import>step_batch_correction_description.html</espe-import>",
       "container": "batch_correction",
       "dependencies": ["feature_selection"],
-      "variables": []
-    },
-    {
-      "id": "clustering_qc_batched_corrected",
-      "name": "Batched corrected QC clustering",
-      "description": "<espe-import>step_clustering_qc_batched_corrected_description.html</espe-import>",
-      "container": "clustering_qc_batched_corrected",
-      "dependencies": ["batch_correction"],
       "variables": []
     }
   ]

@@ -21,8 +21,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse import issparse
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER_BATCHED = MOUNT_PATHS["dependencies"]["integration"] + "/"
-INPUT_FOLDER_UNBATCHED = MOUNT_PATHS["dependencies"]["doublet_removal"] + "/"
+INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
 
 # Setup of rpy2.
 rcb.logger.setLevel(logging.INFO)
@@ -52,7 +51,7 @@ sc.settings.set_figure_params(
 sc.settings.figdir = MOUNT_PATHS["output"]
 
 
-def shifted_logarithm(data, output_folder_path):
+def shifted_logarithm(data):
     """
     Normalises the data using the shifted logarithm algorithm.
     Useful for dimensionality reduction and identification of
@@ -63,7 +62,7 @@ def shifted_logarithm(data, output_folder_path):
     data.layers["log1p_norm"] = sc.pp.log1p(scales_counts["X"], copy=True)
 
 
-def analytic_pearson_residuals(data, output_folder_path):
+def analytic_pearson_residuals(data):
     """
     Normalises the data using the analytic Pearson residuals algorithm.
     Useful for identification of variable features and rare cell populations.
@@ -84,7 +83,7 @@ def proportional_fitting(data_matrix):
     return sp.sparse.diags(array_mean / sum_array) @ data_matrix
 
 
-def pf_log1p_pf(data, output_folder_path):
+def pf_log1p_pf(data):
     """
     Normalises the data using the proportional-fitting-log1p-proportional-fitting algorithm.
     Useful if the sequencing depth is very different between samples.
@@ -95,7 +94,7 @@ def pf_log1p_pf(data, output_folder_path):
     )
 
 
-def scran(data, output_folder_path):
+def scran(data):
     """
     Normalises the data using the scran algorithm.
     Useful for batch correction.
@@ -183,45 +182,22 @@ def plot_normalised_data(data, output_folder_path):
     axes_4.get_legend().remove()
 
     fig.tight_layout()
-    fig.savefig(f"{output_folder_path}/histo_normalised_total_counts.svg")
+    fig.savefig(os.path.join(output_folder_path, "histo_normalised_total_counts.svg"))
     plt.close(fig)
 
 
-def normalise_data(file_path_filtered, output_folder_path):
-    """
-    Normalises the data using different algorithms.
-    """
-    print(f"Processing file {file_path_filtered}", flush=True)
-    print("\tReading filtered data...")
-    adata_filtered = anndata.read_h5ad(file_path_filtered)
-    shifted_logarithm(adata_filtered, output_folder_path)
-    analytic_pearson_residuals(adata_filtered, output_folder_path)
-    scran(adata_filtered, output_folder_path)
-    pf_log1p_pf(adata_filtered, output_folder_path)
-    plot_normalised_data(adata_filtered, output_folder_path)
-    print("\tWriting filtered data to file...")
-    adata_filtered.write(
-        f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip"
-    )
-
-
-def process_data(input_directory, output_directory):
-    """
-    Iterates over all sample directories and processes the according files
-    while conserving the directory structure.
-    """
-    for root, dirs, files in os.walk(input_directory):
-        for file in files:
-            if file.casefold().endswith("filtered_feature_bc_matrix.h5ad"):
-                file_path_filtered = os.path.join(root, file)
-                output_folder_path = os.path.join(
-                    MOUNT_PATHS["output"],
-                    output_directory,
-                    root.removeprefix(input_directory),
-                )
-                os.makedirs(output_folder_path, exist_ok=True)
-                normalise_data(file_path_filtered, output_folder_path)
-
-
-process_data(INPUT_FOLDER_UNBATCHED, "unbatched")
-process_data(INPUT_FOLDER_BATCHED, "batched")
+input_file_path = os.path.join(INPUT_FOLDER, "merged.h5ad")
+print(f"Processing file {input_file_path}", flush=True)
+print("\tReading data...")
+output_folder_path = MOUNT_PATHS["output"]
+adata_merged = anndata.read_h5ad(input_file_path)
+shifted_logarithm(adata_merged)
+analytic_pearson_residuals(adata_merged)
+scran(adata_merged)
+pf_log1p_pf(adata_merged)
+plot_normalised_data(adata_merged, output_folder_path)
+print("\tWriting normalised data to file...")
+os.makedirs(output_folder_path, exist_ok=True)
+adata_merged.write(
+    os.path.join(output_folder_path, "normalised.h5ad"), compression="gzip"
+)
