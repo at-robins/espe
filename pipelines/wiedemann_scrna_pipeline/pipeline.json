@@ -16,7 +16,7 @@
     {
       "id": "ambient_rna_removal",
       "name": "Ambient RNA removal",
-      "description": "<p>Detects and removes ambient RNA and removes non-informative genes.</p><p><b>References</b><ol><li>Young, M.D., Behjati, S. (2020). SoupX removes ambient RNA contamination from droplet-based single-cell RNA sequencing data, GigaScience, Volume 9, Issue 12, December 2020, giaa151bioRxiv, 303727, <a href=\"https://doi.org/10.1093/gigascience/giaa151\">https://doi.org/10.1093/gigascience/giaa151</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "description": "<espe-import>step_ambient_rna_removal_description.html</espe-import>",
       "container": "ambient_rna",
       "dependencies": ["preprocessing"],
       "variables": [
@@ -33,7 +33,7 @@
     {
       "id": "doublet_detection",
       "name": "Doublet detection",
-      "description": "<p>Detects and marks cell doublets.</p><p><b>References</b><ol><li>Germain P, Lun A, Garcia Meixide C, Macnair W, Robinson M (2022). Doublet identification in single-cell sequencing data using scDblFinder. f1000research. <a href=\"https://doi.org/10.12688/f1000research.73600.2\">doi:10.12688/f1000research.73600.2</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "description": "<espe-import>step_doublet_detection_description.html</espe-import>",
       "container": "doublet_detection",
       "dependencies": ["ambient_rna_removal"],
       "variables": []
@@ -41,7 +41,7 @@
     {
       "id": "doublet_removal",
       "name": "Doublet removal",
-      "description": "<p>Removes detected doublets. Doublets are not removed from unbatched data, which is used downstream for QC purposes.</p><p><b>References</b><ol><li>Germain P, Lun A, Garcia Meixide C, Macnair W, Robinson M (2022). Doublet identification in single-cell sequencing data using scDblFinder. f1000research. <a href=\"https://doi.org/10.12688/f1000research.73600.2\">doi:10.12688/f1000research.73600.2</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "description": "<espe-import>step_doublet_removal_description.html</espe-import>",
       "container": "doublet_removal",
       "dependencies": ["doublet_detection"],
       "variables": []
@@ -65,9 +65,25 @@
     {
       "id": "feature_selection",
       "name": "Feature selection",
-      "description": "<p>Selects relevant features for downstream analysis.</p><p><b>References</b><ol><li>Street K, Townes F, Risso D, Hicks S (2023). scry: Small-Count Analysis Methods for High-Dimensional Data. doi:10.18129/B9.bioc.scry, R package version 1.14.0, <a href=\"https://bioconductor.org/packages/scry\">https://bioconductor.org/packages/scry</a></li><li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev Genet (2023). <a href=\"https://doi.org/10.1038/s41576-023-00586-w\">https://doi.org/10.1038/s41576-023-00586-w</a></li></ol></p>",
+      "description": "<espe-import>step_feature_selection_description.html</espe-import>",
       "container": "feature_selection",
       "dependencies": ["normalisation"],
+      "variables": []
+    },
+    {
+      "id": "clustering_base",
+      "name": "Clustering",
+      "description": "<espe-import>step_clustering_base_description.html</espe-import>",
+      "container": "clustering_base",
+      "dependencies": ["feature_selection"],
+      "variables": []
+    },
+    {
+      "id": "marker_expression",
+      "name": "Marker expression",
+      "description": "<espe-import>step_marker_expression_description.html</espe-import>",
+      "container": "marker_expression",
+      "dependencies": ["clustering_base"],
       "variables": []
     }
   ]
