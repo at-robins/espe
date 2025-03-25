@@ -174,6 +174,20 @@ deseq_function = ro.r(
                 ),
                 row.names=TRUE
             )
+
+            cat("Plotting MA...\\n", sep="")
+            svg(
+                file = paste(
+                    output_path,
+                    "/",
+                    "ma_",
+                    output_suffixes[i],
+                    ".svg",
+                    sep = ""
+                )
+            )
+            plotMA(atac_result)
+            dev.off()
         }
     }
     """
