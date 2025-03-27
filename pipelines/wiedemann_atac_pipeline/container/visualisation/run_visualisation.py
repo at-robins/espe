@@ -88,8 +88,11 @@ LOCATION_PLOT_LABEL_ORDER_LEGEND = [
 ]
 
 VOLCANO_PLOT_KEY_SIGNIFICANT = "significant_volcano"
-VOLCANO_PLOT_LABEL_SIGNIFICANT_YES = "yes"
-VOLCANO_PLOT_LABEL_SIGNIFICANT_NO = "no"
+VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS = "more accessible"
+VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_MINUS = "less accessible"
+VOLCANO_PLOT_LABEL_SIGNIFICANT_NO = "no significant change"
+VOLCANO_PLOT_CUTOFF_P = 0.05
+VOLCANO_PLOT_CUTOFF_LFC = 1.0
 
 
 def count_matrix_sample_headers(count_matrix_file_path) -> [str]:
@@ -264,10 +267,13 @@ def lfc_and_fdr_to_category(da_row):
     """
     Converts log2-fold-changes and FDRs to plotable categories.
     """
-    lfc = abs(float(da_row["log2FoldChange"]))
+    lfc = float(da_row["log2FoldChange"])
     fdr = float(da_row["padj"])
-    if fdr <= 0.05 and lfc >= 1.0:
-        return VOLCANO_PLOT_LABEL_SIGNIFICANT_YES
+    if fdr <= VOLCANO_PLOT_CUTOFF_P and abs(lfc) >= VOLCANO_PLOT_CUTOFF_LFC:
+        if lfc >= 0.0:
+            return VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS
+        else:
+            return VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_MINUS
     else:
         return VOLCANO_PLOT_LABEL_SIGNIFICANT_NO
 
@@ -398,7 +404,7 @@ def plot_volcanoplots():
                     encoding="utf-8",
                 )
 
-                da_table["abslog10p"] = np.absolute(np.log10(da_table["pvalue"]))
+                da_table["abslog10p"] = np.absolute(np.log10(da_table["padj"]))
                 da_table[VOLCANO_PLOT_KEY_SIGNIFICANT] = da_table.apply(
                     lfc_and_fdr_to_category, axis=1
                 )
@@ -416,10 +422,10 @@ def plot_volcanoplots():
                     continue
 
                 filtered_da_table.sort_values(
-                    VOLCANO_PLOT_KEY_SIGNIFICANT, inplace=True
+                    VOLCANO_PLOT_KEY_SIGNIFICANT, ascending=False, inplace=True
                 )
 
-                print(f"\tCreating volcano plot...", flush=True)
+                print("\tCreating volcano plot...", flush=True)
                 fig, ax = plt.subplots(figsize=(6, 6))
                 sns.scatterplot(
                     data=filtered_da_table,
@@ -427,26 +433,29 @@ def plot_volcanoplots():
                     y="abslog10p",
                     hue=VOLCANO_PLOT_KEY_SIGNIFICANT,
                     palette={
-                        VOLCANO_PLOT_LABEL_SIGNIFICANT_YES: "#000000FF",
+                        VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS: "#E64B35",
+                        VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_MINUS: "#4DBBD5",
                         VOLCANO_PLOT_LABEL_SIGNIFICANT_NO: "#B3B3B3FF",
                     },
                     linewidth=0,
                     ax=ax,
                     **{"rasterized": True},
                 )
-                # Set axes limits.
-                # ax.set_xlim(-lfc_axis_scale_atac, lfc_axis_scale_atac)
-                # ax.set_ylim(-lfc_axis_scale_rna, lfc_axis_scale_rna)
                 # Adds quadrant lines.
-                # ax.axvline(x=0, color="#000000FF", linestyle=":")
-                # ax.axhline(y=0, color="#000000FF", linestyle=":")
+                ax.axvline(x=VOLCANO_PLOT_CUTOFF_LFC, color="#000000FF", linestyle=":")
+                ax.axvline(x=-VOLCANO_PLOT_CUTOFF_LFC, color="#000000FF", linestyle=":")
+                ax.axhline(
+                    y=np.absolute(np.log10(VOLCANO_PLOT_CUTOFF_P)),
+                    color="#000000FF",
+                    linestyle=":",
+                )
                 # Sets labels.
                 ax.set(
                     xlabel="genomic accessibility log₂ fold change",
                     ylabel="genomic accessibility absolute log₁₀ FDR",
                 )
                 legend = ax.get_legend()
-                legend.set_title("Significant")
+                legend.set_title("Genomic accessiblity")
 
                 # Adds labels for enriched features.
                 # def label_enriched_features(df_row):
