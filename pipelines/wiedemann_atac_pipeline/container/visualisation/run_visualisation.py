@@ -87,6 +87,10 @@ LOCATION_PLOT_LABEL_ORDER_LEGEND = [
     LOCATION_PLOT_LABEL_NEG_HIGH,
 ]
 
+VOLCANO_PLOT_KEY_SIGNIFICANT = "significant_volcano"
+VOLCANO_PLOT_LABEL_SIGNIFICANT_YES = "yes"
+VOLCANO_PLOT_LABEL_SIGNIFICANT_NO = "no"
+
 
 def count_matrix_sample_headers(count_matrix_file_path) -> [str]:
     """
@@ -256,6 +260,18 @@ def lfc_to_category(da_row):
     return None
 
 
+def lfc_and_fdr_to_category(da_row):
+    """
+    Converts log2-fold-changes and FDRs to plotable categories.
+    """
+    lfc = abs(float(da_row["log2FoldChange"]))
+    fdr = float(da_row["padj"])
+    if fdr <= 0.05 and lfc >= 1.0:
+        return VOLCANO_PLOT_LABEL_SIGNIFICANT_YES
+    else:
+        return VOLCANO_PLOT_LABEL_SIGNIFICANT_NO
+
+
 def sign_for_counts(cutoff_value) -> float:
     """
     Returns -1 for negative cutoff values and +1 for zero and positive cutoffs.
@@ -356,6 +372,105 @@ def plot_genomic_region_barplots():
                 plt.close(stacked_barplot_figure)
 
 
+def plot_volcanoplots():
+    print("Processing differential accessibility data...", flush=True)
+    for root, dirs, files in os.walk(INPUT_FOLDER):
+        for file in files:
+            if file.startswith(
+                "annotated_differential_accessibility"
+            ) and file.endswith(".csv"):
+                da_file = os.path.join(root, file)
+                print(f"Processing {da_file}...", flush=True)
+                output_path = os.path.join(
+                    MOUNT_PATHS["output"],
+                    file.replace(
+                        "annotated_differential_accessibility",
+                        "volcanoplot",
+                        1,
+                    ).removesuffix(".csv")
+                    + ".svg",
+                )
+                da_table = pd.read_csv(
+                    os.path.join(da_file),
+                    sep=",",
+                    header=0,
+                    index_col=0,
+                    encoding="utf-8",
+                )
+
+                da_table["abslog10p"] = np.absolute(np.log10(da_table["pvalue"]))
+                da_table[VOLCANO_PLOT_KEY_SIGNIFICANT] = da_table.apply(
+                    lfc_and_fdr_to_category, axis=1
+                )
+
+                filtered_da_table = da_table[
+                    (da_table["log2FoldChange"].notnull())
+                    & (da_table["abslog10p"].notnull())
+                    & (da_table[VOLCANO_PLOT_KEY_SIGNIFICANT].notnull())
+                ]
+                if len(filtered_da_table.index) == 0:
+                    print(
+                        "\tNo differentially accessible peaks found. Skipping sample...",
+                        flush=True,
+                    )
+                    continue
+
+                filtered_da_table.sort_values(
+                    VOLCANO_PLOT_KEY_SIGNIFICANT, inplace=True
+                )
+
+                print(f"\tCreating volcano plot...", flush=True)
+                fig, ax = plt.subplots(figsize=(6, 6))
+                sns.scatterplot(
+                    data=filtered_da_table,
+                    x="log2FoldChange",
+                    y="abslog10p",
+                    hue=VOLCANO_PLOT_KEY_SIGNIFICANT,
+                    palette={
+                        VOLCANO_PLOT_LABEL_SIGNIFICANT_YES: "#000000FF",
+                        VOLCANO_PLOT_LABEL_SIGNIFICANT_NO: "#B3B3B3FF",
+                    },
+                    linewidth=0,
+                    ax=ax,
+                    **{"rasterized": True},
+                )
+                # Set axes limits.
+                # ax.set_xlim(-lfc_axis_scale_atac, lfc_axis_scale_atac)
+                # ax.set_ylim(-lfc_axis_scale_rna, lfc_axis_scale_rna)
+                # Adds quadrant lines.
+                # ax.axvline(x=0, color="#000000FF", linestyle=":")
+                # ax.axhline(y=0, color="#000000FF", linestyle=":")
+                # Sets labels.
+                ax.set(
+                    xlabel="genomic accessibility log₂ fold change",
+                    ylabel="genomic accessibility absolute log₁₀ FDR",
+                )
+                legend = ax.get_legend()
+                legend.set_title("Significant")
+
+                # Adds labels for enriched features.
+                # def label_enriched_features(df_row):
+                #     """
+                #     Local label function with access to the axis variable.
+                #     """
+                #     if df_row[KEY_ENRICHMENT] == ENRICHMENT_VALUE_TRUE:
+                #         ax.text(
+                #             df_row[KEY_LFC + KEY_SUFFIX_ATAC]
+                #             + 0.02 * lfc_axis_scale_atac,
+                #             df_row[KEY_LFC + KEY_SUFFIX_RNA]
+                #             + 0.005 * lfc_axis_scale_rna,
+                #             df_row[KEY_GENE_SYMBOL],
+                #         )
+
+                # merged_table.apply(label_enriched_features, axis=1)
+
+                # Saves and closes the plot.
+                fig.tight_layout()
+                fig.savefig(output_path, dpi=300)
+                plt.close(fig)
+
+
 # Runs the visualisation functions.
 plot_count_clustermap()
 plot_genomic_region_barplots()
+plot_volcanoplots()
