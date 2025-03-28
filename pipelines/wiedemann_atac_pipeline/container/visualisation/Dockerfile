@@ -7,6 +7,7 @@ RUN yes | pip install pandas==2.2.2 --exists-action i
 RUN yes | pip install seaborn==0.13.2 --exists-action i
 RUN yes | pip install scipy==1.13.1 --exists-action i
 RUN yes | pip install fastcluster==1.2.6 --exists-action i
+RUN yes | pip install textalloc==1.1.8 --exists-action i
 
 COPY run_visualisation.py /run.py
 ENTRYPOINT ["python", "/run.py"]

@@ -7,6 +7,7 @@ import numpy as np
 import os
 import pandas as pd
 import seaborn as sns
+import textalloc as ta
 
 from collections import OrderedDict
 from matplotlib.patches import Patch
@@ -87,12 +88,19 @@ LOCATION_PLOT_LABEL_ORDER_LEGEND = [
     LOCATION_PLOT_LABEL_NEG_HIGH,
 ]
 
+VOLCANO_PLOT_KEY_LABELED = "labeled"
 VOLCANO_PLOT_KEY_SIGNIFICANT = "significant_volcano"
 VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS = "more accessible"
 VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_MINUS = "less accessible"
 VOLCANO_PLOT_LABEL_SIGNIFICANT_NO = "no significant change"
+VOLCANO_PLOT_LABEL_COUNT = 15
 VOLCANO_PLOT_CUTOFF_P = 0.05
 VOLCANO_PLOT_CUTOFF_LFC = 1.0
+VOLCANO_PLOT_KEY_SCALED_P = "abslog10p"
+VOLCANO_PLOT_KEY_DISTANCE = "volcano_distance"
+
+DAR_TABLE_KEY_LFC = "log2FoldChange"
+DAR_TABLE_KEY_GENE_SYMBOL = "Gene Name"
 
 
 def count_matrix_sample_headers(count_matrix_file_path) -> [str]:
@@ -255,7 +263,7 @@ def lfc_to_category(da_row):
     """
     Converts log2-fold-changes to plotable categories.
     """
-    lfc = float(da_row["log2FoldChange"])
+    lfc = float(da_row[DAR_TABLE_KEY_LFC])
     for label, cutoff in LOCATION_PLOT_BINS.items():
         if lfc >= cutoff:
             return label
@@ -267,7 +275,7 @@ def lfc_and_fdr_to_category(da_row):
     """
     Converts log2-fold-changes and FDRs to plotable categories.
     """
-    lfc = float(da_row["log2FoldChange"])
+    lfc = float(da_row[DAR_TABLE_KEY_LFC])
     fdr = float(da_row["padj"])
     if fdr <= VOLCANO_PLOT_CUTOFF_P and abs(lfc) >= VOLCANO_PLOT_CUTOFF_LFC:
         if lfc >= 0.0:
@@ -276,6 +284,26 @@ def lfc_and_fdr_to_category(da_row):
             return VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_MINUS
     else:
         return VOLCANO_PLOT_LABEL_SIGNIFICANT_NO
+
+
+def volcano_scale_p(p_values):
+    """
+    Scales p-values / FDRs.
+    """
+    return np.absolute(np.log10(p_values))
+
+
+def volcano_distance(da_row):
+    """
+    Calculates the distance / significance of a point from its cut-off origin.
+    """
+    lfc = float(da_row[DAR_TABLE_KEY_LFC])
+    p_scaled = float(da_row[VOLCANO_PLOT_KEY_SCALED_P])
+
+    origin_lfc = VOLCANO_PLOT_CUTOFF_LFC if lfc >= 0.0 else -VOLCANO_PLOT_CUTOFF_LFC
+    origin_p_scaled = volcano_scale_p(VOLCANO_PLOT_CUTOFF_P)
+
+    return np.sqrt(np.square(lfc - origin_lfc) + np.square(p_scaled - origin_p_scaled))
 
 
 def sign_for_counts(cutoff_value) -> float:
@@ -315,7 +343,7 @@ def plot_genomic_region_barplots():
                 )
                 print("\tFiltering data...", flush=True)
                 filtered_da_table = da_table[da_table["padj"] <= 0.05][
-                    ["log2FoldChange", "Annotation"]
+                    [DAR_TABLE_KEY_LFC, "Annotation"]
                 ].copy()
                 filtered_da_table["plot_annotation"] = filtered_da_table.apply(
                     annotation_to_plot_name, axis=1
@@ -404,16 +432,18 @@ def plot_volcanoplots():
                     encoding="utf-8",
                 )
 
-                da_table["abslog10p"] = np.absolute(np.log10(da_table["padj"]))
+                da_table[VOLCANO_PLOT_KEY_SCALED_P] = np.absolute(
+                    np.log10(da_table["padj"])
+                )
                 da_table[VOLCANO_PLOT_KEY_SIGNIFICANT] = da_table.apply(
                     lfc_and_fdr_to_category, axis=1
                 )
 
                 filtered_da_table = da_table[
-                    (da_table["log2FoldChange"].notnull())
-                    & (da_table["abslog10p"].notnull())
+                    (da_table[DAR_TABLE_KEY_LFC].notnull())
+                    & (da_table[VOLCANO_PLOT_KEY_SCALED_P].notnull())
                     & (da_table[VOLCANO_PLOT_KEY_SIGNIFICANT].notnull())
-                ]
+                ].copy()
                 if len(filtered_da_table.index) == 0:
                     print(
                         "\tNo differentially accessible peaks found. Skipping sample...",
@@ -429,8 +459,8 @@ def plot_volcanoplots():
                 fig, ax = plt.subplots(figsize=(6, 6))
                 sns.scatterplot(
                     data=filtered_da_table,
-                    x="log2FoldChange",
-                    y="abslog10p",
+                    x=DAR_TABLE_KEY_LFC,
+                    y=VOLCANO_PLOT_KEY_SCALED_P,
                     hue=VOLCANO_PLOT_KEY_SIGNIFICANT,
                     palette={
                         VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS: "#E64B35",
@@ -457,21 +487,70 @@ def plot_volcanoplots():
                 legend = ax.get_legend()
                 legend.set_title("Genomic accessiblity")
 
-                # Adds labels for enriched features.
-                # def label_enriched_features(df_row):
-                #     """
-                #     Local label function with access to the axis variable.
-                #     """
-                #     if df_row[KEY_ENRICHMENT] == ENRICHMENT_VALUE_TRUE:
-                #         ax.text(
-                #             df_row[KEY_LFC + KEY_SUFFIX_ATAC]
-                #             + 0.02 * lfc_axis_scale_atac,
-                #             df_row[KEY_LFC + KEY_SUFFIX_RNA]
-                #             + 0.005 * lfc_axis_scale_rna,
-                #             df_row[KEY_GENE_SYMBOL],
-                #         )
+                # Adds labels for most significant features.
 
-                # merged_table.apply(label_enriched_features, axis=1)
+                # Calculates the peak distances from the cut-off origins.
+                filtered_da_table[VOLCANO_PLOT_KEY_DISTANCE] = filtered_da_table.apply(
+                    volcano_distance, axis=1
+                )
+
+                # Marks top peaks for labeling.
+                filtered_da_table[VOLCANO_PLOT_KEY_LABELED] = False
+                indices_positive = (
+                    filtered_da_table[
+                        filtered_da_table[VOLCANO_PLOT_KEY_SIGNIFICANT]
+                        == VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS
+                    ]
+                    .sort_values(
+                        VOLCANO_PLOT_KEY_DISTANCE, ascending=False, inplace=False
+                    )
+                    .head(VOLCANO_PLOT_LABEL_COUNT)
+                    .index
+                )
+                indices_negative = (
+                    filtered_da_table[
+                        filtered_da_table[VOLCANO_PLOT_KEY_SIGNIFICANT]
+                        == VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_MINUS
+                    ]
+                    .sort_values(
+                        VOLCANO_PLOT_KEY_DISTANCE, ascending=False, inplace=False
+                    )
+                    .head(VOLCANO_PLOT_LABEL_COUNT)
+                    .index
+                )
+                filtered_da_table.loc[indices_positive, VOLCANO_PLOT_KEY_LABELED] = True
+                filtered_da_table.loc[indices_negative, VOLCANO_PLOT_KEY_LABELED] = True
+
+                # point_labels = [
+                #     ax.text(df_row[0], df_row[1], df_row[2])
+                #     for df_row in zip(
+                #         filtered_da_table[DAR_TABLE_KEY_LFC],
+                #         filtered_da_table[VOLCANO_PLOT_KEY_SCALED_P],
+                #         filtered_da_table[DAR_TABLE_KEY_GENE_SYMBOL],
+                #         filtered_da_table[VOLCANO_PLOT_KEY_LABELED],
+                #     )
+                #     if df_row[3]
+                # ]
+
+                # adjust_text(
+                #     point_labels, arrowprops=dict(arrowstyle="-")
+                # )
+
+                label_da_table = filtered_da_table[
+                    filtered_da_table[VOLCANO_PLOT_KEY_LABELED]
+                ]
+                ta.allocate(
+                    ax,
+                    label_da_table[DAR_TABLE_KEY_LFC],
+                    label_da_table[VOLCANO_PLOT_KEY_SCALED_P],
+                    label_da_table[DAR_TABLE_KEY_GENE_SYMBOL],
+                    x_scatter=label_da_table[DAR_TABLE_KEY_LFC],
+                    y_scatter=label_da_table[VOLCANO_PLOT_KEY_SCALED_P],
+                    linecolor="#000000FF",
+                    max_distance=0.6,
+                    avoid_label_lines_overlap=True,
+                    nbr_candidates=10000,
+                )
 
                 # Saves and closes the plot.
                 fig.tight_layout()

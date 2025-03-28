@@ -163,18 +163,18 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
             legend.set_title("Enrichment")
 
             # Adds labels for enriched features.
-            def label_enriched_features(df_row):
+            def label_enriched_features(df_row, plot_axis):
                 """
                 Local label function with access to the axis variable.
                 """
                 if df_row[KEY_ENRICHMENT] == ENRICHMENT_VALUE_TRUE:
-                    ax.text(
+                    plot_axis.text(
                         df_row[KEY_LFC + KEY_SUFFIX_ATAC] + 0.02 * lfc_axis_scale_atac,
                         df_row[KEY_LFC + KEY_SUFFIX_RNA] + 0.005 * lfc_axis_scale_rna,
                         df_row[KEY_GENE_SYMBOL],
                     )
 
-            merged_table.apply(label_enriched_features, axis=1)
+            merged_table.apply(label_enriched_features, args=(ax,), axis=1)
             # Saves and closes the plot.
             fig.tight_layout()
             fig.savefig(
