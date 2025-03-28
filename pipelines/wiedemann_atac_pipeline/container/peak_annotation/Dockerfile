@@ -7,8 +7,12 @@ RUN mkdir /HOMER
 WORKDIR /HOMER
 RUN wget --no-verbose http://homer.ucsd.edu/homer/configureHomer.pl
 RUN perl /HOMER/configureHomer.pl -install -version v5.1
-RUN perl /HOMER/configureHomer.pl -install mm10 -version v6.4
-RUN perl /HOMER/configureHomer.pl -install hg38 -version v6.4
+RUN perl /HOMER/configureHomer.pl -install mouse-o -version v7.0
+RUN perl /HOMER/configureHomer.pl -install mouse-p -version v7.0
+RUN perl /HOMER/configureHomer.pl -install mm10 -version v7.0
+RUN perl /HOMER/configureHomer.pl -install human-o -version v7.0
+RUN perl /HOMER/configureHomer.pl -install human-p -version v7.0
+RUN perl /HOMER/configureHomer.pl -install hg38 -version v7.0
 ENV PATH="/HOMER/bin:${PATH}"
 
 WORKDIR /
