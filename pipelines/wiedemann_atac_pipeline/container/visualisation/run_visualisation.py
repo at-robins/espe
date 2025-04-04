@@ -93,11 +93,13 @@ VOLCANO_PLOT_KEY_SIGNIFICANT = "significant_volcano"
 VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS = "more accessible"
 VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_MINUS = "less accessible"
 VOLCANO_PLOT_LABEL_SIGNIFICANT_NO = "no significant change"
-VOLCANO_PLOT_LABEL_COUNT = 15
+VOLCANO_PLOT_LABEL_COUNT = 3
 VOLCANO_PLOT_CUTOFF_P = 0.05
 VOLCANO_PLOT_CUTOFF_LFC = 1.0
 VOLCANO_PLOT_KEY_SCALED_P = "abslog10p"
 VOLCANO_PLOT_KEY_DISTANCE = "volcano_distance"
+VOLCANO_PLOT_KEY_BIN = "label bin"
+VOLCANO_PLOT_QUADRANT_COUNT = 15
 
 DAR_TABLE_KEY_LFC = "log2FoldChange"
 DAR_TABLE_KEY_GENE_SYMBOL = "Gene Name"
@@ -496,46 +498,53 @@ def plot_volcanoplots():
 
                 # Marks top peaks for labeling.
                 filtered_da_table[VOLCANO_PLOT_KEY_LABELED] = False
-                indices_positive = (
-                    filtered_da_table[
+
+                # Splits the data points into bins for labeling.
+                lfc_max = np.nanmax(filtered_da_table[DAR_TABLE_KEY_LFC])
+                lfc_min = np.nanmin(filtered_da_table[DAR_TABLE_KEY_LFC])
+                bin_size = (lfc_max - lfc_min) / VOLCANO_PLOT_QUADRANT_COUNT
+                only_significant_table = filtered_da_table[
+                    (
                         filtered_da_table[VOLCANO_PLOT_KEY_SIGNIFICANT]
-                        == VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS
-                    ]
-                    .sort_values(
-                        VOLCANO_PLOT_KEY_DISTANCE, ascending=False, inplace=False
+                        != VOLCANO_PLOT_LABEL_SIGNIFICANT_NO
                     )
-                    .head(VOLCANO_PLOT_LABEL_COUNT)
-                    .index
-                )
-                indices_negative = (
-                    filtered_da_table[
-                        filtered_da_table[VOLCANO_PLOT_KEY_SIGNIFICANT]
-                        == VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_MINUS
-                    ]
-                    .sort_values(
-                        VOLCANO_PLOT_KEY_DISTANCE, ascending=False, inplace=False
+                    & (pd.notnull(filtered_da_table[DAR_TABLE_KEY_GENE_SYMBOL]))
+                ]
+                for bin_index in range(0, VOLCANO_PLOT_QUADRANT_COUNT):
+                    # Compensates for floating point errors and ensures the final data points are included.
+                    if bin_index == 0:
+                        bin_table = only_significant_table[
+                            only_significant_table[DAR_TABLE_KEY_LFC]
+                            <= lfc_min + bin_size
+                        ]
+                    elif bin_index == VOLCANO_PLOT_QUADRANT_COUNT - 1:
+                        bin_table = only_significant_table[
+                            only_significant_table[DAR_TABLE_KEY_LFC]
+                            > lfc_max - bin_size
+                        ]
+                    else:
+                        bin_table = only_significant_table[
+                            (
+                                only_significant_table[DAR_TABLE_KEY_LFC]
+                                > lfc_min + bin_index * bin_size
+                            )
+                            & (
+                                only_significant_table[DAR_TABLE_KEY_LFC]
+                                <= lfc_min + (bin_index + 1) * bin_size
+                            )
+                        ]
+                    label_indices = (
+                        bin_table.sort_values(
+                            VOLCANO_PLOT_KEY_DISTANCE, ascending=False, inplace=False
+                        )
+                        .head(VOLCANO_PLOT_LABEL_COUNT)
+                        .index
                     )
-                    .head(VOLCANO_PLOT_LABEL_COUNT)
-                    .index
-                )
-                filtered_da_table.loc[indices_positive, VOLCANO_PLOT_KEY_LABELED] = True
-                filtered_da_table.loc[indices_negative, VOLCANO_PLOT_KEY_LABELED] = True
+                    filtered_da_table.loc[label_indices, VOLCANO_PLOT_KEY_LABELED] = (
+                        True
+                    )
 
-                # point_labels = [
-                #     ax.text(df_row[0], df_row[1], df_row[2])
-                #     for df_row in zip(
-                #         filtered_da_table[DAR_TABLE_KEY_LFC],
-                #         filtered_da_table[VOLCANO_PLOT_KEY_SCALED_P],
-                #         filtered_da_table[DAR_TABLE_KEY_GENE_SYMBOL],
-                #         filtered_da_table[VOLCANO_PLOT_KEY_LABELED],
-                #     )
-                #     if df_row[3]
-                # ]
-
-                # adjust_text(
-                #     point_labels, arrowprops=dict(arrowstyle="-")
-                # )
-
+                # Adds text labels.
                 label_da_table = filtered_da_table[
                     filtered_da_table[VOLCANO_PLOT_KEY_LABELED]
                 ]
