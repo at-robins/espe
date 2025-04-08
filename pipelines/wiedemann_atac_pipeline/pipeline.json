@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_atac_paired_end",
   "name": "Wiedemann ATAC paired end pipeline",
-  "version": "0.1.389",
+  "version": "0.1.396",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {

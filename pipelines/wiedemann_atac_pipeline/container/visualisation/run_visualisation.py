@@ -101,7 +101,13 @@ VOLCANO_PLOT_KEY_DISTANCE = "volcano_distance"
 VOLCANO_PLOT_KEY_BIN = "label bin"
 VOLCANO_PLOT_QUADRANT_COUNT = 15
 
+MA_PLOT_KEY_LOG_EXPRESSION = "log mean expression"
+MA_PLOT_QUADRANT_COUNT = 20
+MA_PLOT_LABEL_COUNT = 1
+
 DAR_TABLE_KEY_LFC = "log2FoldChange"
+DAR_TABLE_KEY_FDR = "padj"
+DAR_TABLE_KEY_EXPRESSION = "baseMean"
 DAR_TABLE_KEY_GENE_SYMBOL = "Gene Name"
 
 
@@ -169,13 +175,13 @@ def plot_count_clustermap():
                     index_col=0,
                     encoding="utf-8",
                 )
-                filtered_da_table = da_table[da_table["padj"] <= 0.05]
+                filtered_da_table = da_table[da_table[DAR_TABLE_KEY_FDR] <= 0.05]
                 print(
                     f"\tFound {len(filtered_da_table.index)} significantly different regions. Selecting top peaks...",
                     flush=True,
                 )
                 table_of_relevant_peaks = filtered_da_table.sort_values(
-                    "padj", ascending=True
+                    DAR_TABLE_KEY_FDR, ascending=True
                 ).head(MAX_RELEVANT_GENES_PER_DA)
                 relevant_peak_ids.extend(table_of_relevant_peaks.index)
                 relevant_gene_symbols.extend(table_of_relevant_peaks["Gene Name"])
@@ -278,8 +284,23 @@ def lfc_and_fdr_to_category(da_row):
     Converts log2-fold-changes and FDRs to plotable categories.
     """
     lfc = float(da_row[DAR_TABLE_KEY_LFC])
-    fdr = float(da_row["padj"])
+    fdr = float(da_row[DAR_TABLE_KEY_FDR])
     if fdr <= VOLCANO_PLOT_CUTOFF_P and abs(lfc) >= VOLCANO_PLOT_CUTOFF_LFC:
+        if lfc >= 0.0:
+            return VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS
+        else:
+            return VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_MINUS
+    else:
+        return VOLCANO_PLOT_LABEL_SIGNIFICANT_NO
+
+
+def ma_fdr_to_category(da_row):
+    """
+    Converts FDRs to plotable categories.
+    """
+    lfc = float(da_row[DAR_TABLE_KEY_LFC])
+    fdr = float(da_row[DAR_TABLE_KEY_FDR])
+    if fdr <= VOLCANO_PLOT_CUTOFF_P:
         if lfc >= 0.0:
             return VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS
         else:
@@ -344,7 +365,7 @@ def plot_genomic_region_barplots():
                     encoding="utf-8",
                 )
                 print("\tFiltering data...", flush=True)
-                filtered_da_table = da_table[da_table["padj"] <= 0.05][
+                filtered_da_table = da_table[da_table[DAR_TABLE_KEY_FDR] <= 0.05][
                     [DAR_TABLE_KEY_LFC, "Annotation"]
                 ].copy()
                 filtered_da_table["plot_annotation"] = filtered_da_table.apply(
@@ -435,7 +456,7 @@ def plot_volcanoplots():
                 )
 
                 da_table[VOLCANO_PLOT_KEY_SCALED_P] = np.absolute(
-                    np.log10(da_table["padj"])
+                    np.log10(da_table[DAR_TABLE_KEY_FDR])
                 )
                 da_table[VOLCANO_PLOT_KEY_SIGNIFICANT] = da_table.apply(
                     lfc_and_fdr_to_category, axis=1
@@ -567,7 +588,172 @@ def plot_volcanoplots():
                 plt.close(fig)
 
 
+def plot_maplots():
+    print("Processing differential accessibility data...", flush=True)
+    for root, dirs, files in os.walk(INPUT_FOLDER):
+        for file in files:
+            if file.startswith(
+                "annotated_differential_accessibility"
+            ) and file.endswith(".csv"):
+                da_file = os.path.join(root, file)
+                print(f"Processing {da_file}...", flush=True)
+                output_path = os.path.join(
+                    MOUNT_PATHS["output"],
+                    file.replace(
+                        "annotated_differential_accessibility",
+                        "maplot",
+                        1,
+                    ).removesuffix(".csv")
+                    + ".svg",
+                )
+                da_table = pd.read_csv(
+                    os.path.join(da_file),
+                    sep=",",
+                    header=0,
+                    index_col=0,
+                    encoding="utf-8",
+                )
+
+                da_table[MA_PLOT_KEY_LOG_EXPRESSION] = np.log10(
+                    da_table[DAR_TABLE_KEY_EXPRESSION]
+                )
+                da_table[VOLCANO_PLOT_KEY_SIGNIFICANT] = da_table.apply(
+                    ma_fdr_to_category, axis=1
+                )
+
+                filtered_da_table = da_table[
+                    (da_table[DAR_TABLE_KEY_LFC].notnull())
+                    & (da_table[DAR_TABLE_KEY_FDR].notnull())
+                    & (da_table[VOLCANO_PLOT_KEY_SIGNIFICANT].notnull())
+                ].copy()
+                if len(filtered_da_table.index) == 0:
+                    print(
+                        "\tNo differentially accessible peaks found. Skipping sample...",
+                        flush=True,
+                    )
+                    continue
+
+                filtered_da_table.sort_values(
+                    VOLCANO_PLOT_KEY_SIGNIFICANT, ascending=False, inplace=True
+                )
+
+                print("\tCreating MA plot...", flush=True)
+                fig, ax = plt.subplots(figsize=(6, 6))
+                sns.scatterplot(
+                    data=filtered_da_table,
+                    x=MA_PLOT_KEY_LOG_EXPRESSION,
+                    y=DAR_TABLE_KEY_LFC,
+                    hue=VOLCANO_PLOT_KEY_SIGNIFICANT,
+                    palette={
+                        VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS: "#E64B35",
+                        VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_MINUS: "#4DBBD5",
+                        VOLCANO_PLOT_LABEL_SIGNIFICANT_NO: "#B3B3B3FF",
+                    },
+                    linewidth=0,
+                    ax=ax,
+                    **{"rasterized": True},
+                )
+                # Adds center line.
+                ax.axhline(y=0, color="#000000FF", linestyle=":")
+                # Sets labels.
+                ax.set(
+                    xlabel="genomic accessibility log₂ fold change",
+                    ylabel="genomic region log₁₀ mean count",
+                )
+                legend = ax.get_legend()
+                legend.set_title("Genomic accessiblity")
+
+                # Adds labels for most significant features.
+
+                # # Marks top peaks for labeling.
+                filtered_da_table[VOLCANO_PLOT_KEY_LABELED] = False
+
+                # # Splits the data points into bins for labeling.
+                exp_max = np.nanmax(filtered_da_table[MA_PLOT_KEY_LOG_EXPRESSION])
+                exp_min = np.nanmin(filtered_da_table[MA_PLOT_KEY_LOG_EXPRESSION])
+                bin_size = (exp_max - exp_min) / MA_PLOT_QUADRANT_COUNT
+                only_significant_table = filtered_da_table[
+                    (
+                        filtered_da_table[VOLCANO_PLOT_KEY_SIGNIFICANT]
+                        != VOLCANO_PLOT_LABEL_SIGNIFICANT_NO
+                    )
+                    & (pd.notnull(filtered_da_table[DAR_TABLE_KEY_GENE_SYMBOL]))
+                ]
+                for bin_index in range(0, MA_PLOT_QUADRANT_COUNT):
+                    # Compensates for floating point errors and ensures the final data points are included.
+                    if bin_index == 0:
+                        bin_table = only_significant_table[
+                            only_significant_table[MA_PLOT_KEY_LOG_EXPRESSION]
+                            <= exp_min + bin_size
+                        ]
+                    elif bin_index == MA_PLOT_QUADRANT_COUNT - 1:
+                        bin_table = only_significant_table[
+                            only_significant_table[MA_PLOT_KEY_LOG_EXPRESSION]
+                            > exp_max - bin_size
+                        ]
+                    else:
+                        bin_table = only_significant_table[
+                            (
+                                only_significant_table[MA_PLOT_KEY_LOG_EXPRESSION]
+                                > exp_min + bin_index * bin_size
+                            )
+                            & (
+                                only_significant_table[MA_PLOT_KEY_LOG_EXPRESSION]
+                                <= exp_min + (bin_index + 1) * bin_size
+                            )
+                        ]
+                    bin_table = bin_table.sort_values(
+                        DAR_TABLE_KEY_LFC, ascending=False, inplace=False
+                    )
+
+                    label_indices = (
+                        bin_table[
+                            bin_table[VOLCANO_PLOT_KEY_SIGNIFICANT]
+                            == VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_PLUS
+                        ]
+                        .head(MA_PLOT_LABEL_COUNT)
+                        .index
+                    )
+                    filtered_da_table.loc[label_indices, VOLCANO_PLOT_KEY_LABELED] = (
+                        True
+                    )
+                    label_indices = (
+                        bin_table[
+                            bin_table[VOLCANO_PLOT_KEY_SIGNIFICANT]
+                            == VOLCANO_PLOT_LABEL_SIGNIFICANT_YES_MINUS
+                        ]
+                        .tail(MA_PLOT_LABEL_COUNT)
+                        .index
+                    )
+                    filtered_da_table.loc[label_indices, VOLCANO_PLOT_KEY_LABELED] = (
+                        True
+                    )
+
+                # Adds text labels.
+                label_da_table = filtered_da_table[
+                    filtered_da_table[VOLCANO_PLOT_KEY_LABELED]
+                ]
+                ta.allocate(
+                    ax,
+                    label_da_table[MA_PLOT_KEY_LOG_EXPRESSION],
+                    label_da_table[DAR_TABLE_KEY_LFC],
+                    label_da_table[DAR_TABLE_KEY_GENE_SYMBOL],
+                    x_scatter=label_da_table[MA_PLOT_KEY_LOG_EXPRESSION],
+                    y_scatter=label_da_table[DAR_TABLE_KEY_LFC],
+                    linecolor="#000000FF",
+                    max_distance=0.6,
+                    avoid_label_lines_overlap=True,
+                    nbr_candidates=10000,
+                )
+
+                # Saves and closes the plot.
+                fig.tight_layout()
+                fig.savefig(output_path, dpi=300)
+                plt.close(fig)
+
+
 # Runs the visualisation functions.
 plot_count_clustermap()
 plot_genomic_region_barplots()
 plot_volcanoplots()
+plot_maplots()
