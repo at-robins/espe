@@ -657,8 +657,8 @@ def plot_maplots():
                 ax.axhline(y=0, color="#000000FF", linestyle=":")
                 # Sets labels.
                 ax.set(
-                    xlabel="genomic accessibility log₂ fold change",
-                    ylabel="genomic region log₁₀ mean count",
+                    xlabel="genomic region log₁₀ mean count",
+                    ylabel="genomic accessibility log₂ fold change",
                 )
                 legend = ax.get_legend()
                 legend.set_title("Genomic accessiblity")
