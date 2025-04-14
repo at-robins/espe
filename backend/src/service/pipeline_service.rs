@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use actix_web::web;
 use parking_lot::Mutex;
@@ -6,7 +10,7 @@ use parking_lot::Mutex;
 use crate::{
     application::{
         config::{Configuration, PIPELINE_DEFINITION_FILE},
-        error::{SeqError, SeqErrorType},
+        error::{SeqError, SeqErrorType, DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE},
     },
     model::internal::pipeline_blueprint::{ContextualisedPipelineBlueprint, PipelineBlueprint},
 };
@@ -39,6 +43,22 @@ impl LoadedPipelines {
             .lock()
             .get(id.as_ref())
             .map(|value| Arc::clone(value))
+    }
+
+    /// Sets the pipeline with the specified ID and returns the replaced value if any.
+    ///
+    /// # Parameters
+    ///
+    /// * `id` - the pipeline ID
+    /// * `blueprint` - the new pipeline blueprint to set
+    pub fn set<T: AsRef<str>>(
+        &self,
+        id: T,
+        blueprint: ContextualisedPipelineBlueprint,
+    ) -> Option<Arc<ContextualisedPipelineBlueprint>> {
+        self.pipeline_map
+            .lock()
+            .insert(id.as_ref().to_string(), Arc::new(blueprint))
     }
 
     /// Returns ```true``` if the specified global variable exists in the loaded pipelines.
@@ -124,6 +144,32 @@ impl LoadedPipelines {
         Ok(())
     }
 
+    /// Updates a single currently loaded pipeline.
+    ///
+    /// # Parameters
+    ///
+    /// * `pipeline_id` - the ID of the pipeline
+    pub fn update_loaded_pipeline<T: AsRef<str>>(
+        &self,
+        pipeline_id: T,
+    ) -> Result<(), SeqError> {
+        match self.get(&pipeline_id) {
+            Some(loaded_pipeline) => {
+                self.set(pipeline_id, load_pipeline(loaded_pipeline.context())?);
+                Ok(())
+            },
+            None => Err(SeqError::new(
+                "Pipeline not found",
+                SeqErrorType::NotFoundError,
+                format!(
+                    "The pipeline with ID {} is not loaded and can thus not be updated.",
+                    pipeline_id.as_ref()
+                ),
+                "The pipeline is not loaded. For further information please check the logs.",
+            )),
+        }
+    }
+
     /// Creates a map of loaded pipelines by their respective ID.
     ///
     /// # Parameters
@@ -146,6 +192,49 @@ impl LoadedPipelines {
             }
         }
         Ok(pipeline_map)
+    }
+}
+
+/// Loads and returns a ['ContextualisedPipelineBlueprint'] from the specified file.
+///
+/// # Parameters
+///
+/// * `pipeline_definition_path` - the path to the pipeline definition file
+pub fn load_pipeline_definition<P: AsRef<Path>>(
+    pipeline_definition_path: P,
+) -> Result<ContextualisedPipelineBlueprint, SeqError> {
+    let pipeline_def: PipelineBlueprint =
+        serde_json::from_reader(std::fs::File::open(&pipeline_definition_path)?)?;
+    let mut contextualised_pipeline = ContextualisedPipelineBlueprint::new(
+        pipeline_def,
+        pipeline_definition_path.as_ref().parent().expect(
+            "This unwrap of the parent path must work since we just deserialised the definition file.",
+        ),
+    );
+    // Loads potential data that is not directly present in the pipeline definition.
+    contextualised_pipeline.resolve_imports()?;
+
+    Ok(contextualised_pipeline)
+}
+
+/// Loads and returns a ['ContextualisedPipelineBlueprint'] from the specified directory.
+/// This will return an error if the specified path is not a directory.
+///
+/// # Parameters
+///
+/// * `pipeline_path` - the path to the pipeline directory
+pub fn load_pipeline<P: AsRef<Path>>(
+    pipeline_path: P,
+) -> Result<ContextualisedPipelineBlueprint, SeqError> {
+    if pipeline_path.as_ref().is_dir() {
+        load_pipeline_definition(pipeline_path.as_ref().join(PIPELINE_DEFINITION_FILE))
+    } else {
+        Err(SeqError::new(
+            "Pipeline loading error",
+            SeqErrorType::InternalServerError,
+            format!("The pipeline path {} is not a directory.", pipeline_path.as_ref().display()),
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        ))
     }
 }
 
