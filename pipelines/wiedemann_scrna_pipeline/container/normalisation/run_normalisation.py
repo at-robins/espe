@@ -191,6 +191,12 @@ print(f"Processing file {input_file_path}", flush=True)
 print("\tReading data...")
 output_folder_path = MOUNT_PATHS["output"]
 adata_merged = anndata.read_h5ad(input_file_path)
+# Removing features that are zero for every observation
+# is required for some of the normalisation methods
+# such as analystic pearson residuals to work correctly. 
+print("\tFiltering genes not expressed in any cells...")
+sc.pp.filter_genes(adata_merged, min_cells=1)
+print(f"\tNumber of genes after filtering: {adata_merged.n_vars}")
 shifted_logarithm(adata_merged)
 analytic_pearson_residuals(adata_merged)
 scran(adata_merged)

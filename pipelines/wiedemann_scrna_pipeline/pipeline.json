@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_scrna_pipeline",
   "name": "Wiedemann single cell RNA-Seq pipeline",
-  "version": "0.1.35",
+  "version": "0.1.52",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [],
   "steps": [
@@ -35,7 +35,7 @@
       "name": "Doublet detection",
       "description": "<espe-import>step_doublet_detection_description.html</espe-import>",
       "container": "doublet_detection",
-      "dependencies": ["ambient_rna_removal"],
+      "dependencies": ["preprocessing", "ambient_rna_removal"],
       "variables": []
     },
     {

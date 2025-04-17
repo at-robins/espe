@@ -17,7 +17,8 @@ import warnings
 from rpy2.robjects.packages import importr
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = MOUNT_PATHS["dependencies"]["ambient_rna_removal"] + "/"
+INPUT_FOLDER_PREPROCESSING = MOUNT_PATHS["dependencies"]["preprocessing"] + "/"
+INPUT_FOLDER_AMBIENT_REMOVAL = MOUNT_PATHS["dependencies"]["ambient_rna_removal"] + "/"
 
 # Setup of rpy2.
 rcb.logger.setLevel(logging.INFO)
@@ -85,6 +86,13 @@ def process_data(file_path_filtered, output_folder_path, metrics_writer):
         f"{output_folder_path}/filtered_feature_bc_matrix.h5ad", compression="gzip"
     )
 
+
+if os.path.isfile(os.path.join(INPUT_FOLDER_AMBIENT_REMOVAL, "skipped.txt")):
+    print("Ambient RNA removal was skipped. Using preprocessed data...", flush=True)
+    INPUT_FOLDER = INPUT_FOLDER_PREPROCESSING
+else:
+    print("Using ambient RNA removal data...", flush=True)
+    INPUT_FOLDER = INPUT_FOLDER_AMBIENT_REMOVAL
 
 with open(
     f"{MOUNT_PATHS['output']}/metrics.csv", mode="w", newline="", encoding="utf-8"
