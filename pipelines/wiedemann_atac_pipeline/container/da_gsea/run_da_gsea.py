@@ -58,71 +58,83 @@ def parse_gmt(pth: Path) -> pd.DataFrame:
     return df
 
 
-def parse_da_csv(dge_csv_path) -> pd.DataFrame:
-    """
-    Parses a CSV file containing differential gene expression data.
-    Expects the table to be sorted by FDR (ascending).
-    """
-    with open(dge_csv_path, newline="", encoding="utf-8") as csvfile:
-        dge_reader = csv.DictReader(
-            csvfile, dialect="unix", delimiter=",", quotechar='"'
-        )
-        genes = []
-        stats = []
-        total_peaks = 0
-        for row in dge_reader:
-            total_peaks += 1
-            gene = row["Gene Name"]
-            # Only adds genes once for the most significant peak.
-            if gene not in genes:
-                genes.append(gene)
-                stats.append(float(row["stat"]))
-        df = pd.DataFrame(data={"scores": stats}, index=genes)
-        df.sort_values(by=["scores"], inplace=True, ascending=False)
-
-        print(f"\tUsing {len(genes)} / {total_peaks} peaks.", flush=True)
-        return df
-
-
-def parse_da_csv_for_extension(dge_csv_path) -> pd.DataFrame:
+def parse_da_csv(dge_csv_path, filter=None) -> pd.DataFrame:
     """
     Parses a CSV file containing differential gene expression data.
     """
-    with open(dge_csv_path, newline="", encoding="utf-8") as csvfile:
-        dge_reader = csv.DictReader(
-            csvfile, dialect="unix", delimiter=",", quotechar='"'
-        )
-        genes = []
-        remainder = {
-            "logFC": [],
-            "PValue": [],
-            "FDR": [],
-            "PeakID": [],
-        }
-        for row in dge_reader:
-            gene = row["Gene Name"]
-            # Only adds genes once for the most significant peak.
-            if gene not in genes:
-                genes.append(gene)
-                remainder["logFC"].append(row["log2FoldChange"])
-                remainder["PValue"].append(row["pvalue"])
-                remainder["FDR"].append(row["padj"])
-                remainder["PeakID"].append(row["PeakID"])
-        df = pd.DataFrame(data=remainder, index=genes)
+    # Only keeps relevant columns.
+    annotated_dars = pd.read_csv(
+        dge_csv_path, sep=",", header=0, index_col=None, encoding="utf-8"
+    )[["stat", "padj", "log2FoldChange", "Gene Name"]].copy()
+    annotated_dars.sort_values("padj", ascending=True, inplace=True)
+    total_peaks = len(annotated_dars.index)
 
-        return df
+    # Optionally filters by more or less accessible peaks.
+    if filter == "+":
+        annotated_dars = annotated_dars[annotated_dars["log2FoldChange"] >= 0.0].copy()
+    elif filter == "-":
+        annotated_dars = annotated_dars[annotated_dars["log2FoldChange"] <= 0.0].copy()
+
+    # Only keeps relevant columns and renames the remaining ones.
+    annotated_dars.drop(labels=["log2FoldChange", "padj"], axis=1, inplace=True)
+    annotated_dars.rename(columns={"stat": "scores"}, inplace=True)
+
+    # Only adds genes once for the most significant peak.
+    annotated_dars.drop_duplicates(
+        subset="Gene Name",
+        keep="first",
+        inplace=True,
+    )
+
+    # Set gene names as indices for the GSEA algorithm.
+    annotated_dars.set_index("Gene Name", inplace=True)
+
+    print(f"\tUsing {len(annotated_dars.index)} / {total_peaks} peaks.", flush=True)
+    annotated_dars.sort_values("scores", ascending=False, inplace=True)
+
+    return annotated_dars
 
 
-def perform_enrichment_analysis(dge_path, pathway_db, output_folder, suffix):
+def parse_da_csv_for_extension(dge_csv_path, filter=None) -> pd.DataFrame:
+    """
+    Parses a CSV file containing differential gene expression data.
+    """
+    # Only keeps relevant columns.
+    annotated_dars = pd.read_csv(
+        dge_csv_path, sep=",", header=0, index_col=None, encoding="utf-8"
+    )[["log2FoldChange", "pvalue", "padj", "PeakID", "Gene Name"]].sort_values(
+        "padj", ascending=True, inplace=False
+    )
+
+    # Optionally filters by more or less accessible peaks.
+    if filter == "+":
+        annotated_dars = annotated_dars[annotated_dars["log2FoldChange"] >= 0.0].copy()
+    elif filter == "-":
+        annotated_dars = annotated_dars[annotated_dars["log2FoldChange"] <= 0.0].copy()
+
+    # Only adds genes once for the most significant peak.
+    annotated_dars.drop_duplicates(
+        subset="Gene Name",
+        keep="first",
+        inplace=True,
+    )
+
+    # Set gene names as indices for the GSEA algorithm.
+    annotated_dars.set_index("Gene Name", inplace=True)
+
+    return annotated_dars
+
+
+def perform_enrichment_analysis(
+    dge_path, pathway_db, output_folder, suffix, filter=None
+):
     """
     Performs the pathway enrichment analysis.
     """
     os.makedirs(output_folder, exist_ok=True)
-    
+
     print("\tParsing data data...")
-    cluster_genes = parse_da_csv(
-        dge_csv_path=dge_path,
-    )
+    cluster_genes = parse_da_csv(dge_csv_path=dge_path, filter=filter)
 
     print("\tRunning GSEA...", flush=True)
     scores, norm, pvals = decoupler.run_gsea(
@@ -165,9 +177,7 @@ def perform_enrichment_analysis(dge_path, pathway_db, output_folder, suffix):
         .sort_values("norm", ascending=False)
         .index.values
     )
-    dge_lookup = parse_da_csv_for_extension(
-        dge_csv_path=dge_path,
-    )
+    dge_lookup = parse_da_csv_for_extension(dge_csv_path=dge_path, filter=filter)
     pd.merge(
         pathway_db[pathway_db[KEY_PATHWAY_DB_GENESET].isin(gsea_results_filtered_sets)],
         dge_lookup,
@@ -183,10 +193,17 @@ def perform_enrichment_analysis(dge_path, pathway_db, output_folder, suffix):
     )
 
     print("\tPlotting data...", flush=True)
-    gsea_results_filtered = (
-        gsea_results[gsea_results["pval"] <= 0.05]
-        .head(30)
-        .sort_values("norm", ascending=False)
+    gsea_results_filtered = gsea_results[gsea_results["pval"] <= 0.05]
+    if filter == "+":
+        gsea_results_filtered = gsea_results_filtered[
+            gsea_results_filtered["norm"] >= 0.0
+        ]
+    elif filter == "-":
+        gsea_results_filtered = gsea_results_filtered[
+            gsea_results_filtered["norm"] <= 0.0
+        ]
+    gsea_results_filtered = gsea_results_filtered.head(30).sort_values(
+        "norm", ascending=False
     )
 
     if len(gsea_results_filtered) == 0:
@@ -255,19 +272,61 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 dge_path=dge_file,
                 pathway_db=pathway_database_hallmark,
                 output_folder=output_folder_path,
-                suffix="hallmark",
+                suffix="hallmark_all",
+            )
+            perform_enrichment_analysis(
+                dge_path=dge_file,
+                pathway_db=pathway_database_hallmark,
+                output_folder=output_folder_path,
+                suffix="hallmark_up",
+                filter="+",
+            )
+            perform_enrichment_analysis(
+                dge_path=dge_file,
+                pathway_db=pathway_database_hallmark,
+                output_folder=output_folder_path,
+                suffix="hallmark_down",
+                filter="-",
             )
             print("\tUsing reactome database.", flush=True)
             perform_enrichment_analysis(
                 dge_path=dge_file,
                 pathway_db=pathway_database_reactome,
                 output_folder=output_folder_path,
-                suffix="reactome",
+                suffix="reactome_all",
+            )
+            perform_enrichment_analysis(
+                dge_path=dge_file,
+                pathway_db=pathway_database_reactome,
+                output_folder=output_folder_path,
+                suffix="reactome_up",
+                filter="+",
+            )
+            perform_enrichment_analysis(
+                dge_path=dge_file,
+                pathway_db=pathway_database_reactome,
+                output_folder=output_folder_path,
+                suffix="reactome_down",
+                filter="-",
             )
             print("\tUsing gene ontology database.", flush=True)
             perform_enrichment_analysis(
                 dge_path=dge_file,
                 pathway_db=pathway_database_go,
                 output_folder=output_folder_path,
-                suffix="go",
+                suffix="go_all",
+            )
+            perform_enrichment_analysis(
+                dge_path=dge_file,
+                pathway_db=pathway_database_go,
+                output_folder=output_folder_path,
+                suffix="go_up",
+                filter="+",
+            )
+            perform_enrichment_analysis(
+                dge_path=dge_file,
+                pathway_db=pathway_database_go,
+                output_folder=output_folder_path,
+                suffix="go_down",
+                filter="-",
             )
