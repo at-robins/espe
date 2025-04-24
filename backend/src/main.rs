@@ -3,18 +3,21 @@ extern crate diesel;
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{dev::Service, middleware, web, App, HttpServer};
 use application::{
     config::Configuration,
     database::DatabaseManager,
     environment::LOG_LEVEL,
-    error::{SeqError, SeqErrorType, DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE},
+    error::{
+        SeqError, SeqErrorLogger, SeqErrorType, DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+    },
 };
 use controller::routing::routing_config;
 use diesel_migrations::{
     embed_migrations, EmbeddedMigrations, HarnessWithOutput, MigrationHarness,
 };
 use dotenv::dotenv;
+use futures::FutureExt;
 use parking_lot::Mutex;
 use service::{
     execution_service::ExecutionScheduler,
@@ -37,7 +40,10 @@ async fn main() -> Result<(), SeqError> {
     env_logger::init_from_env(env_logger::Env::new().filter(LOG_LEVEL));
     // Log potential errors that occurred during environment setup.
     if let Err(enviroment_error) = environment_setup_result {
-        log::error!("{}", enviroment_error);
+        log::error!(
+            "Setting up the application evironment failed with error: {}",
+            enviroment_error
+        );
     }
     // Setup the configuration.
     let app_config = web::Data::new(Configuration::create_from_environment()?);
@@ -104,6 +110,19 @@ async fn main() -> Result<(), SeqError> {
     Ok(HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
+            .wrap_fn(|request, srv| {
+                // Logs internal errrors.
+                srv.call(request).map(|response_result| {
+                    response_result.and_then(|response| {
+                        if let Some(seq_error_logger) =
+                            response.response().extensions().get::<SeqErrorLogger>()
+                        {
+                            seq_error_logger.log_default();
+                        }
+                        Ok(response)
+                    })
+                })
+            })
             .app_data(web::Data::clone(&app_config))
             .app_data(web::Data::clone(&loaded_pipelines))
             .app_data(web::Data::clone(&database_manager))

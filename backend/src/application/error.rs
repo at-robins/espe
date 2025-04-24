@@ -1,6 +1,6 @@
 //! The `error` module defines specific error types.
 
-use actix_web::{http::StatusCode, HttpResponse, ResponseError};
+use actix_web::{http::StatusCode, HttpResponse, HttpResponseBuilder, ResponseError};
 use getset::{CopyGetters, Getters};
 use log::{error, warn};
 use serde::{Deserialize, Serialize};
@@ -21,10 +21,10 @@ pub struct SeqError {
     /// The identifier, name or type of the error.
     #[getset(get = "pub")]
     name: String,
-    /// The message for internal logging or display.
+    /// The message stack for internal logging or display.
     /// This may contain sensitive data.
     #[getset(get = "pub")]
-    internal_message: String,
+    internal_messages: Vec<String>,
     /// The message for external display.
     /// This must not contain sensitive data.
     #[getset(get = "pub")]
@@ -56,21 +56,32 @@ impl SeqError {
             uuid: Uuid::new_v4(),
             error_type,
             name: name.to_string(),
-            internal_message: internal_message.to_string(),
+            internal_messages: vec![internal_message.to_string()],
             external_message: external_message.to_string(),
         };
-        error.log_default();
         error
     }
 
-    /// Logs the error on its default level.
-    fn log_default(&self) {
-        match self.error_type() {
-            SeqErrorType::InternalServerError => error!("{}", self),
-            SeqErrorType::NotFoundError => warn!("{}", self),
-            SeqErrorType::BadRequestError => error!("{}", self),
-            SeqErrorType::Conflict => error!("{}", self),
-        }
+    /// Returns the formated internal message stack.
+    fn format_internal_messages(&self) -> String {
+        self.internal_messages().iter().rev().enumerate().fold(
+            String::new(),
+            |mut acc, (index, message)| {
+                let formatted_message = format!("{:03}: {}\n", index, message);
+                acc.push_str(&formatted_message);
+                acc
+            },
+        )
+    }
+
+    /// Adds another internal error message to the message stack.
+    ///
+    /// # Parameters
+    ///
+    /// * `message` - the message to add to the message stack
+    pub fn chain<T: ToString>(mut self, message: T) -> Self {
+        self.internal_messages.push(message.to_string());
+        self
     }
 
     /// Returns a respective error response.
@@ -102,11 +113,11 @@ impl std::fmt::Display for SeqError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}: {} - {} - {}",
+            "{}: {} - {}\n{}",
             self.uuid(),
             self.status_code(),
             self.name(),
-            self.internal_message()
+            self.format_internal_messages()
         )
     }
 }
@@ -125,7 +136,10 @@ struct ErrorResponse {
 
 impl ResponseError for SeqError {
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code()).json(self.error_response())
+        let mut builder = HttpResponseBuilder::new(self.status_code());
+        // Adds a callable logger that is processable by the middleware to allow logging of the internal error message.
+        builder.extensions_mut().insert(SeqErrorLogger::new(self));
+        builder.json(self.error_response())
     }
 
     fn status_code(&self) -> StatusCode {
@@ -135,6 +149,12 @@ impl ResponseError for SeqError {
             SeqErrorType::BadRequestError => StatusCode::BAD_REQUEST,
             SeqErrorType::Conflict => StatusCode::CONFLICT,
         }
+    }
+}
+
+impl AsRef<SeqError> for SeqError {
+    fn as_ref(&self) -> &SeqError {
+        self
     }
 }
 
@@ -234,5 +254,46 @@ impl From<std::time::SystemTimeError> for SeqError {
             error,
             DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
         )
+    }
+}
+
+impl From<dotenv::Error> for SeqError {
+    fn from(error: dotenv::Error) -> Self {
+        Self::new(
+            "dotenv::Error",
+            SeqErrorType::InternalServerError,
+            error,
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        )
+    }
+}
+
+/// A logger for a specific [`SeqError`].
+pub struct SeqErrorLogger {
+    message: String,
+    error_type: SeqErrorType,
+}
+
+impl SeqErrorLogger {
+    /// Creates a new [`SeqErrorLogger`] from an [`SeqError`].
+    ///
+    /// # Parameters
+    ///
+    /// * `error` - the error to create a logger for
+    pub fn new<T: AsRef<SeqError>>(error: T) -> Self {
+        SeqErrorLogger {
+            message: error.as_ref().to_string(),
+            error_type: error.as_ref().error_type(),
+        }
+    }
+
+    /// Logs the error on its default level.
+    pub fn log_default(&self) {
+        match self.error_type {
+            SeqErrorType::InternalServerError => error!("{}", self.message),
+            SeqErrorType::NotFoundError => warn!("{}", self.message),
+            SeqErrorType::BadRequestError => error!("{}", self.message),
+            SeqErrorType::Conflict => error!("{}", self.message),
+        }
     }
 }
