@@ -30,6 +30,7 @@ KEY_PATHWAY_DB_GENESYMBOL = "genesymbol"
 FILTER_PATHWAY_DB_MIN = 15
 FILTER_PATHWAY_DB_MAX = 500
 PLOT_PATHWAYS_MAX = 30
+FILTER_VALUE_ABSOLUTE = "abs"
 
 
 def parse_gmt(pth: Path) -> pd.DataFrame:
@@ -69,11 +70,9 @@ def parse_da_csv(dge_csv_path, filter=None) -> pd.DataFrame:
     annotated_dars.sort_values("padj", ascending=True, inplace=True)
     total_peaks = len(annotated_dars.index)
 
-    # Optionally filters by more or less accessible peaks.
-    if filter == "+":
-        annotated_dars = annotated_dars[annotated_dars["log2FoldChange"] >= 0.0].copy()
-    elif filter == "-":
-        annotated_dars = annotated_dars[annotated_dars["log2FoldChange"] <= 0.0].copy()
+    # Optionally ignore regulation.
+    if filter == FILTER_VALUE_ABSOLUTE:
+        annotated_dars["stat"] = np.abs(annotated_dars["stat"])
 
     # Only keeps relevant columns and renames the remaining ones.
     annotated_dars.drop(labels=["log2FoldChange", "padj"], axis=1, inplace=True)
@@ -95,7 +94,7 @@ def parse_da_csv(dge_csv_path, filter=None) -> pd.DataFrame:
     return annotated_dars
 
 
-def parse_da_csv_for_extension(dge_csv_path, filter=None) -> pd.DataFrame:
+def parse_da_csv_for_extension(dge_csv_path) -> pd.DataFrame:
     """
     Parses a CSV file containing differential gene expression data.
     """
@@ -105,12 +104,6 @@ def parse_da_csv_for_extension(dge_csv_path, filter=None) -> pd.DataFrame:
     )[["log2FoldChange", "pvalue", "padj", "PeakID", "Gene Name"]].sort_values(
         "padj", ascending=True, inplace=False
     )
-
-    # Optionally filters by more or less accessible peaks.
-    if filter == "+":
-        annotated_dars = annotated_dars[annotated_dars["log2FoldChange"] >= 0.0].copy()
-    elif filter == "-":
-        annotated_dars = annotated_dars[annotated_dars["log2FoldChange"] <= 0.0].copy()
 
     # Only adds genes once for the most significant peak.
     annotated_dars.drop_duplicates(
@@ -163,13 +156,26 @@ def perform_enrichment_analysis(
         )
         .sort_values(["pval", "abs_norm"])
     )
-    gsea_results.to_csv(
-        os.path.join(
-            output_folder, pathvalidate.sanitize_filename(f"gsea_{suffix}_table.csv")
-        ),
-        sep=",",
-        encoding="utf-8",
-    )
+
+    if filter == FILTER_VALUE_ABSOLUTE:
+        # Remove regulation column if using abolute ordering as it does not have any meaning.
+        gsea_results.drop(labels=["regulation"], axis=1, inplace=False).to_csv(
+            os.path.join(
+                output_folder,
+                pathvalidate.sanitize_filename(f"gsea_{suffix}_table.csv"),
+            ),
+            sep=",",
+            encoding="utf-8",
+        )
+    else:
+        gsea_results.to_csv(
+            os.path.join(
+                output_folder,
+                pathvalidate.sanitize_filename(f"gsea_{suffix}_table.csv"),
+            ),
+            sep=",",
+            encoding="utf-8",
+        )
 
     print("\tWriting per gene data...", flush=True)
     gsea_results_filtered_sets = (
@@ -177,7 +183,7 @@ def perform_enrichment_analysis(
         .sort_values("norm", ascending=False)
         .index.values
     )
-    dge_lookup = parse_da_csv_for_extension(dge_csv_path=dge_path, filter=filter)
+    dge_lookup = parse_da_csv_for_extension(dge_csv_path=dge_path)
     pd.merge(
         pathway_db[pathway_db[KEY_PATHWAY_DB_GENESET].isin(gsea_results_filtered_sets)],
         dge_lookup,
@@ -194,17 +200,18 @@ def perform_enrichment_analysis(
 
     print("\tPlotting data...", flush=True)
     gsea_results_filtered = gsea_results[gsea_results["pval"] <= 0.05]
-    if filter == "+":
-        gsea_results_filtered = gsea_results_filtered[
-            gsea_results_filtered["norm"] >= 0.0
-        ]
-    elif filter == "-":
-        gsea_results_filtered = gsea_results_filtered[
-            gsea_results_filtered["norm"] <= 0.0
-        ]
-    gsea_results_filtered = gsea_results_filtered.head(30).sort_values(
-        "norm", ascending=False
-    )
+    if filter == FILTER_VALUE_ABSOLUTE:
+        # Sorted by signed NES, so only the top of the list is selected.
+        gsea_results_filtered = (
+            gsea_results_filtered[gsea_results_filtered["norm"] >= 0.0]
+            .sort_values("norm", ascending=False)
+            .head(30)
+        )
+    else:
+        # Sorted by absolute NES, so more and less accessible regions are selected separately.
+        gsea_results_filtered = gsea_results_filtered.head(30).sort_values(
+            "norm", ascending=False
+        )
 
     if len(gsea_results_filtered) == 0:
         print("\tNo significantly altered pathways. Skipping sample...", flush=True)
@@ -227,8 +234,13 @@ def perform_enrichment_analysis(
         )
         ax.set(xlabel="absolute NES", ylabel=None)
         legend = ax.get_legend()
-        legend.set_title("Regulation")
-        sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+        if filter == FILTER_VALUE_ABSOLUTE:
+            # There is no split by regulation when using absolute sorting,
+            # so the legend should be removed.
+            legend.remove()
+        else:
+            legend.set_title("Regulation")
+            sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
         fig.tight_layout()
         fig.savefig(
             os.path.join(
@@ -272,61 +284,40 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 dge_path=dge_file,
                 pathway_db=pathway_database_hallmark,
                 output_folder=output_folder_path,
-                suffix="hallmark_all",
+                suffix="hallmark_normal",
             )
             perform_enrichment_analysis(
                 dge_path=dge_file,
                 pathway_db=pathway_database_hallmark,
                 output_folder=output_folder_path,
-                suffix="hallmark_up",
-                filter="+",
-            )
-            perform_enrichment_analysis(
-                dge_path=dge_file,
-                pathway_db=pathway_database_hallmark,
-                output_folder=output_folder_path,
-                suffix="hallmark_down",
-                filter="-",
+                suffix="hallmark_ignore_regulation",
+                filter=FILTER_VALUE_ABSOLUTE,
             )
             print("\tUsing reactome database.", flush=True)
             perform_enrichment_analysis(
                 dge_path=dge_file,
                 pathway_db=pathway_database_reactome,
                 output_folder=output_folder_path,
-                suffix="reactome_all",
+                suffix="reactome_normal",
             )
             perform_enrichment_analysis(
                 dge_path=dge_file,
                 pathway_db=pathway_database_reactome,
                 output_folder=output_folder_path,
-                suffix="reactome_up",
-                filter="+",
-            )
-            perform_enrichment_analysis(
-                dge_path=dge_file,
-                pathway_db=pathway_database_reactome,
-                output_folder=output_folder_path,
-                suffix="reactome_down",
-                filter="-",
+                suffix="reactome_ignore_regulation",
+                filter=FILTER_VALUE_ABSOLUTE,
             )
             print("\tUsing gene ontology database.", flush=True)
             perform_enrichment_analysis(
                 dge_path=dge_file,
                 pathway_db=pathway_database_go,
                 output_folder=output_folder_path,
-                suffix="go_all",
+                suffix="go_normal",
             )
             perform_enrichment_analysis(
                 dge_path=dge_file,
                 pathway_db=pathway_database_go,
                 output_folder=output_folder_path,
-                suffix="go_up",
-                filter="+",
-            )
-            perform_enrichment_analysis(
-                dge_path=dge_file,
-                pathway_db=pathway_database_go,
-                output_folder=output_folder_path,
-                suffix="go_down",
-                filter="-",
+                suffix="go_ignore_regulation",
+                filter=FILTER_VALUE_ABSOLUTE,
             )

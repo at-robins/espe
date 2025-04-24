@@ -10,11 +10,11 @@
 <p>Performs gene set enrichment analysis for each sample comparison.</p>
 <p>
   <b>Output</b><br />
-  For each sample comparison and used pathway database 3 different
-  <code>gsea_{pathway database}_{used regions}_table.csv</code>s are produced, one labeled <code>all</code> where all
-  peak regions were used for the analysis, one labeled <code>up</code> where only more accessible regions where used for
-  the analysis and one labeled <code>down</code> where only less regions where used for the analysis. They contain
-  the following columns:
+  For each sample comparison and used pathway database 2 different
+  <code>gsea_{pathway database}_{ordering}_table.csv</code>s are produced, one labeled <code>normal</code> where
+  accessiblity information is retained and one labeled <code>ignore_regulation</code> where only the absolute strength
+  of the differential accessibility, but not the direction (more or less accessible) is considered for the GSEA
+  ordering. They contain the following columns:
 </p>
 <ul>
   <li><code>source</code>: the ID of the respective pathway</li>
@@ -25,7 +25,7 @@
 <br />
 <p>
   Additionally, an extended table
-  <code>gsea_{pathway database}_{used regions}_genes.csv</code> is produced that contains
+  <code>gsea_{pathway database}_{ordering}_genes.csv</code> is produced that contains
   differential peak accesibility information for every signifanctly altered
   pathway. It contains the following columns:
 </p>
@@ -39,7 +39,7 @@
 </ul>
 <br />
 <p>
-  Finally, a barplot <code>gsea_{pathway database}_{used regions}_barplot.svg</code> is created
+  Finally, a barplot <code>gsea_{pathway database}_{ordering}_barplot.svg</code> is created
   showing the top pathways sorted by p-value.
 </p>
 <p><b>References</b></p>
