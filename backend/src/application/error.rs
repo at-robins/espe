@@ -84,6 +84,11 @@ impl SeqError {
         self
     }
 
+    /// Logs the error on its default level.
+    pub fn log_default(&self) {
+        SeqErrorLogger::new(self).log_default();
+    }
+
     /// Returns a respective error response.
     fn error_response(&self) -> ErrorResponse {
         ErrorResponse {

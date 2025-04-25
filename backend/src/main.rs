@@ -3,7 +3,7 @@ extern crate diesel;
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use actix_web::{dev::Service, middleware, web, App, HttpServer};
+use actix_web::{dev::Service, middleware, web::Data, App, HttpServer};
 use application::{
     config::Configuration,
     database::DatabaseManager,
@@ -26,35 +26,54 @@ use service::{
 };
 
 /// The intervall in seconds in which the pipeline execution process is updated.
-const PIPELINE_EXECUTION_UPDATE_INTERVALL: u64 = 10;
+const PIPELINE_EXECUTION_UPDATE_INTERVALL: u64 = 5;
 /// The intervall in seconds in which temporary data is inspected.
 const TEMPORARY_DATA_MANAGEMENT_UPDATE_INTERVALL: u64 = 300;
 /// The compiled database migrations.
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
-#[actix_web::main]
-async fn main() -> Result<(), SeqError> {
+/// Sets up the environment and the logger.
+fn setup_environment() -> Result<(), SeqError> {
     // Setup default enviroment variables.
-    let environment_setup_result = dotenv();
+    let environment_setup_result = dotenv()
+        .map_err(|err| SeqError::from(err).chain("Setting up the application environment failed."));
     // Setup the logger.
     env_logger::init_from_env(env_logger::Env::new().filter(LOG_LEVEL));
-    // Log potential errors that occurred during environment setup.
-    if let Err(enviroment_error) = environment_setup_result {
-        log::error!(
-            "Setting up the application evironment failed with error: {}",
-            enviroment_error
-        );
-    }
-    // Setup the configuration.
-    let app_config = web::Data::new(Configuration::create_from_environment()?);
-    let server_address = app_config.server_address_and_port();
+    environment_setup_result
+        .map(|_| ())
+        .map_err(|err| SeqError::from(err).chain("Setting up the application environment failed."))
+}
+
+/// Sets up the application's [`Configuration`].
+fn setup_configuration() -> Result<Data<Configuration>, SeqError> {
+    Configuration::create_from_environment()
+        .map(|app_config| Data::new(app_config))
+        .map_err(|err| {
+            SeqError::from(err).chain("Setting up the application's configuration failed.")
+        })
+}
+
+/// Sets up the database.
+///
+/// # Parameters
+///
+/// * `app_config` - the application's [`Configuration`]
+fn setup_database(app_config: &Data<Configuration>) -> Result<Data<DatabaseManager>, SeqError> {
     // Setup database and conncetion pool.
     if let Some(database_path) = PathBuf::from(app_config.database_url()).parent() {
-        std::fs::create_dir_all(database_path)?;
+        std::fs::create_dir_all(database_path).map_err(|err| {
+            SeqError::from(err)
+                .chain(format!("Could not create database directory {}", database_path.display()))
+        })?;
     }
-    let database_manager = web::Data::new(DatabaseManager::new(web::Data::clone(&app_config))?);
+    let database_manager =
+        Data::new(DatabaseManager::new(Data::clone(&app_config)).map_err(|err| {
+            err.chain("Could not create database manager during application setup.")
+        })?);
     {
-        let mut connection = database_manager.database_connection()?;
+        let mut connection = database_manager.database_connection().map_err(|err| {
+            err.chain("Could not obtain a database connection during application setup.")
+        })?;
         HarnessWithOutput::write_to_stdout(&mut connection)
             .run_pending_migrations(MIGRATIONS)
             .map_err(|error| {
@@ -64,10 +83,20 @@ async fn main() -> Result<(), SeqError> {
                     error,
                     DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
                 )
+                .chain("Could not apply database migrations during application setup.")
             })?;
     }
-    // Load all pipelines into memory.
-    let pipelines = load_pipelines(Arc::clone(&app_config))?;
+    return Ok(database_manager);
+}
+
+/// Loads the pipelines into memory.
+///
+/// # Parameters
+///
+/// * `app_config` - the application's [`Configuration`]
+fn setup_pipelines(app_config: &Data<Configuration>) -> Result<Data<LoadedPipelines>, SeqError> {
+    let pipelines = load_pipelines(Arc::clone(&app_config))
+        .map_err(|err| err.chain("Pipelines could not be loaded during application setup."))?;
     let mut pipeline_map = HashMap::new();
     for pipeline in pipelines {
         let duplicate = pipeline_map.insert(pipeline.pipeline().id().clone(), pipeline);
@@ -79,26 +108,52 @@ async fn main() -> Result<(), SeqError> {
             );
         }
     }
-    let loaded_pipelines = web::Data::new(LoadedPipelines::new(web::Data::clone(&app_config))?);
-    let scheduler = web::Data::new(Mutex::new(ExecutionScheduler::new(
-        web::Data::clone(&app_config),
-        web::Data::clone(&database_manager),
-        web::Data::clone(&loaded_pipelines),
+    LoadedPipelines::new(Data::clone(&app_config))
+        .map(|loaded_pipelines| Data::new(loaded_pipelines))
+        .map_err(|err| err.chain("Loading the pipelines failed during application setup."))
+}
+
+/// Starts and returns the scheduler that handles pipeline execution.
+///
+/// # Parameters
+///
+/// * `app_config` - the application's [`Configuration`]
+/// * `database_manager` - the application's [`DatabaseManager`]
+/// * `loaded_pipelines` - the application's [`LoadedPipelines`]
+fn setup_execution_scheduler(
+    app_config: &Data<Configuration>,
+    database_manager: &Data<DatabaseManager>,
+    loaded_pipelines: &Data<LoadedPipelines>,
+) -> Data<Mutex<ExecutionScheduler>> {
+    let scheduler = Data::new(Mutex::new(ExecutionScheduler::new(
+        Data::clone(&app_config),
+        Data::clone(&database_manager),
+        Data::clone(&loaded_pipelines),
     )));
-    let execution_scheduler = web::Data::clone(&scheduler);
+    let execution_scheduler = Data::clone(&scheduler);
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::new(PIPELINE_EXECUTION_UPDATE_INTERVALL, 0));
         if let Err(err) = execution_scheduler.lock().update_pipeline_execution() {
-            log::error!("Updating the pipeline execution failed with error: {:?}", err);
+            err.chain("Updating the pipeline execution failed.")
+                .log_default();
         }
     });
-    // Setup temporary file management.
-    let temp_file_manager_config = web::Data::clone(&app_config);
+
+    scheduler
+}
+
+/// Starts the temporary file management.
+///
+/// # Parameters
+///
+/// * `app_config` - the application's [`Configuration`]
+fn setup_temporary_file_manager_scheduler(app_config: &Data<Configuration>) {
+    let temp_file_manager_config = Data::clone(&app_config);
     std::thread::spawn(move || {
         let temp_file_manager = TemporaryFileManager::new(temp_file_manager_config);
         loop {
             if let Err(err) = temp_file_manager.update() {
-                log::error!("Managing temporary data failed with error: {:?}", err);
+                err.chain("Managing temporary data failed.").log_default();
             }
             std::thread::sleep(std::time::Duration::new(
                 TEMPORARY_DATA_MANAGEMENT_UPDATE_INTERVALL,
@@ -106,6 +161,17 @@ async fn main() -> Result<(), SeqError> {
             ));
         }
     });
+}
+
+/// Starts the application.
+async fn start_application() -> Result<(), SeqError> {
+    let app_config = setup_environment().and(setup_configuration())?;
+    let server_address = app_config.server_address_and_port();
+    let database_manager = setup_database(&app_config)?;
+    let loaded_pipelines = setup_pipelines(&app_config)?;
+    let scheduler = setup_execution_scheduler(&app_config, &database_manager, &loaded_pipelines);
+    setup_temporary_file_manager_scheduler(&app_config);
+
     // Setup the application.
     Ok(HttpServer::new(move || {
         App::new()
@@ -123,15 +189,24 @@ async fn main() -> Result<(), SeqError> {
                     })
                 })
             })
-            .app_data(web::Data::clone(&app_config))
-            .app_data(web::Data::clone(&loaded_pipelines))
-            .app_data(web::Data::clone(&database_manager))
-            .app_data(web::Data::clone(&scheduler))
+            .app_data(Data::clone(&app_config))
+            .app_data(Data::clone(&loaded_pipelines))
+            .app_data(Data::clone(&database_manager))
+            .app_data(Data::clone(&scheduler))
             .configure(routing_config)
     })
     .bind(server_address)?
     .run()
     .await?)
+}
+
+#[actix_web::main]
+async fn main() -> Result<(), SeqError> {
+    start_application().await.map_err(|err| {
+        let final_err = err.chain("Fatal error while running the application.");
+        final_err.log_default();
+        final_err
+    })
 }
 
 mod application;
