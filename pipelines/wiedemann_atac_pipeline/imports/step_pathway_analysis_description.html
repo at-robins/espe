@@ -7,31 +7,28 @@
     border-radius: 0.2rem;
   }
 </style>
-<p>Performs gene set enrichment analysis for each sample comparison.</p>
+<p>Performs pathway analysis for each sample comparison.</p>
 <p>
   <b>Output</b><br />
-  For each sample comparison and used pathway database 2 different
-  <code>gsea_{pathway database}_{ordering}_table.csv</code>s are produced, one labeled <code>normal</code> where
-  accessiblity information is retained and one labeled <code>ignore_regulation</code> where only the absolute strength
-  of the differential accessibility, but not the direction (more or less accessible) is considered for the GSEA
-  ordering. They contain the following columns:
+  For each sample comparison and used pathway databasea
+  <code>pathway_analysis_{pathway database}_table.csv</code>s is produced. It contains the following columns:
 </p>
 <ul>
-  <li><code>source</code>: the ID of the respective pathway</li>
+  <li><code>pathway</code>: the ID of the respective pathway</li>
   <li><code>score</code>: the enrichment score of the pathway</li>
-  <li><code>norm</code>: the normalised enrichment score of the pathway</li>
-  <li><code>pval</code>: the p-value for the enrichment</li>
+  <li><code>pvalue</code>: the p-value for the enrichment</li>
 </ul>
 <br />
 <p>
   Additionally, an extended table
-  <code>gsea_{pathway database}_{ordering}_genes.csv</code> is produced that contains
+  <code>pathway_analysis_{pathway database}_genes.csv</code> is produced that contains
   differential peak accesibility information for every signifanctly altered
   pathway. It contains the following columns:
 </p>
 <ul>
-  <li><code>geneset</code>: the ID of the respective pathway</li>
-  <li><code>genesymbol</code>: the symbol of the associated gene</li>
+  <li><code>source</code>: the ID of the respective pathway</li>
+  <li><code>target</code>: the symbol of the associated gene</li>
+  <li><code>weight</code>: the influence strength of the associated gene on the pathway</li>
   <li><code>log2FoldChange</code>: the log-2-fold change in accessibility</li>
   <li><code>pvalue</code>: the p-value for the enrichment</li>
   <li><code>padj</code>: the adjusted p-value for the enrichment</li>
@@ -39,8 +36,8 @@
 </ul>
 <br />
 <p>
-  Finally, a barplot <code>gsea_{pathway database}_{ordering}_barplot.svg</code> is created
-  showing the top pathways sorted by p-value.
+  Finally, a barplot <code>pathway_analysis_{pathway database}_barplot.svg</code> is created
+  showing significant (p-value &le; 0.05) pathway alterations.
 </p>
 <p><b>References</b></p>
 <ol>
@@ -54,12 +51,10 @@
     </a>
   </li>
   <li>
-    Subramanian A, Tamayo P, Mootha VK, Mukherjee S, Ebert BL, Gillette MA,
-    Paulovich A, Pomeroy SL, Golub TR, Lander ES, Mesirov JP. Gene set
-    enrichment analysis: a knowledge-based approach for interpreting genome-wide
-    expression profiles. Proc Natl Acad Sci U S A. 2005 Oct 25;102(43):15545-50.
-    <a href="https://doi.org/10.1073/pnas.0506580102">
-      https://doi.org/10.1073/pnas.0506580102
+    Schubert, M., Klinger, B., Klünemann, M. et al. Perturbation-response genes reveal signaling footprints in cancer
+    gene expression. Nat Commun 9, 20 (2018).
+    <a href="https://doi.org/10.1038/s41467-017-02391-6">
+      https://doi.org/10.1038/s41467-017-02391-6
     </a>
   </li>
   <li>

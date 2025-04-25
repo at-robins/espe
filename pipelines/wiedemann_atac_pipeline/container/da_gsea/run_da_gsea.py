@@ -205,11 +205,11 @@ def perform_enrichment_analysis(
         gsea_results_filtered = (
             gsea_results_filtered[gsea_results_filtered["norm"] >= 0.0]
             .sort_values("norm", ascending=False)
-            .head(30)
+            .head(PLOT_PATHWAYS_MAX)
         )
     else:
         # Sorted by absolute NES, so more and less accessible regions are selected separately.
-        gsea_results_filtered = gsea_results_filtered.head(30).sort_values(
+        gsea_results_filtered = gsea_results_filtered.head(PLOT_PATHWAYS_MAX).sort_values(
             "norm", ascending=False
         )
 
@@ -279,7 +279,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                     ".csv"
                 ),
             )
-            print("\tUsing hallmark database.", flush=True)
+            print("\tUsing hallmark database...", flush=True)
             perform_enrichment_analysis(
                 dge_path=dge_file,
                 pathway_db=pathway_database_hallmark,
@@ -293,7 +293,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 suffix="hallmark_ignore_regulation",
                 filter=FILTER_VALUE_ABSOLUTE,
             )
-            print("\tUsing reactome database.", flush=True)
+            print("\tUsing reactome database...", flush=True)
             perform_enrichment_analysis(
                 dge_path=dge_file,
                 pathway_db=pathway_database_reactome,
@@ -307,7 +307,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 suffix="reactome_ignore_regulation",
                 filter=FILTER_VALUE_ABSOLUTE,
             )
-            print("\tUsing gene ontology database.", flush=True)
+            print("\tUsing gene ontology database...", flush=True)
             perform_enrichment_analysis(
                 dge_path=dge_file,
                 pathway_db=pathway_database_go,
