@@ -140,7 +140,9 @@ impl LoadedPipelines {
         &self,
         app_config: web::Data<Configuration>,
     ) -> Result<(), SeqError> {
-        *(self.pipeline_map.lock()) = Self::load_pipeline_map(app_config)?;
+        *(self.pipeline_map.lock()) = Self::load_pipeline_map(app_config).map_err(|err| {
+            err.chain("Updating all loaded pipeline failed. The pipeline map could not be loaded.")
+        })?;
         Ok(())
     }
 
@@ -149,13 +151,18 @@ impl LoadedPipelines {
     /// # Parameters
     ///
     /// * `pipeline_id` - the ID of the pipeline
-    pub fn update_loaded_pipeline<T: AsRef<str>>(
-        &self,
-        pipeline_id: T,
-    ) -> Result<(), SeqError> {
+    pub fn update_loaded_pipeline<T: AsRef<str>>(&self, pipeline_id: T) -> Result<(), SeqError> {
         match self.get(&pipeline_id) {
             Some(loaded_pipeline) => {
-                self.set(pipeline_id, load_pipeline(loaded_pipeline.context())?);
+                self.set(
+                    pipeline_id.as_ref(),
+                    load_pipeline(loaded_pipeline.context()).map_err(|err| {
+                        err.chain(format!(
+                            "The pipeline with ID {} could not be updated.",
+                            pipeline_id.as_ref()
+                        ))
+                    })?,
+                );
                 Ok(())
             },
             None => Err(SeqError::new(
@@ -227,7 +234,14 @@ pub fn load_pipeline<P: AsRef<Path>>(
     pipeline_path: P,
 ) -> Result<ContextualisedPipelineBlueprint, SeqError> {
     if pipeline_path.as_ref().is_dir() {
-        load_pipeline_definition(pipeline_path.as_ref().join(PIPELINE_DEFINITION_FILE))
+        load_pipeline_definition(pipeline_path.as_ref().join(PIPELINE_DEFINITION_FILE)).map_err(
+            |err| {
+                err.chain(format!(
+                    "The pipeline directory {} could not be loaded.",
+                    pipeline_path.as_ref().display()
+                ))
+            },
+        )
     } else {
         Err(SeqError::new(
             "Pipeline loading error",
@@ -247,7 +261,10 @@ pub fn load_pipelines(
     app_config: Arc<Configuration>,
 ) -> Result<Vec<ContextualisedPipelineBlueprint>, SeqError> {
     let pipeline_path: PathBuf = app_config.pipeline_folder().into();
-    let list = std::fs::read_dir(pipeline_path)?;
+    let list = std::fs::read_dir(&pipeline_path).map_err(|err| {
+        SeqError::from(err)
+            .chain(format!("Could not read pipeline directory {}.", pipeline_path.display()))
+    })?;
     let (dirs, errors): (Vec<std::fs::DirEntry>, Vec<std::io::Error>) =
         list.fold((Vec::new(), Vec::new()), |mut acc, entry| {
             if entry.is_ok() {
