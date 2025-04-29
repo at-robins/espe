@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate diesel;
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
 use actix_web::{dev::Service, middleware, web::Data, App, HttpServer};
 use application::{
@@ -20,8 +20,7 @@ use dotenv::dotenv;
 use futures::FutureExt;
 use parking_lot::Mutex;
 use service::{
-    execution_service::ExecutionScheduler,
-    pipeline_service::{load_pipelines, LoadedPipelines},
+    execution_service::ExecutionScheduler, pipeline_service::LoadedPipelines,
     temp_file_service::TemporaryFileManager,
 };
 
@@ -95,22 +94,35 @@ fn setup_database(app_config: &Data<Configuration>) -> Result<Data<DatabaseManag
 ///
 /// * `app_config` - the application's [`Configuration`]
 fn setup_pipelines(app_config: &Data<Configuration>) -> Result<Data<LoadedPipelines>, SeqError> {
-    let pipelines = load_pipelines(Arc::clone(&app_config))
-        .map_err(|err| err.chain("Pipelines could not be loaded during application setup."))?;
-    let mut pipeline_map = HashMap::new();
-    for pipeline in pipelines {
-        let duplicate = pipeline_map.insert(pipeline.pipeline().id().clone(), pipeline);
-        if let Some(duplicate_pipeline) = duplicate {
-            log::warn!(
-                "The pipeline {:?} was overwritten due to pipeline ID {} not being unique.",
-                duplicate_pipeline,
-                duplicate_pipeline.pipeline().id()
-            );
-        }
+    let (loaded_pipelines, errors) = match LoadedPipelines::new(Data::clone(&app_config)) {
+        Ok(loaded_pipelines) => (loaded_pipelines, Vec::new()),
+        Err((errors, loaded_pipelines)) => (
+            loaded_pipelines,
+            errors
+                .into_iter()
+                .map(|err| err.chain("Loading of a pipeline failed during application setup."))
+                .collect(),
+        ),
+    };
+
+    // Logs all errors during pipeline loading.
+    // These might be minor errors that are only relevant for
+    // specific pipelines. Others might have been loaded fine.
+    for error in &errors {
+        error.log_default();
     }
-    LoadedPipelines::new(Data::clone(&app_config))
-        .map(|loaded_pipelines| Data::new(loaded_pipelines))
-        .map_err(|err| err.chain("Loading the pipelines failed during application setup."))
+
+    if loaded_pipelines.size() == 0 && !errors.is_empty() {
+        // Something went really wrong. There were errors and not a single pipeline could be loaded.
+        Err(SeqError::new(
+            "Pipeline setup error",
+            SeqErrorType::InternalServerError,
+            "Loading the pipelines failed during application setup. Please check the pipeline specific logging statements for more detailed information on the errors.",
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        ))
+    } else {
+        Ok(Data::new(loaded_pipelines))
+    }
 }
 
 /// Starts and returns the scheduler that handles pipeline execution.
