@@ -21,7 +21,6 @@ pub struct ExperimentExecution {
     pub start_time: Option<NaiveDateTime>,
     pub end_time: Option<NaiveDateTime>,
     pub creation_time: NaiveDateTime,
-    pub pipeline_version: Option<String>,
 }
 
 const EXECUTION_STATUS_ABORTED: &str = "Aborted";
@@ -236,8 +235,6 @@ pub struct NewExperimentExecution {
     end_time: Option<NaiveDateTime>,
     #[getset(get = "pub")]
     creation_time: NaiveDateTime,
-    #[getset(get = "pub")]
-    pipeline_version: Option<String>,
 }
 
 impl NewExperimentExecution {
@@ -261,7 +258,6 @@ impl NewExperimentExecution {
             experiment_id: experiment_id.into(),
             pipeline_id: pipeline_id.into(),
             pipeline_step_id: pipeline_step_id.into(),
-            pipeline_version: None,
             execution_status: ExecutionStatus::Waiting.into(),
             start_time: None,
             end_time: None,
@@ -337,7 +333,6 @@ mod tests {
                 experiment_id: experiment_id_0,
                 pipeline_id: id.to_string(),
                 pipeline_step_id: id.to_string(),
-                pipeline_version: None,
                 execution_status: ExecutionStatus::Waiting.into(),
                 start_time: None,
                 end_time: None,
@@ -354,7 +349,6 @@ mod tests {
                 experiment_id: experiment_id_1,
                 pipeline_id: id.to_string(),
                 pipeline_step_id: id.to_string(),
-                pipeline_version: None,
                 execution_status: ExecutionStatus::Waiting.into(),
                 start_time: None,
                 end_time: None,
@@ -405,7 +399,6 @@ mod tests {
                 },
                 pipeline_id: id.to_string(),
                 pipeline_step_id: id.to_string(),
-                pipeline_version: None,
                 execution_status: ExecutionStatus::Waiting.into(),
                 start_time: None,
                 end_time: None,
@@ -453,7 +446,6 @@ mod tests {
                 },
                 pipeline_id: id.to_string(),
                 pipeline_step_id: id.to_string(),
-                pipeline_version: None,
                 execution_status: ExecutionStatus::Waiting.into(),
                 start_time: None,
                 end_time: None,
@@ -510,7 +502,6 @@ mod tests {
                 experiment_id: experiment_id_0,
                 pipeline_id: id.to_string(),
                 pipeline_step_id: id.to_string(),
-                pipeline_version: None,
                 execution_status: ExecutionStatus::Waiting.into(),
                 start_time: None,
                 end_time: None,
@@ -561,7 +552,6 @@ mod tests {
             experiment_id: experiment_id_0,
             pipeline_id: id.to_string(),
             pipeline_step_id: id.to_string(),
-            pipeline_version: None,
             execution_status: status.into(),
             start_time: None,
             end_time: None,
@@ -610,7 +600,6 @@ mod tests {
             experiment_id: experiment_id_0,
             pipeline_id: id.to_string(),
             pipeline_step_id: id.to_string(),
-            pipeline_version: None,
             execution_status: status.into(),
             start_time: None,
             end_time: None,

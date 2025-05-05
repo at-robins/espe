@@ -19,7 +19,6 @@ table! {
         start_time -> Nullable<Timestamp>,
         end_time -> Nullable<Timestamp>,
         creation_time -> Timestamp,
-        pipeline_version -> Nullable<Text>,
     }
 }
 

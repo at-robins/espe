@@ -1,1 +1,0 @@
-ALTER TABLE experiment_execution DROP COLUMN pipeline_version;
