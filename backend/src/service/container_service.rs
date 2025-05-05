@@ -346,6 +346,7 @@ pub struct ContainerHandler {
     loaded_pipelines: web::Data<LoadedPipelines>,
     executed_step: Option<ExperimentExecution>,
     build_process: Option<Child>,
+    build_version: Option<String>,
     run_process: Option<Child>,
     stop_processes: Vec<Child>,
 }
@@ -368,6 +369,7 @@ impl ContainerHandler {
             loaded_pipelines,
             executed_step: None,
             build_process: None,
+            build_version: None,
             run_process: None,
             stop_processes: Vec::new(),
         }
@@ -445,6 +447,7 @@ impl ContainerHandler {
     /// Resets the internal state of the handler.
     fn reset(&mut self) {
         self.build_process = None;
+        self.build_version = None;
         self.run_process = None;
         self.executed_step = None;
     }
@@ -574,6 +577,26 @@ impl ContainerHandler {
                 "The pipeline is not defined.",
             )
         })
+    }
+
+    /// Loads the pipeline version for the step to be built / executed
+    /// and fixes it.
+    fn load_pipeline_version(&mut self) -> Result<&str, SeqError> {
+        // Loads the pipeline version and fixes it for the current step exection / build.
+        if self.build_version.is_none() {
+            let pipeline_version = self
+                .get_pipeline_blueprint()
+                .map_err(|err| err.chain("The pipeline for finding out the pipeline step version could not be loaded."))?
+                .pipeline()
+                .version()
+                .to_string();
+            self.build_version = Some(pipeline_version);
+        }
+        Ok(self
+            .build_version
+            .as_ref()
+            .expect("The pipeline step build version must be set at this point.")
+            .as_str())
     }
 
     /// Logs the output and returns an error if the exit status was unsuccessful.
@@ -731,10 +754,9 @@ impl ContainerHandler {
             ProcessStatus::NotStarted => {
                 let mut connection = self.database_manager.database_connection()?;
                 let pipeline_version = self
-                    .get_pipeline_blueprint()?
-                    .pipeline()
-                    .version()
-                    .to_string();
+                    .load_pipeline_version()
+                    .map(|version| version.to_string())
+                    .map_err(|err| err.chain(""))?;
                 match Self::get_process_status(&mut self.build_process)? {
                     ProcessStatus::Finished => {
                         if let Some(build) = self.build_process.take() {
