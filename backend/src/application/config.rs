@@ -33,7 +33,7 @@ use std::{
     time::SystemTime,
 };
 
-use getset::Getters;
+use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use twox_hash::XxHash64;
 use uuid::{
@@ -43,12 +43,12 @@ use uuid::{
 
 use super::{
     environment::{
-        CONTEXT_FOLDER, DATABASE_URL, LOG_LEVEL, PIPELINE_FOLDER, SERVER_ADDRESS, SERVER_PORT,
+        CONTEXT_FOLDER, DATABASE_URL, LOG_LEVEL, MODE, PIPELINE_FOLDER, SERVER_ADDRESS, SERVER_PORT,
     },
-    error::SeqError,
+    error::{SeqError, SeqErrorType},
 };
 
-#[derive(Debug, Getters, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Getters, CopyGetters, PartialEq, Serialize, Deserialize)]
 /// A configuration that defines basic parameters of the application.
 pub struct Configuration {
     /// The path to the application database file.
@@ -69,6 +69,9 @@ pub struct Configuration {
     /// The folder where all pipeline definitions are stored.
     #[getset(get = "pub")]
     pipeline_folder: PathBuf,
+    /// The application run mode.
+    #[getset(get_copy = "pub")]
+    mode: ApplicationMode,
 }
 
 impl Configuration {
@@ -82,6 +85,7 @@ impl Configuration {
     /// * `server_port` - the port of the server
     /// * `context_folder` - the folder, in which all context related resources are stored
     /// * `pipeline_folder` - the folder, in which all pipeline definitions are stored
+    /// * `mode` - the [`ApplicationMode`] the application should be running in
     pub fn new<
         DatabaseUrlType: Into<String>,
         LogLevelType: Into<String>,
@@ -96,6 +100,7 @@ impl Configuration {
         server_port: ServerPortType,
         context_folder: ContextFolderType,
         pipeline_folder: PipelineFolderType,
+        mode: ApplicationMode,
     ) -> Self {
         Self {
             database_url: database_url.into(),
@@ -104,6 +109,7 @@ impl Configuration {
             server_port: server_port.into(),
             context_folder: context_folder.into(),
             pipeline_folder: pipeline_folder.into(),
+            mode,
         }
     }
 
@@ -116,6 +122,8 @@ impl Configuration {
             Self::get_environment_variable(SERVER_PORT)?,
             Self::get_environment_variable(CONTEXT_FOLDER)?,
             Self::get_environment_variable(PIPELINE_FOLDER)?,
+            Self::get_environment_variable(MODE)
+                .and_then(|env_value| ApplicationMode::try_from(env_value.as_str()))?,
         ))
     }
 
@@ -125,8 +133,12 @@ impl Configuration {
     ///
     /// * `environment_variable` - the environment variable to retrieve
     fn get_environment_variable(environment_variable: &str) -> Result<String, SeqError> {
-        std::env::var(environment_variable)
-            .map_err(|error| SeqError::from_var_error(error, environment_variable))
+        std::env::var(environment_variable).map_err(|error| {
+            SeqError::from_var_error(error, environment_variable).chain(format!(
+                "Error while loading environment variable \"{}\".",
+                environment_variable
+            ))
+        })
     }
 
     /// The context path where temporary data are stored.
@@ -411,6 +423,47 @@ impl Display for LogOutputType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// The application run mode.
+pub enum ApplicationMode {
+    /// Release mode optimised for performance.
+    Release,
+    /// Development mode.
+    Development,
+}
+
+impl Display for ApplicationMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ApplicationMode::Release => "release",
+                ApplicationMode::Development => "development",
+            }
+        )
+    }
+}
+
+impl TryFrom<&str> for ApplicationMode {
+    type Error = SeqError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value == Self::Release.to_string() {
+            Ok(Self::Release)
+        } else if value == Self::Development.to_string() {
+            Ok(Self::Development)
+        } else {
+            Err(SeqError::new(
+                "Application mode error",
+                SeqErrorType::InternalServerError,
+                format!("\"{}\" is not a valid application run mode.", value),
+                "Invalid application run mode.",
+            ))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -418,34 +471,67 @@ mod tests {
 
     #[test]
     fn test_server_address_and_port() {
-        let config = Configuration::new("", "", "127.0.0.1", "8080", "", "");
+        let config =
+            Configuration::new("", "", "127.0.0.1", "8080", "", "", ApplicationMode::Release);
         assert_eq!(&config.server_address_and_port(), "127.0.0.1:8080");
     }
 
     #[test]
     fn test_temporary_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         let path: PathBuf = "./application/context/tmp".into();
         assert_eq!(config.temporary_path(), path);
     }
 
     #[test]
     fn test_temporary_upload_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         let path: PathBuf = "./application/context/tmp/upload".into();
         assert_eq!(config.temporary_upload_path(), path);
     }
 
     #[test]
     fn test_temporary_download_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         let path: PathBuf = "./application/context/tmp/download".into();
         assert_eq!(config.temporary_download_path(), path);
     }
 
     #[test]
     fn test_temporary_download_file_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         let id = "01234567-89ab-cdef-0123-456789abcdef";
         let path: PathBuf = format!("./application/context/tmp/download/{}", id).into();
         assert_eq!(config.temporary_download_file_path(id), path);
@@ -453,58 +539,120 @@ mod tests {
 
     #[test]
     fn test_globals_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         let path: PathBuf = "./application/context/globals".into();
         assert_eq!(config.globals_path(), path);
     }
 
     #[test]
     fn test_pipeline_path() {
-        let config =
-            Configuration::new("", "", "", "", "./application/context", "./application/pipelines");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "./application/pipelines",
+            ApplicationMode::Release,
+        );
         let path: PathBuf = "./application/pipelines/test".into();
         assert_eq!(config.pipeline_path("test"), path);
     }
 
     #[test]
     fn test_pipeline_attachment_path() {
-        let config =
-            Configuration::new("", "", "", "", "./application/context", "./application/pipelines");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "./application/pipelines",
+            ApplicationMode::Release,
+        );
         let path: PathBuf = "./application/pipelines/test/attachments/test.txt".into();
         assert_eq!(config.pipeline_attachment_path("test", "test.txt"), path);
     }
 
     #[test]
     fn test_global_data_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         let path: PathBuf = "./application/context/globals/global_id".into();
         assert_eq!(config.global_data_path("global_id"), path);
     }
 
     #[test]
     fn test_experiments_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         let path: PathBuf = "./application/context/experiments".into();
         assert_eq!(config.experiments_path(), path);
     }
 
     #[test]
     fn test_experiment_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         let path: PathBuf = "./application/context/experiments/test_id".into();
         assert_eq!(config.experiment_path("test_id"), path);
     }
 
     #[test]
     fn test_experiment_steps_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         let path: PathBuf = "./application/context/experiments/test_id/steps".into();
         assert_eq!(config.experiment_steps_path("test_id"), path);
     }
 
     #[test]
     fn test_experiment_step_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         // Hash of step_id.
         let path: PathBuf =
             "./application/context/experiments/experiment_id/steps/4363919453614495606".into();
@@ -513,7 +661,15 @@ mod tests {
 
     #[test]
     fn test_experiment_logs_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         // Hash of step_id.
         let path: PathBuf = "./application/context/experiments/experiment_id/logs".into();
         assert_eq!(config.experiment_logs_path("experiment_id"), path);
@@ -521,7 +677,15 @@ mod tests {
 
     #[test]
     fn test_experiment_log_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         // Hash of step_id.
         let path: PathBuf =
             "./application/context/experiments/experiment_id/logs/13269802908832430007_build_stderr.log"

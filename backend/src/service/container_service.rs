@@ -14,7 +14,7 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SqliteConnection};
 
 use crate::{
     application::{
-        config::{Configuration, LogOutputType, LogProcessType},
+        config::{ApplicationMode, Configuration, LogOutputType, LogProcessType},
         database::DatabaseManager,
         error::{SeqError, SeqErrorType},
     },
@@ -270,7 +270,15 @@ fn should_build<
     pipeline_step_id: PipelineStepIdIdType,
     pipeline_version: PipelineVersionType,
     connection: &mut SqliteConnection,
+    app_config: web::Data<Configuration>,
 ) -> Result<bool, SeqError> {
+    // Always re-builds the container if the application runs
+    // in development mode.
+    if app_config.mode() == ApplicationMode::Development {
+        log::trace!("Running in development mode and skipping the build cache check.");
+        return Ok(true);
+    }
+
     let pipeline_id = pipeline_id.into();
     let pipeline_step_id = pipeline_step_id.into();
     let pipeline_version = pipeline_version.into();
@@ -790,6 +798,7 @@ impl ContainerHandler {
                             &pipeline_step_id,
                             &pipeline_version,
                             &mut connection,
+                            web::Data::clone(&self.config),
                         )? {
                             self.start_build_process()?;
                         } else {

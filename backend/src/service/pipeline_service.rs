@@ -399,7 +399,7 @@ mod tests {
     use serial_test::serial;
 
     use crate::{
-        application::config::Configuration,
+        application::config::{ApplicationMode, Configuration},
         model::internal::pipeline_blueprint::PipelineStepVariableCategory,
         test_utility::{TestContext, TEST_RESOURCES_PATH},
     };
@@ -454,6 +454,7 @@ mod tests {
             "8080",
             context.context_folder(),
             format!("{}/pipelines", TEST_RESOURCES_PATH),
+            ApplicationMode::Release,
         ));
         let pipelines = load_pipelines(app_config).unwrap();
         assert_eq!(pipelines.len(), 1);
@@ -521,6 +522,7 @@ mod tests {
             "8080",
             context.context_folder(),
             format!("{}/pipelines", TEST_RESOURCES_PATH),
+            ApplicationMode::Release,
         ));
         let pipelines = LoadedPipelines::new(app_config).unwrap();
         assert!(pipelines.has_step_variable("testing_pipeline", "fastqc", "bool"));
@@ -546,6 +548,7 @@ mod tests {
             "8080",
             context.context_folder(),
             format!("{}/pipelines", TEST_RESOURCES_PATH),
+            ApplicationMode::Release,
         ));
         let pipelines = LoadedPipelines::new(app_config).unwrap();
         assert!(pipelines.has_global_variable("testing_pipeline", "global_number"));
