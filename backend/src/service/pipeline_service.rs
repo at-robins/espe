@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use actix_web::web;
 use parking_lot::Mutex;
@@ -6,7 +10,7 @@ use parking_lot::Mutex;
 use crate::{
     application::{
         config::{Configuration, PIPELINE_DEFINITION_FILE},
-        error::{SeqError, SeqErrorType},
+        error::{SeqError, SeqErrorType, DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE},
     },
     model::internal::pipeline_blueprint::{ContextualisedPipelineBlueprint, PipelineBlueprint},
 };
@@ -23,10 +27,26 @@ impl LoadedPipelines {
     /// # Parameters
     ///
     /// * `app_config` - the app [`Configuration`]
-    pub fn new(app_config: web::Data<Configuration>) -> Result<Self, SeqError> {
-        Ok(Self {
-            pipeline_map: Mutex::new(Self::load_pipeline_map(app_config)?),
-        })
+    pub fn new(app_config: web::Data<Configuration>) -> Result<Self, (Vec<SeqError>, Self)> {
+        let (pipeline_map, errors) = match Self::load_pipeline_map(app_config) {
+            Ok(pipeline_map) => (Mutex::new(pipeline_map), Vec::new()),
+            Err((errors, pipeline_map)) => (
+                Mutex::new(pipeline_map),
+                errors
+                    .into_iter()
+                    .map(|err| {
+                        err.chain(
+                            "A pipeline could not be loaded during creation of all loaded pipeline data.",
+                        )
+                    })
+                    .collect(),
+            ),
+        };
+        if errors.is_empty() {
+            Ok(Self { pipeline_map })
+        } else {
+            Err((errors, Self { pipeline_map }))
+        }
     }
 
     /// Returns the pipeline with the specified ID if loaded.
@@ -39,6 +59,27 @@ impl LoadedPipelines {
             .lock()
             .get(id.as_ref())
             .map(|value| Arc::clone(value))
+    }
+
+    /// Sets the pipeline with the specified ID and returns the replaced value if any.
+    ///
+    /// # Parameters
+    ///
+    /// * `id` - the pipeline ID
+    /// * `blueprint` - the new pipeline blueprint to set
+    pub fn set<T: AsRef<str>>(
+        &self,
+        id: T,
+        blueprint: ContextualisedPipelineBlueprint,
+    ) -> Option<Arc<ContextualisedPipelineBlueprint>> {
+        self.pipeline_map
+            .lock()
+            .insert(id.as_ref().to_string(), Arc::new(blueprint))
+    }
+
+    /// The number of pipelines loaded.
+    pub fn size(&self) -> usize {
+        self.pipeline_map.lock().len()
     }
 
     /// Returns ```true``` if the specified global variable exists in the loaded pipelines.
@@ -112,6 +153,9 @@ impl LoadedPipelines {
     }
 
     /// Updates the currently loaded pipelines.
+    /// If errors occur during loading only successfully loaded pipelines
+    /// are available and all remaining errors are logged.
+    /// An error is only returned if no pipeline could be loaded.
     ///
     /// # Parameters
     ///
@@ -120,19 +164,97 @@ impl LoadedPipelines {
         &self,
         app_config: web::Data<Configuration>,
     ) -> Result<(), SeqError> {
-        *(self.pipeline_map.lock()) = Self::load_pipeline_map(app_config)?;
-        Ok(())
+        let (pipeline_map, errors) = match Self::load_pipeline_map(app_config) {
+            Ok(pipeline_map) => (pipeline_map, Vec::new()),
+            Err((errors, pipeline_map)) => (pipeline_map, errors.into_iter().map(|err| {
+                err.chain("Updating some of the loaded pipelines failed. The pipeline map could not be loaded completely.")
+            }).collect()),
+        };
+
+        // Log all errors.
+        for error in &errors {
+            error.log_default();
+        }
+
+        let is_pipeline_map_empty = pipeline_map.is_empty();
+
+        if !is_pipeline_map_empty || errors.is_empty() {
+            // Do not update the pipelines if there is clearly something wrong (empty pipeline map and errors),
+            // but allow updating on partial errors.
+            *(self.pipeline_map.lock()) = pipeline_map;
+            log::warn!("Not all pipelines could be successfully updated.")
+        }
+
+        if is_pipeline_map_empty && !errors.is_empty() {
+            // Only return an error if nothing could be loaded.
+            Err(SeqError::new(
+                "Pipeline update error",
+                SeqErrorType::InternalServerError,
+                "During updating all pipelines a severe error occured. Please check the individual pipeline loading logs for further information.",
+                DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Updates a single currently loaded pipeline.
+    ///
+    /// # Parameters
+    ///
+    /// * `pipeline_id` - the ID of the pipeline
+    pub fn update_loaded_pipeline<T: AsRef<str>>(&self, pipeline_id: T) -> Result<(), SeqError> {
+        match self.get(&pipeline_id) {
+            Some(loaded_pipeline) => {
+                self.set(
+                    pipeline_id.as_ref(),
+                    load_pipeline(loaded_pipeline.context()).map_err(|err| {
+                        err.chain(format!(
+                            "The pipeline with ID {} could not be updated.",
+                            pipeline_id.as_ref()
+                        ))
+                    })?,
+                );
+                Ok(())
+            },
+            None => Err(SeqError::new(
+                "Pipeline not found",
+                SeqErrorType::NotFoundError,
+                format!(
+                    "The pipeline with ID {} is not loaded and can thus not be updated.",
+                    pipeline_id.as_ref()
+                ),
+                "The pipeline is not loaded. For further information please check the logs.",
+            )),
+        }
     }
 
     /// Creates a map of loaded pipelines by their respective ID.
+    /// If loading of specific pipelines fails the map of pipelines
+    /// that could be loaded is returned together with all errors
+    /// that occurred during loading.
     ///
     /// # Parameters
     ///
     /// * `app_config` - the app [`Configuration`]
     fn load_pipeline_map(
         app_config: web::Data<Configuration>,
-    ) -> Result<HashMap<String, Arc<ContextualisedPipelineBlueprint>>, SeqError> {
-        let pipelines = load_pipelines(Arc::clone(&app_config))?;
+    ) -> Result<
+        HashMap<String, Arc<ContextualisedPipelineBlueprint>>,
+        (Vec<SeqError>, HashMap<String, Arc<ContextualisedPipelineBlueprint>>),
+    > {
+        let (pipelines, errors) = match load_pipelines(Arc::clone(&app_config)) {
+            Ok(pipelines) => (pipelines, Vec::new()),
+            Err((errors, pipelines)) => (
+                pipelines,
+                errors
+                    .into_iter()
+                    .map(|err| {
+                        err.chain("A pipeline could not be loaded during pipeline map generation.")
+                    })
+                    .collect(),
+            ),
+        };
         let mut pipeline_map = HashMap::new();
         for pipeline in pipelines {
             let duplicate =
@@ -145,66 +267,128 @@ impl LoadedPipelines {
                 );
             }
         }
-        Ok(pipeline_map)
+        if errors.is_empty() {
+            Ok(pipeline_map)
+        } else {
+            Err((errors, pipeline_map))
+        }
+    }
+}
+
+/// Loads and returns a ['ContextualisedPipelineBlueprint'] from the specified file.
+///
+/// # Parameters
+///
+/// * `pipeline_definition_path` - the path to the pipeline definition file
+pub fn load_pipeline_definition<P: AsRef<Path>>(
+    pipeline_definition_path: P,
+) -> Result<ContextualisedPipelineBlueprint, SeqError> {
+    let pipeline_def: PipelineBlueprint =
+        serde_json::from_reader(std::fs::File::open(&pipeline_definition_path)?)?;
+    let mut contextualised_pipeline = ContextualisedPipelineBlueprint::new(
+        pipeline_def,
+        pipeline_definition_path.as_ref().parent().expect(
+            "This unwrap of the parent path must work since we just deserialised the definition file.",
+        ),
+    );
+    // Loads potential data that is not directly present in the pipeline definition.
+    contextualised_pipeline.resolve_imports()?;
+
+    Ok(contextualised_pipeline)
+}
+
+/// Loads and returns a ['ContextualisedPipelineBlueprint'] from the specified directory.
+/// This will return an error if the specified path is not a directory.
+///
+/// # Parameters
+///
+/// * `pipeline_path` - the path to the pipeline directory
+pub fn load_pipeline<P: AsRef<Path>>(
+    pipeline_path: P,
+) -> Result<ContextualisedPipelineBlueprint, SeqError> {
+    if pipeline_path.as_ref().is_dir() {
+        load_pipeline_definition(pipeline_path.as_ref().join(PIPELINE_DEFINITION_FILE)).map_err(
+            |err| {
+                err.chain(format!(
+                    "The pipeline directory {} could not be loaded.",
+                    pipeline_path.as_ref().display()
+                ))
+            },
+        )
+    } else {
+        Err(SeqError::new(
+            "Pipeline loading error",
+            SeqErrorType::InternalServerError,
+            format!("The pipeline path {} is not a directory.", pipeline_path.as_ref().display()),
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        ))
     }
 }
 
 /// Returns all pipelines defined in the respective directory.
+/// In case of an error it returns all errors as well as all pipelines
+/// that could be read successfully.
 ///
 /// # Parameters
 ///
 /// * `app_config` - the app [`Configuration`]
 pub fn load_pipelines(
     app_config: Arc<Configuration>,
-) -> Result<Vec<ContextualisedPipelineBlueprint>, SeqError> {
+) -> Result<
+    Vec<ContextualisedPipelineBlueprint>,
+    (Vec<SeqError>, Vec<ContextualisedPipelineBlueprint>),
+> {
     let pipeline_path: PathBuf = app_config.pipeline_folder().into();
-    let list = std::fs::read_dir(pipeline_path)?;
-    let (dirs, errors): (Vec<std::fs::DirEntry>, Vec<std::io::Error>) =
+    let list = match std::fs::read_dir(&pipeline_path) {
+        Ok(list) => list,
+        Err(err) => {
+            return Err((
+                vec![SeqError::from(err).chain(format!(
+                    "Could not read pipeline directory {}.",
+                    pipeline_path.display()
+                ))],
+                Vec::new(),
+            ))
+        },
+    };
+
+    let (dirs, mut errors): (Vec<std::fs::DirEntry>, Vec<SeqError>) =
         list.fold((Vec::new(), Vec::new()), |mut acc, entry| {
             if entry.is_ok() {
                 acc.0.push(entry.unwrap());
             } else {
-                acc.1.push(entry.unwrap_err());
+                acc.1.push(SeqError::from(entry.unwrap_err()).chain(format!(
+                    "Error while reading the sub-directories of the pipeline directory {}.",
+                    pipeline_path.display(),
+                )));
             }
             acc
         });
-    if errors.is_empty() {
-        let pipeline_definition_files: Vec<PathBuf> = dirs
-            .into_iter()
-            .map(|dir| dir.path())
-            .filter(|dir| dir.is_dir().into())
-            .map(|mut dir| {
-                dir.push(PIPELINE_DEFINITION_FILE);
-                dir
-            })
-            .collect();
-        let mut pipelines = Vec::with_capacity(pipeline_definition_files.len());
-        for pipeline_def_file in pipeline_definition_files {
-            let pipeline_def: PipelineBlueprint =
-                serde_json::from_reader(std::fs::File::open(&pipeline_def_file)?)?;
-            let mut contextualised_pipeline = ContextualisedPipelineBlueprint::new(
-                    pipeline_def,
-                    pipeline_def_file
-                        .parent()
-                        .expect("This unwrap of the parent path must work since we just appended the definition file."),
-                );
-            // Loads potential data that is not directly present in the pipeline definition.
-            contextualised_pipeline.resolve_imports()?;
-            pipelines.push(contextualised_pipeline);
+    // Only loads folders that actually contain a pipeline definition file.
+    let pipeline_definition_files: Vec<PathBuf> = dirs
+        .into_iter()
+        .map(|dir| dir.path())
+        .filter(|dir| dir.is_dir())
+        .map(|mut dir| {
+            dir.push(PIPELINE_DEFINITION_FILE);
+            dir
+        })
+        .filter(|file| file.is_file())
+        .collect();
+    let mut pipelines = Vec::with_capacity(pipeline_definition_files.len());
+    for pipeline_def_file in pipeline_definition_files {
+        match load_pipeline_definition(&pipeline_def_file) {
+            Ok(pipeline) => pipelines.push(pipeline),
+            Err(err) => errors.push(err.chain(format!(
+                "Pipeline definition file {} could not be loaded.",
+                pipeline_def_file.display()
+            ))),
         }
+    }
+    if errors.is_empty() {
         Ok(pipelines)
     } else {
-        let combined_error = errors.into_iter().fold(String::new(), |mut acc, error| {
-            acc.push_str(&error.to_string());
-            acc.push('\n');
-            acc
-        });
-        Err(SeqError::new(
-            "std::io::Error",
-            SeqErrorType::InternalServerError,
-            combined_error,
-            "An unforseen error occured during pipeline parsing. Please consult the logs.",
-        ))
+        Err((errors, pipelines))
     }
 }
 
@@ -215,7 +399,7 @@ mod tests {
     use serial_test::serial;
 
     use crate::{
-        application::config::Configuration,
+        application::config::{ApplicationMode, Configuration},
         model::internal::pipeline_blueprint::PipelineStepVariableCategory,
         test_utility::{TestContext, TEST_RESOURCES_PATH},
     };
@@ -270,6 +454,7 @@ mod tests {
             "8080",
             context.context_folder(),
             format!("{}/pipelines", TEST_RESOURCES_PATH),
+            ApplicationMode::Release,
         ));
         let pipelines = load_pipelines(app_config).unwrap();
         assert_eq!(pipelines.len(), 1);
@@ -337,6 +522,7 @@ mod tests {
             "8080",
             context.context_folder(),
             format!("{}/pipelines", TEST_RESOURCES_PATH),
+            ApplicationMode::Release,
         ));
         let pipelines = LoadedPipelines::new(app_config).unwrap();
         assert!(pipelines.has_step_variable("testing_pipeline", "fastqc", "bool"));
@@ -362,6 +548,7 @@ mod tests {
             "8080",
             context.context_folder(),
             format!("{}/pipelines", TEST_RESOURCES_PATH),
+            ApplicationMode::Release,
         ));
         let pipelines = LoadedPipelines::new(app_config).unwrap();
         assert!(pipelines.has_global_variable("testing_pipeline", "global_number"));
