@@ -116,14 +116,57 @@ impl Configuration {
     /// Creates a new configuration if all enviroment variables are setup correctly.
     pub fn create_from_environment() -> Result<Self, SeqError> {
         Ok(Self::new(
-            Self::get_environment_variable(DATABASE_URL)?,
-            Self::get_environment_variable(LOG_LEVEL)?,
-            Self::get_environment_variable(SERVER_ADDRESS)?,
-            Self::get_environment_variable(SERVER_PORT)?,
-            Self::get_environment_variable(CONTEXT_FOLDER)?,
-            Self::get_environment_variable(PIPELINE_FOLDER)?,
+            Self::get_environment_variable(DATABASE_URL).map_err(|err| {
+                err.chain(format!(
+                    "Obtaining the database URL from the respective environment variable \"{}\" \
+                failed during construction of the application's configuration.",
+                    DATABASE_URL
+                ))
+            })?,
+            Self::get_environment_variable(LOG_LEVEL).map_err(|err| {
+                err.chain(format!(
+                    "Obtaining the log level from the respective environment variable \"{}\" \
+                failed during construction of the application's configuration.",
+                    LOG_LEVEL
+                ))
+            })?,
+            Self::get_environment_variable(SERVER_ADDRESS).map_err(|err| {
+                err.chain(format!(
+                    "Obtaining the server address from the respective environment variable \"{}\" \
+                failed during construction of the application's configuration.",
+                SERVER_ADDRESS
+                ))
+            })?,
+            Self::get_environment_variable(SERVER_PORT).map_err(|err| {
+                err.chain(format!(
+                    "Obtaining the server port from the respective environment variable \"{}\" \
+                failed during construction of the application's configuration.",
+                SERVER_PORT
+                ))
+            })?,
+            Self::get_environment_variable(CONTEXT_FOLDER).map_err(|err| {
+                err.chain(format!(
+                    "Obtaining the context folder from the respective environment variable \"{}\" \
+                failed during construction of the application's configuration.",
+                CONTEXT_FOLDER
+                ))
+            })?,
+            Self::get_environment_variable(PIPELINE_FOLDER).map_err(|err| {
+                err.chain(format!(
+                    "Obtaining the pipeline folder from the respective environment variable \"{}\" \
+                failed during construction of the application's configuration.",
+                PIPELINE_FOLDER
+                ))
+            })?,
             Self::get_environment_variable(MODE)
-                .and_then(|env_value| ApplicationMode::try_from(env_value.as_str()))?,
+                .and_then(|env_value| ApplicationMode::try_from(env_value.as_str()))
+                .map_err(|err| {
+                    err.chain(format!(
+                        "Obtaining the application run mode from the respective environment variable \"{}\" \
+                    failed during construction of the application's configuration.",
+                    MODE
+                    ))
+                })?,
         ))
     }
 
