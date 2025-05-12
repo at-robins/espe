@@ -57,6 +57,10 @@ impl DatabaseManager {
                     err,
                     DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
                 )
+                .chain(format!(
+                    "Failed to create a connection pool for database {}.",
+                    config.database_url()
+                ))
             })?;
         Ok(Self {
             db_connection_pool: pool,
@@ -74,6 +78,7 @@ impl DatabaseManager {
                 err,
                 DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
             )
+            .chain("Failed to aquire a database connection.")
         })?)
     }
 }

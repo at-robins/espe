@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     application::{
-        config::Configuration,
+        config::{Configuration, LogProcessType},
         database::DatabaseManager,
         error::{SeqError, SeqErrorType},
     },
@@ -22,6 +22,7 @@ use crate::{
     },
     service::{
         execution_service::ExecutionScheduler,
+        experiment_service::{delete_step_logs, delete_step_output},
         pipeline_service::LoadedPipelines,
         validation_service::{validate_comment, validate_entity_name, validate_mail},
     },
@@ -480,6 +481,7 @@ pub async fn post_execute_experiment(
 }
 
 pub async fn post_execute_experiment_step(
+    app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     experiment_id: web::Path<i32>,
     step_id: web::Json<String>,
@@ -487,9 +489,19 @@ pub async fn post_execute_experiment_step(
 ) -> Result<HttpResponse, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
     let step_id: String = step_id.into_inner();
-    let mut connection = database_manager.database_connection()?;
+    let mut connection = database_manager.database_connection().map_err(|err| {
+        err.chain(format!(
+            "Connection to the database could not be aquired when executing pipeline step {} of experiment {}.",
+            step_id, experiment_id
+        ))
+    })?;
     // Error if the experiment does not exist.
-    Experiment::exists_err(experiment_id, &mut connection)?;
+    Experiment::exists_err(experiment_id, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "Experiment {} does not exist. Pipeline step {} cannot be executed.",
+            experiment_id, step_id
+        ))
+    })?;
     if let Some(pipeline_id) = Experiment::get(experiment_id, &mut connection)?.pipeline_id {
         if let Some(pipeline) = pipelines.get(&pipeline_id) {
             let pipeline = pipeline.pipeline();
@@ -551,6 +563,27 @@ pub async fn post_execute_experiment_step(
                             "The requested run parameters are invalid.",
                         ));
                     }
+                    // Deletes the output folder and run logs, but keeps the build logs
+                    // as the build process might be cached / skipped.
+                    delete_step_output(&step_id, experiment_id, web::Data::clone(&app_config))
+                        .map_err(|err| {
+                            err.chain(format!(
+                                "Deletion of pipeline step output ({}/{}) of experiment {} failed during restart request.",
+                                pipeline_id, step_id, experiment_id
+                            ))
+                        })?;
+                    delete_step_logs(
+                        &pipeline_id,
+                        &step_id,
+                        experiment_id,
+                        &vec![LogProcessType::Run],
+                        app_config,
+                    ).map_err(|err| {
+                        err.chain(format!(
+                            "Deletion of pipeline step run logs ({}/{}) of experiment {} failed during restart request.",
+                            pipeline_id, step_id, experiment_id
+                        ))
+                    })?;
                     connection.immediate_transaction(|connection| {
                         let clear_time: Option<NaiveDateTime> = None;
                         diesel::update(
