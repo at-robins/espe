@@ -502,14 +502,27 @@ pub async fn post_execute_experiment_step(
             experiment_id, step_id
         ))
     })?;
-    if let Some(pipeline_id) = Experiment::get(experiment_id, &mut connection)?.pipeline_id {
+    if let Some(pipeline_id) = Experiment::get(experiment_id, &mut connection)
+        .map_err(|err| {
+            SeqError::from(err).chain(format!(
+            "Reading experiment data of experiment {} from the database failed during start of step {}.",
+            experiment_id, step_id
+        ))
+        })?
+        .pipeline_id
+    {
         if let Some(pipeline) = pipelines.get(&pipeline_id) {
             let pipeline = pipeline.pipeline();
             // Checks if the step exists within the currently selected pipeline
             if let Some(step) = pipeline.steps().iter().find(|step| step.id() == &step_id) {
                 // Checks if the dependencies are satisfied.
                 let executions: Vec<ExperimentExecution> =
-                    ExperimentExecution::get_by_experiment(experiment_id, &mut connection)?
+                    ExperimentExecution::get_by_experiment(experiment_id, &mut connection).map_err(|err| {
+                            SeqError::from(err).chain(format!(
+                                "Reading pipeline step execution ({}/{}) of experiment {} from the database failed.",
+                                pipeline_id, step_id, experiment_id
+                            ))
+                        })?
                         .into_iter()
                         .filter(|s| &s.pipeline_id == &pipeline_id)
                         .collect();
@@ -539,13 +552,23 @@ pub async fn post_execute_experiment_step(
                     pipeline,
                     experiment_id,
                     &mut connection,
-                )?;
+                ).map_err(|err| {
+                    err.chain(format!(
+                        "Global variable validation failed for pipeline step ({}/{}) of experiment {} failed during restart request.",
+                        pipeline_id, step_id, experiment_id
+                    ))
+                })?;
                 PipelineStepVariable::validate_step_variables(
                     step,
                     experiment_id,
                     &pipeline_id,
                     &mut connection,
-                )?;
+                ).map_err(|err| {
+                    err.chain(format!(
+                        "Step variable validation failed for pipeline step ({}/{}) of experiment {} failed during restart request.",
+                        pipeline_id, step_id, experiment_id
+                    ))
+                })?;
                 // Submits execution step.
                 if let Some(existing_execution) =
                     executions.iter().find(|s| s.pipeline_step_id == step_id)
@@ -584,29 +607,45 @@ pub async fn post_execute_experiment_step(
                             pipeline_id, step_id, experiment_id
                         ))
                     })?;
-                    connection.immediate_transaction(|connection| {
-                        let clear_time: Option<NaiveDateTime> = None;
-                        diesel::update(
-                            crate::schema::experiment_execution::table.find(existing_execution.id),
-                        )
-                        .set((
-                            crate::schema::experiment_execution::execution_status
-                                .eq(ExecutionStatus::Waiting.to_string()),
-                            crate::schema::experiment_execution::start_time.eq(clear_time.clone()),
-                            crate::schema::experiment_execution::end_time.eq(clear_time),
+                    connection
+                        .immediate_transaction(|connection| {
+                            let clear_time: Option<NaiveDateTime> = None;
+                            diesel::update(
+                                crate::schema::experiment_execution::table
+                                    .find(existing_execution.id),
+                            )
+                            .set((
+                                crate::schema::experiment_execution::execution_status
+                                    .eq(ExecutionStatus::Waiting.to_string()),
+                                crate::schema::experiment_execution::start_time
+                                    .eq(clear_time.clone()),
+                                crate::schema::experiment_execution::end_time.eq(clear_time),
+                            ))
+                            .execute(connection)
+                        })
+                        .map_err(|err| {
+                            SeqError::from(err).chain(format!(
+                            "Failed to update the pipeline execution step {:?} in the database.",
+                            existing_execution
                         ))
-                        .execute(connection)
-                    })?;
+                        })?;
                 } else {
                     // Create a newly added pipeline step.
                     let execution_step: NewExperimentExecution =
                         NewExperimentExecution::new(experiment_id, pipeline.id(), step.id());
 
-                    connection.immediate_transaction(|connection| {
-                        diesel::insert_into(crate::schema::experiment_execution::table)
-                            .values(&execution_step)
-                            .execute(connection)
-                    })?;
+                    connection
+                        .immediate_transaction(|connection| {
+                            diesel::insert_into(crate::schema::experiment_execution::table)
+                                .values(&execution_step)
+                                .execute(connection)
+                        })
+                        .map_err(|err| {
+                            SeqError::from(err).chain(format!(
+                                "Failed to persist the pipeline execution step {:?} in the database.",
+                                execution_step
+                            ))
+                        })?;
                 }
                 log::info!(
                     "Submitted experiment {} with pipeline {} step {} for execution.",
