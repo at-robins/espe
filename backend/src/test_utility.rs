@@ -1,5 +1,9 @@
 use crate::{
-    application::{config::Configuration, database::DatabaseManager, environment::LOG_LEVEL},
+    application::{
+        config::{ApplicationMode, Configuration},
+        database::DatabaseManager,
+        environment::LOG_LEVEL,
+    },
     controller::routing::routing_config,
     service::pipeline_service::LoadedPipelines,
 };
@@ -142,6 +146,7 @@ impl From<&TestContext> for Configuration {
             "8080",
             context.context_folder(),
             context.pipeline_folder(),
+            ApplicationMode::Release,
         )
     }
 }

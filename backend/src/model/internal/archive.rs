@@ -41,7 +41,7 @@ impl ArchiveMetadata {
 #[cfg(test)]
 mod tests {
 
-    use crate::application::config::Configuration;
+    use crate::application::config::{ApplicationMode, Configuration};
 
     use super::*;
 
@@ -61,7 +61,15 @@ mod tests {
 
     #[test]
     fn test_metadata_path() {
-        let config = Configuration::new("", "", "", "", "./application/context", "");
+        let config = Configuration::new(
+            "",
+            "",
+            "",
+            "",
+            "./application/context",
+            "",
+            ApplicationMode::Release,
+        );
         let archive_id = "01234567-89ab-cdef-0123-456789abcdef";
         let archive_path = config.temporary_download_file_path(archive_id);
         let expected_meta_path: PathBuf =

@@ -36,17 +36,22 @@ Docker was selected as tool for running and managing containers due to its ease 
 The easiest way to run the application is by using Docker.
 
 1. Install [Docker](https://docs.docker.com/engine/install/).
-2. Build the container with the following command (requires root privileges): 
+2. Build the container with the following command (requires root privileges):
+
 ```bash
 docker build -t "espe:dev" "https://github.com/at-robins/espe.git#master:container"
 ```
+
 3. Create an ESPE run directory for the application (ensure enough storage space is available) with the following folder structure:
+
 ```bash
 espe/context
 espe/database
 ```
-4. Start the container with the following command replacing the ```/path/to/espe``` 
-with the path to the ESPE run directory (requires root privileges):
+
+4. Start the container with the following command replacing the `/path/to/espe`
+   with the path to the ESPE run directory (requires root privileges):
+
 ```bash
 docker run \
    -e SERVER_ADDRESS=0.0.0.0 \
@@ -57,20 +62,28 @@ docker run \
    -d \
    espe:dev
 ```
+
 6. Open a browser and enter [localhost](http://localhost).
 
 ## Enviroment variables
 
 Also see `backend/.env`.
 
-| Variable        | Description                                                                 |
-| --------------- | --------------------------------------------------------------------------- |
-| CONTEXT_FOLDER  | the context folder of the application where all relevant data is stored     |
-| DATABASE_URL    | the database location                                                       |
-| LOG_LEVEL       | the minimum log level of the application (`debug`, `info`, `warn`, `error`) |
-| PIPELINE_FOLDER | the folder storing pipeline definitions                                     |
-| SERVER_ADDRESS  | the address of the server                                                   |
-| SERVER_PORT     | the port of the server                                                      |
+| Variable             | Description                                                                 |
+| -------------------- | --------------------------------------------------------------------------- |
+| ESPE_CONTEXT_FOLDER  | the context folder of the application where all relevant data is stored     |
+| ESPE_DATABASE_URL    | the database location                                                       |
+| ESPE_LOG_LEVEL       | the minimum log level of the application (`debug`, `info`, `warn`, `error`) |
+| ESPE_PIPELINE_FOLDER | the folder storing pipeline definitions                                     |
+| ESPE_SERVER_ADDRESS  | the address of the server                                                   |
+| ESPE_SERVER_PORT     | the port of the server                                                      |
+| ESPE_MODE            | the mode the application runs in (`release` or `development`)               |
+
+Running the application in `development` mode will disable the internal container cache register
+and cause containers to be re-built on every pipeline step execution.
+This simplifies implementing and testing custom pipelines or pipeline steps
+as pipelines do not need to be manually updated upon changes.
+But beware, this will not disable Docker's own caching mechinsms.
 
 ## Build (for developers)
 
