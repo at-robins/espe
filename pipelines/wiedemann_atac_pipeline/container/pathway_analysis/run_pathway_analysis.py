@@ -54,6 +54,9 @@ def parse_da_csv(dge_csv_path) -> pd.DataFrame:
         inplace=True,
     )
 
+    # Remove invalid values.
+    annotated_dars = annotated_dars[np.isfinite(annotated_dars[KEY_SCORE])].copy()
+
     # Set gene names as indices for the GSEA algorithm.
     annotated_dars.set_index("Gene Name", inplace=True)
 

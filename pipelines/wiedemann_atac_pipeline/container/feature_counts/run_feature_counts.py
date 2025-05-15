@@ -12,7 +12,7 @@ import sys
 from pathlib import PurePath
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER_BAM = MOUNT_PATHS["dependencies"]["blacklist_removal"]
+INPUT_FOLDER_BAM = MOUNT_PATHS["dependencies"]["splitting"]
 INPUT_FOLDER_PEAK = MOUNT_PATHS["dependencies"]["peak_annotation"]
 BAM_SUFFIX = ".bam"
 PEAK_SUFFIX = ".mergedPeak"
@@ -102,7 +102,7 @@ bam_files = []
 sample_dirs = []
 for root, dirs, files in os.walk(INPUT_FOLDER_BAM):
     for file in files:
-        if file.endswith(BAM_SUFFIX):
+        if file.endswith("_nucleosomefree.bam"):
             bam_file_path = os.path.join(root, file)
             print(f"Detected BAM file {bam_file_path}...", flush=True)
             bam_files.append(bam_file_path)

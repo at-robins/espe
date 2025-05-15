@@ -140,11 +140,6 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
             create_region_file(
                 input_file_path=file_path_annotated,
                 output_directory_path=directory_path_output,
-                filter=None,
-            )
-            create_region_file(
-                input_file_path=file_path_annotated,
-                output_directory_path=directory_path_output,
                 filter="+",
             )
             create_region_file(
