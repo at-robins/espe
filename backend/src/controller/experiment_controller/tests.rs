@@ -1482,3 +1482,176 @@ async fn test_post_execute_experiment_already_running() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
+
+#[actix_web::test]
+async fn test_get_experiment_execution_locked_running() {
+    let db_context = TestContext::new();
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id = 42;
+    let pipeline_id = "Dummy ID";
+    let new_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let new_execution = [
+        ExperimentExecution {
+            id: 42,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "1".to_string(),
+            execution_status: ExecutionStatus::Finished.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+        ExperimentExecution {
+            id: 43,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "2".to_string(),
+            execution_status: ExecutionStatus::Running.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+    ];
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/experiments/{}/locked", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let is_locked: bool = test::read_body_json(resp).await;
+    assert!(is_locked);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_execution_locked_waiting() {
+    let db_context = TestContext::new();
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id = 42;
+    let pipeline_id = "Dummy ID";
+    let new_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let new_execution = [
+        ExperimentExecution {
+            id: 42,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "1".to_string(),
+            execution_status: ExecutionStatus::Aborted.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+        ExperimentExecution {
+            id: 43,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "2".to_string(),
+            execution_status: ExecutionStatus::Waiting.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+    ];
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/experiments/{}/locked", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let is_locked: bool = test::read_body_json(resp).await;
+    assert!(is_locked);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_execution_locked_finished() {
+    let db_context = TestContext::new();
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id = 42;
+    let pipeline_id = "Dummy ID";
+    let new_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let new_execution = [
+        ExperimentExecution {
+            id: 42,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "1".to_string(),
+            execution_status: ExecutionStatus::Finished.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+        ExperimentExecution {
+            id: 43,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "2".to_string(),
+            execution_status: ExecutionStatus::Failed.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+    ];
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/experiments/{}/locked", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let is_locked: bool = test::read_body_json(resp).await;
+    assert!(!is_locked);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_execution_locked_not_found() {
+    let db_context = TestContext::new();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let req = test::TestRequest::get()
+        .uri("/api/experiments/42/locked")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}

@@ -6,12 +6,7 @@ use crate::application::error::SeqError;
 
 use super::{
     experiment_controller::{
-        create_experiment, delete_experiment, get_experiment, get_experiment_execution_status,
-        get_experiment_pipeline_run, get_experiment_pipelines, list_experiment,
-        patch_experiment_comment, patch_experiment_mail, patch_experiment_name,
-        patch_experiment_pipeline, post_execute_experiment, post_execute_experiment_step,
-        post_experiment_execution_abort, post_experiment_execution_reset,
-        post_experiment_pipeline_global_variable, post_experiment_pipeline_step_variable,
+        create_experiment, delete_experiment, get_experiment, get_experiment_execution_locked, get_experiment_execution_status, get_experiment_pipeline_run, get_experiment_pipelines, list_experiment, patch_experiment_comment, patch_experiment_mail, patch_experiment_name, patch_experiment_pipeline, post_execute_experiment, post_execute_experiment_step, post_experiment_execution_abort, post_experiment_execution_reset, post_experiment_pipeline_global_variable, post_experiment_pipeline_step_variable
     },
     file_controller::{
         delete_files_by_path, get_experiment_download_step_results, get_files,
@@ -62,6 +57,7 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/experiments/{id}/download/{archive}", web::get().to(get_experiment_download_step_results))
         // This method is only POST to support the JSON message body.
     .route("/api/experiments/{id}/logs", web::post().to(get_experiment_step_logs))
+    .route("/api/experiments/{id}/locked", web::get().to(get_experiment_execution_locked))
     .route("/api/experiments/{id}/mail", web::patch().to(patch_experiment_mail))
     .route("/api/experiments/{id}/name", web::patch().to(patch_experiment_name))
     .route("/api/experiments/{id}/pipeline", web::patch().to(patch_experiment_pipeline))

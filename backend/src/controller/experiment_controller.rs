@@ -736,5 +736,19 @@ pub async fn post_experiment_execution_reset(
     Ok(HttpResponse::Ok().finish())
 }
 
+pub async fn get_experiment_execution_locked(
+    database_manager: web::Data<DatabaseManager>,
+    experiment_id: web::Path<i32>,
+) -> Result<HttpResponse, SeqError> {
+    let experiment_id: i32 = experiment_id.into_inner();
+    let mut connection = database_manager.database_connection()?;
+    Experiment::exists_err(experiment_id, &mut connection)
+        .map_err(|err| err.chain(format!("Lock state for experiment {} could not be determined. The experiment does not exist.", experiment_id)))?;
+    let is_executed = ExperimentExecution::is_executed(experiment_id, &mut connection)
+        .map_err(|err| SeqError::from(err).chain(format!("Lock state for experiment {} could not be determined. Error while quering the database.", experiment_id)))?;
+    // TODO: Add check for ongoing download.
+    Ok(HttpResponse::Ok().json(is_executed))
+}
+
 #[cfg(test)]
 mod tests;
