@@ -34,4 +34,4 @@ zip-extensions = "0.6.2"
 
 [dev-dependencies]
 mime = "0.3.17"
-serial_test = "2.0.0"
+serial_test = "3.2.0"

@@ -5,7 +5,7 @@ use crate::{
         environment::LOG_LEVEL,
     },
     controller::routing::routing_config,
-    service::pipeline_service::LoadedPipelines,
+    service::{execution_service::ExecutionScheduler, pipeline_service::LoadedPipelines},
 };
 use actix_web::{
     body::MessageBody,
@@ -15,6 +15,7 @@ use actix_web::{
 use diesel::{connection::SimpleConnection, Connection, SqliteConnection};
 use diesel_migrations::MigrationHarness;
 use dotenv::dotenv;
+use parking_lot::Mutex;
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -43,11 +44,18 @@ pub fn create_test_app(
     let app_config = &web::Data::<Configuration>::new(context.into());
     let database_manager =
         web::Data::new(DatabaseManager::new(web::Data::clone(&app_config)).unwrap());
+    let loaded_pipelines =
+        web::Data::new(LoadedPipelines::new(web::Data::clone(&app_config)).unwrap());
     App::new()
         .wrap(middleware::Logger::default())
         .app_data(web::Data::clone(&app_config))
-        .app_data(web::Data::new(LoadedPipelines::new(web::Data::clone(&app_config)).unwrap()))
+        .app_data(web::Data::clone(&loaded_pipelines))
         .app_data(web::Data::clone(&database_manager))
+        .app_data(web::Data::new(Mutex::new(ExecutionScheduler::new(
+            web::Data::clone(&app_config),
+            web::Data::clone(&database_manager),
+            web::Data::clone(&loaded_pipelines),
+        ))))
         .configure(routing_config)
 }
 

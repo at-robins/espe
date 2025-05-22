@@ -226,6 +226,12 @@ pub async fn get_experiment_pipelines(
 ) -> Result<web::Json<Vec<ExperimentPipelineBlueprint>>, SeqError> {
     let experiment_id: i32 = id.into_inner();
     let mut connection = database_manager.database_connection()?;
+    Experiment::exists_err(experiment_id, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "Loading pipelines for experiment {} failed. Experiment does not exist.",
+            experiment_id
+        ))
+    })?;
     let all_experiment_stati =
         ExperimentExecution::get_by_experiment(experiment_id, &mut connection)?;
     let mut experiment_pipelines = Vec::new();
@@ -742,8 +748,12 @@ pub async fn get_experiment_execution_locked(
 ) -> Result<HttpResponse, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
     let mut connection = database_manager.database_connection()?;
-    Experiment::exists_err(experiment_id, &mut connection)
-        .map_err(|err| err.chain(format!("Lock state for experiment {} could not be determined. The experiment does not exist.", experiment_id)))?;
+    Experiment::exists_err(experiment_id, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "Lock state for experiment {} could not be determined. The experiment does not exist.",
+            experiment_id
+        ))
+    })?;
     let is_executed = ExperimentExecution::is_executed(experiment_id, &mut connection)
         .map_err(|err| SeqError::from(err).chain(format!("Lock state for experiment {} could not be determined. Error while quering the database.", experiment_id)))?;
     // TODO: Add check for ongoing download.
