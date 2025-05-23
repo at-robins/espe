@@ -1678,7 +1678,11 @@ async fn test_experiment_exists_not_found() {
     std::fs::File::create_new(&archive_path).unwrap();
     let archive_metadata = ArchiveMetadata::new(format!("{}.zip", archive_id));
     let archive_metadata_path = ArchiveMetadata::metadata_path(&archive_path);
-    serde_json::to_writer(std::fs::File::create_new(archive_metadata_path).unwrap(), &archive_metadata).unwrap();
+    serde_json::to_writer(
+        std::fs::File::create_new(archive_metadata_path).unwrap(),
+        &archive_metadata,
+    )
+    .unwrap();
 
     let base_url = format!("/api/experiments/{}", experiment_id);
     let test_requests = [
@@ -1787,8 +1791,11 @@ async fn test_experiment_exists_found() {
     std::fs::File::create_new(&archive_path).unwrap();
     let archive_metadata = ArchiveMetadata::new(format!("{}.zip", archive_id));
     let archive_metadata_path = ArchiveMetadata::metadata_path(&archive_path);
-    serde_json::to_writer(std::fs::File::create_new(archive_metadata_path).unwrap(), &archive_metadata).unwrap();
-
+    serde_json::to_writer(
+        std::fs::File::create_new(archive_metadata_path).unwrap(),
+        &archive_metadata,
+    )
+    .unwrap();
 
     let base_url = format!("/api/experiments/{}", experiment_id);
     let test_requests = [
@@ -1843,6 +1850,95 @@ async fn test_experiment_exists_found() {
             .to_request(),
         TestRequest::get()
             .uri(&format!("{}/status", base_url))
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/variable/global", base_url))
+            .set_json(PipelineGlobalVariableUpload {
+                pipeline_id: pipeline_id.to_string(),
+                variable_id: "global_number".to_string(),
+                variable_value: None,
+            })
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/variable/step", base_url))
+            .set_json(PipelineStepVariableUpload {
+                pipeline_id: pipeline_id.to_string(),
+                pipeline_step_id: pipeline_step_id.to_string(),
+                variable_id: "number".to_string(),
+                variable_value: None,
+            })
+            .to_request(),
+    ];
+
+    // Creates a dummy experiment.
+    let new_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+
+    for test_request in test_requests {
+        let test_url = test_request.uri().to_string();
+        let resp = test::call_service(&app, test_request).await;
+        assert_ne!(
+            resp.status(),
+            StatusCode::NOT_FOUND,
+            "Accessing {} with an existing experiment did return status code {} but should return another status code. Message: {:?}",
+            test_url,
+            resp.status(),
+            resp.response()
+        );
+    }
+}
+
+#[actix_web::test]
+async fn test_experiment_locked() {
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let test_config = Configuration::from(&db_context);
+
+    let experiment_id = 42;
+    let archive_id = 42;
+    let pipeline_id = "testing_pipeline";
+    let pipeline_step_id = "fastqc";
+
+    // Creates a dummy archive file.
+    std::fs::create_dir_all(test_config.temporary_download_path()).unwrap();
+    let archive_path = test_config.temporary_download_file_path(archive_id.to_string());
+    std::fs::File::create_new(&archive_path).unwrap();
+    let archive_metadata = ArchiveMetadata::new(format!("{}.zip", archive_id));
+    let archive_metadata_path = ArchiveMetadata::metadata_path(&archive_path);
+    serde_json::to_writer(
+        std::fs::File::create_new(archive_metadata_path).unwrap(),
+        &archive_metadata,
+    )
+    .unwrap();
+
+    let base_url = format!("/api/experiments/{}", experiment_id);
+    let test_requests = [
+        TestRequest::post()
+            .uri(&format!("{}/archive", base_url))
+            .set_json(pipeline_step_id)
+            .to_request(),
+        TestRequest::patch()
+            .uri(&format!("{}/pipeline", base_url))
+            .set_json(Some(pipeline_id))
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/rerun", base_url))
+            .set_json(pipeline_step_id)
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/reset", base_url))
             .to_request(),
         TestRequest::post()
             .uri(&format!("{}/variable/global", base_url))

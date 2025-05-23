@@ -22,7 +22,7 @@ use crate::{
     },
     service::{
         execution_service::ExecutionScheduler,
-        experiment_service::{delete_step_logs, delete_step_output},
+        experiment_service::{delete_step_logs, delete_step_output, is_experiment_locked},
         pipeline_service::LoadedPipelines,
         validation_service::{validate_comment, validate_entity_name, validate_mail},
     },
@@ -742,7 +742,7 @@ pub async fn post_experiment_execution_reset(
     Ok(HttpResponse::Ok().finish())
 }
 
-pub async fn get_experiment_execution_locked(
+pub async fn get_experiment_locked(
     database_manager: web::Data<DatabaseManager>,
     experiment_id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
@@ -754,10 +754,9 @@ pub async fn get_experiment_execution_locked(
             experiment_id
         ))
     })?;
-    let is_executed = ExperimentExecution::is_executed(experiment_id, &mut connection)
+    let is_locked = is_experiment_locked(experiment_id, &mut connection)
         .map_err(|err| SeqError::from(err).chain(format!("Lock state for experiment {} could not be determined. Error while quering the database.", experiment_id)))?;
-    // TODO: Add check for ongoing download.
-    Ok(HttpResponse::Ok().json(is_executed))
+    Ok(HttpResponse::Ok().json(is_locked))
 }
 
 #[cfg(test)]

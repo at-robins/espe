@@ -34,14 +34,16 @@ pub struct SeqError {
 /// An application wide error type.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum SeqErrorType {
-    /// A generic error implying an internal problem.
+    /// An generic error implying an internal problem.
     InternalServerError,
-    /// A error representing a missing resource.
+    /// An error representing a missing resource.
     NotFoundError,
-    /// A error representing an erroneous request.
+    /// An error representing an erroneous request.
     BadRequestError,
-    /// A error representing a request conflicting with internal server state.
+    /// An error representing a request conflicting with internal server state.
     Conflict,
+    /// An error representing a request that was performed despite an available check has failed.
+    PreconditionFailed,
 }
 
 impl SeqError {
@@ -153,6 +155,7 @@ impl ResponseError for SeqError {
             SeqErrorType::NotFoundError => StatusCode::NOT_FOUND,
             SeqErrorType::BadRequestError => StatusCode::BAD_REQUEST,
             SeqErrorType::Conflict => StatusCode::CONFLICT,
+            SeqErrorType::PreconditionFailed => StatusCode::PRECONDITION_FAILED,
         }
     }
 }
@@ -299,6 +302,7 @@ impl SeqErrorLogger {
             SeqErrorType::NotFoundError => warn!("{}", self.message),
             SeqErrorType::BadRequestError => error!("{}", self.message),
             SeqErrorType::Conflict => error!("{}", self.message),
+            SeqErrorType::PreconditionFailed => error!("{}", self.message),
         }
     }
 }
