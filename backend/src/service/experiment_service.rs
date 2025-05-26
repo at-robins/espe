@@ -221,10 +221,36 @@ pub fn is_experiment_locked(
     })
 }
 
+/// Returns [`Ok`] if the experiment is currently locked
+/// and an error otherwise.
+///
+/// # Parameters
+///
+/// * `experiment_id` - the ID of the experiment
+/// * `connection` - a connection to the database
+pub fn is_experiment_locked_err(
+    experiment_id: i32,
+    connection: &mut SqliteConnection,
+) -> Result<(), SeqError> {
+    is_experiment_locked(experiment_id, connection).and_then(|locked| {
+        if locked {
+            Err(SeqError::new(
+                "Experiment locked",
+                SeqErrorType::PreconditionFailed,
+                format!("Experiment {} is locked.", experiment_id),
+                "The experiment is locked.",
+            ))
+        } else {
+            Ok(())
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
+    use actix_web::{http::StatusCode, ResponseError};
     use diesel::RunQueryDsl;
 
     use crate::{
@@ -478,7 +504,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_executed() {
+    fn test_is_experiment_locked() {
         // Use a reference to the context, so the context is not dropped early
         // and messes up test context folder deletion.
         let context = TestContext::new();
@@ -556,5 +582,86 @@ mod tests {
         assert!(is_experiment_locked(experiment_id_running, &mut connection).unwrap());
         assert!(!is_experiment_locked(experiment_id_not_executed, &mut connection).unwrap());
         assert!(!is_experiment_locked(experiment_id_empty, &mut connection).unwrap());
+    }
+
+    #[test]
+    fn test_is_experiment_locked_err() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let mut connection = context.get_connection();
+        // Create an experiment containing all different stati.
+        let experiment_all = NewExperiment::new("all".to_string());
+        let experiment_waiting = NewExperiment::new("waiting".to_string());
+        let experiment_running = NewExperiment::new("running".to_string());
+        let experiment_not_executed = NewExperiment::new("not executed".to_string());
+        let experiment_empty = NewExperiment::new("empty".to_string());
+        let experiment_id_all: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_all)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_waiting: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_waiting)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_running: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_running)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_not_executed: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_not_executed)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_empty: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_empty)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let new_records_all: Vec<ExperimentExecution> = vec![
+            (ExecutionStatus::Aborted, experiment_id_all),
+            (ExecutionStatus::Failed, experiment_id_all),
+            (ExecutionStatus::Finished, experiment_id_all),
+            (ExecutionStatus::Running, experiment_id_all),
+            (ExecutionStatus::Finished, experiment_id_all),
+            (ExecutionStatus::Waiting, experiment_id_all),
+            (ExecutionStatus::Finished, experiment_id_waiting),
+            (ExecutionStatus::Waiting, experiment_id_waiting),
+            (ExecutionStatus::Aborted, experiment_id_waiting),
+            (ExecutionStatus::Finished, experiment_id_waiting),
+            (ExecutionStatus::Finished, experiment_id_running),
+            (ExecutionStatus::Running, experiment_id_running),
+            (ExecutionStatus::Aborted, experiment_id_running),
+            (ExecutionStatus::Finished, experiment_id_running),
+            (ExecutionStatus::Finished, experiment_id_not_executed),
+            (ExecutionStatus::Failed, experiment_id_not_executed),
+            (ExecutionStatus::Aborted, experiment_id_not_executed),
+            (ExecutionStatus::Finished, experiment_id_not_executed),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(id, (status, experiment_id))| ExperimentExecution {
+            id: id as i32,
+            experiment_id,
+            pipeline_id: id.to_string(),
+            pipeline_step_id: id.to_string(),
+            execution_status: status.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        })
+        .collect();
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+        assert_eq!(is_experiment_locked_err(experiment_id_all, &mut connection).unwrap_err().status_code(), StatusCode::PRECONDITION_FAILED);
+        assert_eq!(is_experiment_locked_err(experiment_id_waiting, &mut connection).unwrap_err().status_code(), StatusCode::PRECONDITION_FAILED);
+        assert_eq!(is_experiment_locked_err(experiment_id_running, &mut connection).unwrap_err().status_code(), StatusCode::PRECONDITION_FAILED);
+        assert!(is_experiment_locked_err(experiment_id_not_executed, &mut connection).is_ok());
+        assert!(is_experiment_locked_err(experiment_id_empty, &mut connection).is_ok());
     }
 }

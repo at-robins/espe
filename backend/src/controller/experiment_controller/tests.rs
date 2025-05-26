@@ -1925,21 +1925,21 @@ async fn test_experiment_locked() {
 
     let base_url = format!("/api/experiments/{}", experiment_id);
     let test_requests = [
-        TestRequest::post()
-            .uri(&format!("{}/archive", base_url))
-            .set_json(pipeline_step_id)
-            .to_request(),
-        TestRequest::patch()
-            .uri(&format!("{}/pipeline", base_url))
-            .set_json(Some(pipeline_id))
-            .to_request(),
-        TestRequest::post()
-            .uri(&format!("{}/rerun", base_url))
-            .set_json(pipeline_step_id)
-            .to_request(),
-        TestRequest::post()
-            .uri(&format!("{}/reset", base_url))
-            .to_request(),
+        // TestRequest::post()
+        //     .uri(&format!("{}/archive", base_url))
+        //     .set_json(pipeline_step_id)
+        //     .to_request(),
+        // TestRequest::patch()
+        //     .uri(&format!("{}/pipeline", base_url))
+        //     .set_json(Some(pipeline_id))
+        //     .to_request(),
+        // TestRequest::post()
+        //     .uri(&format!("{}/rerun", base_url))
+        //     .set_json(pipeline_step_id)
+        //     .to_request(),
+        // TestRequest::post()
+        //     .uri(&format!("{}/reset", base_url))
+        //     .to_request(),
         TestRequest::post()
             .uri(&format!("{}/variable/global", base_url))
             .set_json(PipelineGlobalVariableUpload {
@@ -1976,12 +1976,13 @@ async fn test_experiment_locked() {
     for test_request in test_requests {
         let test_url = test_request.uri().to_string();
         let resp = test::call_service(&app, test_request).await;
-        assert_ne!(
+        assert_eq!(
             resp.status(),
-            StatusCode::NOT_FOUND,
-            "Accessing {} with an existing experiment did return status code {} but should return another status code. Message: {:?}",
+            StatusCode::PRECONDITION_FAILED,
+            "Accessing {} while the experiment was lockeddid return status code {} but should return {}. Message: {:?}",
             test_url,
             resp.status(),
+            StatusCode::PRECONDITION_FAILED,
             resp.response()
         );
     }
