@@ -31,6 +31,7 @@ FILTER_PATHWAY_DB_MIN = 15
 FILTER_PATHWAY_DB_MAX = 500
 PLOT_PATHWAYS_MAX = 30
 FILTER_VALUE_ABSOLUTE = "abs"
+KEY_SCORE = "scores"
 
 
 def parse_gmt(pth: Path) -> pd.DataFrame:
@@ -76,7 +77,7 @@ def parse_da_csv(dge_csv_path, filter=None) -> pd.DataFrame:
 
     # Only keeps relevant columns and renames the remaining ones.
     annotated_dars.drop(labels=["log2FoldChange", "padj"], axis=1, inplace=True)
-    annotated_dars.rename(columns={"stat": "scores"}, inplace=True)
+    annotated_dars.rename(columns={"stat": KEY_SCORE}, inplace=True)
 
     # Only adds genes once for the most significant peak.
     annotated_dars.drop_duplicates(
@@ -85,11 +86,14 @@ def parse_da_csv(dge_csv_path, filter=None) -> pd.DataFrame:
         inplace=True,
     )
 
+    # Remove invalid values.
+    annotated_dars = annotated_dars[np.isfinite(annotated_dars[KEY_SCORE])].copy()
+
     # Set gene names as indices for the GSEA algorithm.
     annotated_dars.set_index("Gene Name", inplace=True)
 
     print(f"\tUsing {len(annotated_dars.index)} / {total_peaks} peaks.", flush=True)
-    annotated_dars.sort_values("scores", ascending=False, inplace=True)
+    annotated_dars.sort_values(KEY_SCORE, ascending=False, inplace=True)
 
     return annotated_dars
 

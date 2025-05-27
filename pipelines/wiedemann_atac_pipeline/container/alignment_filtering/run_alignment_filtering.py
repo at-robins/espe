@@ -46,13 +46,17 @@ def passes_invalid_reads(bam_row):
     Checks if invalid alignments should be removed and if a specific alignment
     passes the filtering.
     """
-    # Samtools flag -F 2828
+    # Samtools flag -F 2828 -f 3
     return remove_invalid_reads != "true" or (
-        not bam_row.mate_is_unmapped
-        and not bam_row.is_unmapped
-        and not bam_row.is_supplementary
-        and not bam_row.is_secondary
-        and not bam_row.is_qcfail
+        (
+            not bam_row.mate_is_unmapped
+            and not bam_row.is_unmapped
+            and not bam_row.is_supplementary
+            and not bam_row.is_secondary
+            and not bam_row.is_qcfail
+        )
+        and bam_row.is_paired
+        and bam_row.is_proper_pair
     )
 
 
@@ -78,9 +82,7 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                 file_base_input_path.removeprefix(INPUT_FOLDER + "/"),
             )
             os.makedirs(os.path.dirname(file_base_output_path), exist_ok=True)
-            print(
-                f"Filtering file {file_base_input_path}{INPUT_SUFFIX}...", flush=True
-            )
+            print(f"Filtering file {file_base_input_path}{INPUT_SUFFIX}...", flush=True)
             with pysam.AlignmentFile(
                 f"{file_base_input_path}{INPUT_SUFFIX}", mode="rb", threads=threads
             ) as bam_file_in:
