@@ -5,6 +5,13 @@ use crate::{
         environment::LOG_LEVEL,
     },
     controller::routing::routing_config,
+    model::{
+        db::{
+            experiment::Experiment,
+            experiment_execution::{ExecutionStatus, NewExperimentExecution},
+        },
+        internal::archive::ArchiveMetadata,
+    },
     service::{execution_service::ExecutionScheduler, pipeline_service::LoadedPipelines},
 };
 use actix_web::{
@@ -12,7 +19,7 @@ use actix_web::{
     dev::{ServiceFactory, ServiceRequest, ServiceResponse},
     middleware, web, App, Error,
 };
-use diesel::{connection::SimpleConnection, Connection, SqliteConnection};
+use diesel::{connection::SimpleConnection, Connection, RunQueryDsl, SqliteConnection};
 use diesel_migrations::MigrationHarness;
 use dotenv::dotenv;
 use parking_lot::Mutex;
@@ -157,4 +164,73 @@ impl From<&TestContext> for Configuration {
             ApplicationMode::Release,
         )
     }
+}
+
+pub const DEFAULT_EXPERIMENT_ID: i32 = 42;
+pub const DEFAULT_PIPELINE_ID: &str = "testing_pipeline";
+pub const DEFAULT_PIPELINE_STEP_ID: &str = "fastqc";
+pub const DEFAULT_ARCHIVE_ID: &str = "42";
+// let global_variable_id = "global_number";
+// let step_variable_id = "number";
+// let new_variable_value = "42";
+
+/// Creates a default dummy experiment for testing.
+///
+/// # Parameters
+///
+/// * `connection` - a connection to the test database
+pub fn create_default_experiment(connection: &mut SqliteConnection) {
+    let new_record = Experiment {
+        id: DEFAULT_EXPERIMENT_ID,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(DEFAULT_PIPELINE_ID.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(connection)
+        .unwrap();
+}
+
+/// Creates a default dummy archive for testing.
+///
+/// # Parameters
+///
+/// * `connection` - a connection to the test database
+pub fn create_default_temporary_download_archive(context: &TestContext) {
+    let test_config = Configuration::from(context);
+    std::fs::create_dir_all(test_config.temporary_download_path()).unwrap();
+    let archive_path = test_config.temporary_download_file_path(DEFAULT_ARCHIVE_ID);
+    std::fs::File::create_new(&archive_path).unwrap();
+    let archive_metadata = ArchiveMetadata::new(format!("{}.zip", DEFAULT_ARCHIVE_ID));
+    let archive_metadata_path = ArchiveMetadata::metadata_path(&archive_path);
+    serde_json::to_writer(
+        std::fs::File::create_new(archive_metadata_path).unwrap(),
+        &archive_metadata,
+    )
+    .unwrap();
+}
+
+/// Creates an execution step with the specified status for the default dummy experiment for testing.
+///
+/// # Parameters
+///
+/// * `connection` - a connection to the test database
+/// * `status` - the [`ExecutionStatus`] of the step execution
+pub fn create_default_experiment_execution(
+    connection: &mut SqliteConnection,
+    status: ExecutionStatus,
+) {
+    let new_execution = [NewExperimentExecution::new_with_status(
+        DEFAULT_EXPERIMENT_ID,
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+        status,
+    )];
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
+        .execute(connection)
+        .unwrap();
 }

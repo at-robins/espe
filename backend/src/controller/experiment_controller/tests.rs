@@ -11,7 +11,11 @@ use crate::{
         exchange::experiment_step_logs::ExperimentStepLogRequest,
         internal::{archive::ArchiveMetadata, pipeline_blueprint::PipelineStepVariableCategory},
     },
-    test_utility::{create_test_app, TestContext, TEST_RESOURCES_PATH},
+    test_utility::{
+        create_default_experiment, create_default_experiment_execution,
+        create_default_temporary_download_archive, create_test_app, TestContext,
+        DEFAULT_EXPERIMENT_ID, DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID, TEST_RESOURCES_PATH,
+    },
 };
 
 use actix_web::{
@@ -1904,35 +1908,21 @@ async fn test_experiment_locked() {
     db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
     let mut connection = db_context.get_connection();
     let app = test::init_service(create_test_app(&db_context)).await;
-    let test_config = Configuration::from(&db_context);
 
-    let experiment_id = 42;
-    let archive_id = 42;
-    let pipeline_id = "testing_pipeline";
-    let pipeline_step_id = "fastqc";
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Running);
+    create_default_temporary_download_archive(&db_context);
 
-    // Creates a dummy archive file.
-    std::fs::create_dir_all(test_config.temporary_download_path()).unwrap();
-    let archive_path = test_config.temporary_download_file_path(archive_id.to_string());
-    std::fs::File::create_new(&archive_path).unwrap();
-    let archive_metadata = ArchiveMetadata::new(format!("{}.zip", archive_id));
-    let archive_metadata_path = ArchiveMetadata::metadata_path(&archive_path);
-    serde_json::to_writer(
-        std::fs::File::create_new(archive_metadata_path).unwrap(),
-        &archive_metadata,
-    )
-    .unwrap();
+    let global_variable_id = "global_number";
+    let step_variable_id = "number";
+    let new_variable_value = "42";
 
-    let base_url = format!("/api/experiments/{}", experiment_id);
+    let base_url = format!("/api/experiments/{}", DEFAULT_EXPERIMENT_ID);
     let test_requests = [
-        // TestRequest::post()
-        //     .uri(&format!("{}/archive", base_url))
-        //     .set_json(pipeline_step_id)
-        //     .to_request(),
-        // TestRequest::patch()
-        //     .uri(&format!("{}/pipeline", base_url))
-        //     .set_json(Some(pipeline_id))
-        //     .to_request(),
+        TestRequest::patch()
+            .uri(&format!("{}/pipeline", base_url))
+            .set_json(Option::<String>::None)
+            .to_request(),
         // TestRequest::post()
         //     .uri(&format!("{}/rerun", base_url))
         //     .set_json(pipeline_step_id)
@@ -1943,35 +1933,52 @@ async fn test_experiment_locked() {
         TestRequest::post()
             .uri(&format!("{}/variable/global", base_url))
             .set_json(PipelineGlobalVariableUpload {
-                pipeline_id: pipeline_id.to_string(),
-                variable_id: "global_number".to_string(),
-                variable_value: None,
+                pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+                variable_id: global_variable_id.to_string(),
+                variable_value: Some(new_variable_value.to_string()),
             })
             .to_request(),
         TestRequest::post()
             .uri(&format!("{}/variable/step", base_url))
             .set_json(PipelineStepVariableUpload {
-                pipeline_id: pipeline_id.to_string(),
-                pipeline_step_id: pipeline_step_id.to_string(),
-                variable_id: "number".to_string(),
-                variable_value: None,
+                pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+                pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+                variable_id: step_variable_id.to_string(),
+                variable_value: Some(new_variable_value.to_string()),
             })
             .to_request(),
     ];
 
-    // Creates a dummy experiment.
-    let new_record = Experiment {
-        id: experiment_id,
-        experiment_name: "Dummy record".to_string(),
-        comment: Some("A comment".to_string()),
-        mail: Some("a.b@c.de".to_string()),
-        pipeline_id: Some(pipeline_id.to_string()),
-        creation_time: chrono::Utc::now().naive_local(),
-    };
-    diesel::insert_into(crate::schema::experiment::table)
-        .values(&new_record)
-        .execute(&mut connection)
-        .unwrap();
+    // Make sure variables are unset.
+    assert_eq!(
+        None,
+        PipelineGlobalVariable::get(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            global_variable_id,
+            &mut connection
+        )
+        .unwrap()
+    );
+    assert_eq!(
+        None,
+        PipelineStepVariable::get(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            step_variable_id,
+            &mut connection
+        )
+        .unwrap()
+    );
+
+    // Make sure the pipeline ID is correct.
+    assert_eq!(
+        Some(DEFAULT_PIPELINE_ID.to_string()),
+        Experiment::get(DEFAULT_EXPERIMENT_ID, &mut connection)
+            .unwrap()
+            .pipeline_id
+    );
 
     for test_request in test_requests {
         let test_url = test_request.uri().to_string();
@@ -1979,11 +1986,42 @@ async fn test_experiment_locked() {
         assert_eq!(
             resp.status(),
             StatusCode::PRECONDITION_FAILED,
-            "Accessing {} while the experiment was lockeddid return status code {} but should return {}. Message: {:?}",
+            "Accessing {} while the experiment was locked did return status code {} but should return {}. Message: {:?}",
             test_url,
             resp.status(),
             StatusCode::PRECONDITION_FAILED,
             resp.response()
         );
     }
+
+    // Make sure variables are still unset.
+    assert_eq!(
+        None,
+        PipelineGlobalVariable::get(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            global_variable_id,
+            &mut connection
+        )
+        .unwrap()
+    );
+    assert_eq!(
+        None,
+        PipelineStepVariable::get(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            step_variable_id,
+            &mut connection
+        )
+        .unwrap()
+    );
+
+    // Make sure the pipeline ID did not change.
+    assert_eq!(
+        Some(DEFAULT_PIPELINE_ID.to_string()),
+        Experiment::get(DEFAULT_EXPERIMENT_ID, &mut connection)
+            .unwrap()
+            .pipeline_id
+    );
 }

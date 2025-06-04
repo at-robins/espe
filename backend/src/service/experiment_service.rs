@@ -658,9 +658,24 @@ mod tests {
             .values(&new_records_all)
             .execute(&mut connection)
             .unwrap();
-        assert_eq!(is_experiment_locked_err(experiment_id_all, &mut connection).unwrap_err().status_code(), StatusCode::PRECONDITION_FAILED);
-        assert_eq!(is_experiment_locked_err(experiment_id_waiting, &mut connection).unwrap_err().status_code(), StatusCode::PRECONDITION_FAILED);
-        assert_eq!(is_experiment_locked_err(experiment_id_running, &mut connection).unwrap_err().status_code(), StatusCode::PRECONDITION_FAILED);
+        assert_eq!(
+            is_experiment_locked_err(experiment_id_all, &mut connection)
+                .unwrap_err()
+                .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
+        assert_eq!(
+            is_experiment_locked_err(experiment_id_waiting, &mut connection)
+                .unwrap_err()
+                .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
+        assert_eq!(
+            is_experiment_locked_err(experiment_id_running, &mut connection)
+                .unwrap_err()
+                .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
         assert!(is_experiment_locked_err(experiment_id_not_executed, &mut connection).is_ok());
         assert!(is_experiment_locked_err(experiment_id_empty, &mut connection).is_ok());
     }

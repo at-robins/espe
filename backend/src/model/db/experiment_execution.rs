@@ -287,6 +287,36 @@ impl NewExperimentExecution {
             creation_time: Utc::now().naive_utc(),
         }
     }
+
+    /// Creates a new experiment execution record for insertion into the database
+    /// with the specified status.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiment_id` - the ID of the according experiment
+    /// * `pipeline_id` - the ID of the pipeline to be executed
+    /// * `pipeline_step_id` - the ID of the pipeline step to be executed
+    /// * `status` - the initial [`ExecutionStatus`] that should be set
+    pub fn new_with_status<
+        ExperimentIdType: Into<i32>,
+        PipelineIdIdType: Into<String>,
+        PipelineStepIdIdType: Into<String>,
+    >(
+        experiment_id: ExperimentIdType,
+        pipeline_id: PipelineIdIdType,
+        pipeline_step_id: PipelineStepIdIdType,
+        status: ExecutionStatus,
+    ) -> Self {
+        Self {
+            experiment_id: experiment_id.into(),
+            pipeline_id: pipeline_id.into(),
+            pipeline_step_id: pipeline_step_id.into(),
+            execution_status: status.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: Utc::now().naive_utc(),
+        }
+    }
 }
 
 #[cfg(test)]

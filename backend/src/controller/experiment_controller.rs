@@ -22,7 +22,9 @@ use crate::{
     },
     service::{
         execution_service::ExecutionScheduler,
-        experiment_service::{delete_step_logs, delete_step_output, is_experiment_locked},
+        experiment_service::{
+            delete_step_logs, delete_step_output, is_experiment_locked, is_experiment_locked_err,
+        },
         pipeline_service::LoadedPipelines,
         validation_service::{validate_comment, validate_entity_name, validate_mail},
     },
@@ -199,7 +201,19 @@ pub async fn patch_experiment_pipeline(
         }
     }
     let mut connection = database_manager.database_connection()?;
-    Experiment::exists_err(id, &mut connection)?;
+    Experiment::exists_err(id, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "Pipeline {:?} cannot be set for experiment {} as the experiment does not exist.",
+            new_pipeline, id
+        ))
+    })?;
+    is_experiment_locked_err(id, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "Pipeline {:?} cannot be set for experiment {} as the experiment is locked.",
+            new_pipeline, id
+        ))
+    })?;
+
     connection.immediate_transaction(|connection| {
         diesel::update(crate::schema::experiment::table.find(id))
             .set(crate::schema::experiment::pipeline_id.eq(new_pipeline))
@@ -318,7 +332,9 @@ pub async fn post_experiment_pipeline_step_variable(
         ));
     }
     let mut connection = database_manager.database_connection()?;
-    Experiment::exists_err(experiment_id, &mut connection)?;
+    Experiment::exists_err(experiment_id, &mut connection).map_err(|err| err.chain(format!("Step variable {} - {} - {} of experiment {} could not be set as the experiment does not exis.", new_variable.pipeline_id, new_variable.pipeline_step_id, new_variable.variable_id, experiment_id)))?;
+    is_experiment_locked_err(experiment_id, &mut connection).map_err(|err| err.chain(format!("Step variable {} - {} - {} of experiment {} could not be set as the experiment is locked.", new_variable.pipeline_id, new_variable.pipeline_step_id, new_variable.variable_id, experiment_id)))?;
+
     connection.immediate_transaction(|connection| {
         if let Some(existing_variable) = PipelineStepVariable::get(
             experiment_id,
@@ -374,7 +390,9 @@ pub async fn post_experiment_pipeline_global_variable(
         ));
     }
     let mut connection = database_manager.database_connection()?;
-    Experiment::exists_err(experiment_id, &mut connection)?;
+    Experiment::exists_err(experiment_id, &mut connection).map_err(|err| err.chain(format!("Global variable {} - {} of experiment {} could not be set as the experiment does not exist.", new_variable.pipeline_id, new_variable.variable_id, experiment_id)))?;
+    is_experiment_locked_err(experiment_id, &mut connection).map_err(|err| err.chain(format!("Global variable {} - {} of experiment {} could not be set as the experiment is locked.", new_variable.pipeline_id, new_variable.variable_id, experiment_id)))?;
+
     connection.immediate_transaction(|connection| {
         if let Some(existing_variable) = PipelineGlobalVariable::get(
             experiment_id,

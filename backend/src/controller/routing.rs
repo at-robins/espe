@@ -6,8 +6,8 @@ use crate::application::error::SeqError;
 
 use super::{
     experiment_controller::{
-        create_experiment, delete_experiment, get_experiment, get_experiment_locked,
-        get_experiment_execution_status, get_experiment_pipeline_run, get_experiment_pipelines,
+        create_experiment, delete_experiment, get_experiment, get_experiment_execution_status,
+        get_experiment_locked, get_experiment_pipeline_run, get_experiment_pipelines,
         list_experiment, patch_experiment_comment, patch_experiment_mail, patch_experiment_name,
         patch_experiment_pipeline, post_execute_experiment, post_execute_experiment_step,
         post_experiment_execution_abort, post_experiment_execution_reset,
