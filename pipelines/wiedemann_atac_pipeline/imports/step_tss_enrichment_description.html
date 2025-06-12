@@ -1,0 +1,69 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: 0.05rem;
+    border-radius: 0.2rem;
+  }
+</style>
+<p>Plots read density around transcription start sites (TSS).</p>
+<p>
+  <b>Output</b>
+  The following files are created for each sample and each nucleosomal fraction (nucleosome-free, mononucleosomal, ...):
+</p>
+<ol>
+  <li>
+    <code>*.bw</code>: A bigWig file representation of the input bam file.
+  </li>
+  <li>
+    <code>*.mat.gz</code>: A zipped matrix file containg count distribution information.
+  </li>
+  <li>
+    <code>*_heatmap.svg</code>: A heatmap of the read distribution around the TSS.
+  </li>
+  <li>
+    <code>*_read_density.svg</code>: A density plot of the read distribution around the TSS.
+  </li>
+</ol>
+<p>
+  <b>References</b>
+</p>
+<ol>
+  <li>
+    Ramírez, F., Ryan, D. P., Grüning, B., Bhardwaj, V., Kilpert, F., Richter, A. S., Heyne, S., Dündar, F., & Manke, T.
+    (2016). deepTools2: a next generation web server for deep-sequencing data analysis. Nucleic acids research, 44(W1),
+    W160–W165.
+    <a href="https://doi.org/10.1093/nar/gkw257">https://doi.org/10.1093/nar/gkw257</a>
+  </li>
+  <li>
+    Hunter, J. D. (2007). Matplotlib: A 2D graphics environment. Computing in
+    Science & Engineering, 9(3), 90–95.
+    <a href="https://doi.org/10.1109/MCSE.2007.55">https://doi.org/10.1109/MCSE.2007.55</a>
+  </li>
+  <li>
+    Waskom, M. L. (2021). seaborn: Statistical data visualization. Journal of
+    Open Source Software, 6(60), 3021.
+    <a href="https://doi.org/10.21105/joss.03021">https://doi.org/10.21105/joss.03021</a>
+  </li>
+  <li>
+    McKinney, W. (2010). Data Structures for Statistical Computing in Python. In
+    S. van der Walt & J. Millman (Hrsg.), Proceedings of the 9th Python in
+    Science Conference (S. 56–61).
+    <a href="https://doi.org/10.25080/Majora-92bf1922-00a">https://doi.org/10.25080/Majora-92bf1922-00a</a>
+  </li>
+  <li>
+    The pandas development team. (2020). pandas-dev/pandas: Pandas (latest)
+    [Software]. Zenodo.
+    <a href="https://doi.org/10.5281/zenodo.3509134">https://doi.org/10.5281/zenodo.3509134</a>
+  </li>
+  <li>
+    Virtanen, P., Gommers, R., Oliphant, T. E., Haberland, M., Reddy, T.,
+    Cournapeau, D., Burovski, E., Peterson, P., Weckesser, W., Bright, J., van
+    der Walt, S. J., Brett, M., Wilson, J., Millman, K. J., Mayorov, N., Nelson,
+    A. R. J., Jones, E., Kern, R., Larson, E., … SciPy 1.0 Contributors. (2020).
+    SciPy 1.0: Fundamental Algorithms for Scientific Computing in Python. Nature
+    Methods, 17, 261–272.
+    <a href="https://doi.org/10.1038/s41592-019-0686-2">https://doi.org/10.1038/s41592-019-0686-2</a>
+  </li>
+</ol>
