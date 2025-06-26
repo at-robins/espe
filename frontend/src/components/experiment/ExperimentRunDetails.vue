@@ -160,9 +160,11 @@
         </div>
       </div>
     </q-card>
-    <q-dialog v-model="showPollingError" v-if="pollingError">
-      <error-popup :error-response="pollingError" />
-    </q-dialog>
+    <poller
+      v-if="enableRunDetailsPoller"
+      :url="run_details_url"
+      @success="setPipelineDetails"
+    ></poller>
   </div>
 </template>
 
@@ -171,7 +173,6 @@ import { type ErrorResponse, type ExperimentDetails } from "@/scripts/types";
 import axios from "axios";
 import { ref, onMounted, type Ref, computed } from "vue";
 import ErrorPopup from "@/components/ErrorPopup.vue";
-import { onBeforeRouteLeave, useRouter } from "vue-router";
 import {
   PipelineStepStatus,
   type PipelineBlueprint,
@@ -187,24 +188,17 @@ import {
 } from "@quasar/extras/material-symbols-outlined";
 import { matDownload, matRestartAlt } from "@quasar/extras/material-icons";
 import ExperimentStepLogs from "./ExperimentStepLogs.vue";
-
-// The intervall in which pipeline updates are requested from the server.
-const POLLING_INTERVALL_MILLISECONDS = 10000;
+import Poller from "../shared/Poller.vue";
 
 const experiment: Ref<ExperimentDetails | null> = ref(null);
 const pipeline: Ref<PipelineBlueprint | null> = ref(null);
 const sortedSteps: Ref<PipelineStepBlueprint[][]> = ref([]);
 const isLoadingPipelineDetails = ref(false);
+const enableRunDetailsPoller = ref(false);
 const isRestarting = ref(false);
 const loadingError: Ref<ErrorResponse | null> = ref(null);
-const isPollingPipelineDetails = ref(false);
-const pollingError: Ref<ErrorResponse | null> = ref(null);
 const restartingError: Ref<ErrorResponse | null> = ref(null);
 const selectedStep: Ref<PipelineStepBlueprint | null> = ref(null);
-const showPollingError = ref(false);
-const router = useRouter();
-const this_route = router.currentRoute.value.fullPath;
-const pollingTimer: Ref<number | null> = ref(null);
 const isArchiving = ref(false);
 const downloadError: Ref<ErrorResponse | null> = ref(null);
 
@@ -215,15 +209,12 @@ const props = defineProps({
 const experiment_name = computed(() => {
   return experiment.value ? experiment.value.name : props.id;
 });
+const run_details_url = computed(() => {
+  return "/api/experiments/" + props.id + "/run";
+});
 
 onMounted(() => {
   loadPipelineDetails();
-});
-
-onBeforeRouteLeave(() => {
-  if (pollingTimer.value !== null) {
-    clearTimeout(pollingTimer.value);
-  }
 });
 
 /**
@@ -236,53 +227,16 @@ function loadPipelineDetails() {
     .get("/api/experiments/" + props.id)
     .then((response) => {
       experiment.value = response.data;
-      return axios.get("/api/experiments/" + props.id + "/run");
-    })
-    .then((response) => {
-      setPipelineDetails(response.data);
-      pollingTimer.value = window.setTimeout(
-        pollDetailsChanges,
-        POLLING_INTERVALL_MILLISECONDS
-      );
+      enableRunDetailsPoller.value = true;
     })
     .catch((error) => {
       pipeline.value = null;
       loadingError.value = error.response.data;
+      enableRunDetailsPoller.value = false;
     })
     .finally(() => {
       isLoadingPipelineDetails.value = false;
     });
-}
-
-/**
- * Conitinuesly polls changes from the server.
- */
-function pollDetailsChanges() {
-  if (
-    !isPollingPipelineDetails.value &&
-    !loadingError.value &&
-    !pollingError.value &&
-    // Stop polling if the route changes.
-    router.currentRoute.value.fullPath === this_route
-  ) {
-    pollingError.value = null;
-    axios
-      .get("/api/experiments/" + props.id + "/run")
-      .then((response) => {
-        setPipelineDetails(response.data);
-        pollingTimer.value = window.setTimeout(
-          pollDetailsChanges,
-          POLLING_INTERVALL_MILLISECONDS
-        );
-      })
-      .catch((error) => {
-        showPollingError.value = true;
-        pollingError.value = error.response.data;
-      })
-      .finally(() => {
-        isPollingPipelineDetails.value = false;
-      });
-  }
 }
 
 function setPipelineDetails(response: PipelineBlueprint | null) {
@@ -454,18 +408,24 @@ function downloadStepResults(step: PipelineStepBlueprint | null) {
 </script>
 <style scoped lang="scss">
 .chip-unselected {
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2), 0 2px 2px rgba(0, 0, 0, 0.141),
+  box-shadow:
+    0 1px 5px rgba(0, 0, 0, 0.2),
+    0 2px 2px rgba(0, 0, 0, 0.141),
     0 3px 1px -2px rgba(0, 0, 0, 0.122);
   transition: box-shadow 0.3s ease-in-out;
 }
 .chip-selected {
-  box-shadow: 0 1px 5px rgba(0, 100, 255, 0.4),
-    0 2px 2px rgba(0, 100, 255, 0.282), 0 3px 1px -2px rgba(0, 100, 255, 0.244);
+  box-shadow:
+    0 1px 5px rgba(0, 100, 255, 0.4),
+    0 2px 2px rgba(0, 100, 255, 0.282),
+    0 3px 1px -2px rgba(0, 100, 255, 0.244);
   transition: box-shadow 0.3s ease-in-out;
 }
 .chip-dependency {
-  box-shadow: 0 1px 5px rgba(255, 190, 0, 0.4),
-    0 2px 2px rgba(255, 190, 0, 0.282), 0 3px 1px -2px rgba(255, 190, 0, 0.244);
+  box-shadow:
+    0 1px 5px rgba(255, 190, 0, 0.4),
+    0 2px 2px rgba(255, 190, 0, 0.282),
+    0 3px 1px -2px rgba(255, 190, 0, 0.244);
   transition: box-shadow 0.3s ease-in-out;
 }
 </style>
