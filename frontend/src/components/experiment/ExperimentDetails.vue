@@ -125,6 +125,8 @@
     <q-dialog v-model="showServerError" v-if="serverError">
       <error-popup :error-response="serverError" />
     </q-dialog>
+    <poller :url="lock_url" @success="isLocked = $event"></poller>
+    <poller :url="status_url" @success="status = $event"></poller>
   </div>
 </template>
 
@@ -137,7 +139,7 @@ import {
   type ExperimentDetails,
 } from "@/scripts/types";
 import axios from "axios";
-import { ref, onMounted, type Ref } from "vue";
+import { ref, onMounted, type Ref, computed } from "vue";
 import ErrorPopup from "../ErrorPopup.vue";
 import FileTree from "../FileTree.vue";
 import EntityComment from "../shared/EntityComment.vue";
@@ -148,15 +150,13 @@ import EntityPipelineVariables from "../shared/EntityPipelineVariables.vue";
 import ExperimentStatusIndicator from "../shared/ExperimentStatusIndicator.vue";
 import type { PipelineBlueprint } from "@/scripts/pipeline-blueprint";
 import { ExperimentExecutionStatus } from "@/scripts/types";
+import Poller from "../shared/Poller.vue";
 import {
   matPlayCircle,
   matRestartAlt,
   matStopCircle,
 } from "@quasar/extras/material-icons";
-import { onBeforeRouteLeave, useRouter } from "vue-router";
-
-// The intervall in which status updates are requested from the server.
-const POLLING_INTERVALL_MILLISECONDS = 10000;
+import { onBeforeRouteLeave } from "vue-router";
 
 const files: Ref<Array<FileDetails>> = ref([]);
 const experiment: Ref<ExperimentDetails | null> = ref(null);
@@ -169,21 +169,18 @@ const selectedPipeline: Ref<PipelineBlueprint | null> = ref(null);
 const isAborting = ref(false);
 const isRestarting = ref(false);
 const isSubmitting = ref(false);
+const isLocked = ref(false);
 const status = ref(ExperimentExecutionStatus.None);
-const isPolling = ref(false);
-const pollingError: Ref<ErrorResponse | null> = ref(null);
-const router = useRouter();
-const this_route = router.currentRoute.value.fullPath;
-const pollingTimer: Ref<number | null> = ref(null);
+
+const lock_url = computed(() => {
+  return "/api/experiments/" + props.id + "/locked";
+});
+const status_url = computed(() => {
+  return "/api/experiments/" + props.id + "/status";
+});
 
 const props = defineProps({
   id: { type: String, required: true },
-});
-
-onBeforeRouteLeave(() => {
-  if (pollingTimer.value !== null) {
-    clearTimeout(pollingTimer.value);
-  }
 });
 
 function updateTitle(title: string) {
@@ -224,7 +221,6 @@ function getFileTreeNodes(files: FileDetails[]): FileTreeNode[] {
 
 onMounted(() => {
   loadDetails();
-  pollStatusChanges();
 });
 
 /**
@@ -421,36 +417,6 @@ function restartExperiment() {
       })
       .finally(() => {
         isRestarting.value = false;
-      });
-  }
-}
-
-/**
- * Conitinuesly polls changes from the server.
- */
-function pollStatusChanges() {
-  if (
-    !isPolling.value &&
-    !loadingError.value &&
-    !pollingError.value &&
-    // Stop polling if the route changes.
-    router.currentRoute.value.fullPath === this_route
-  ) {
-    pollingError.value = null;
-    axios
-      .get("/api/experiments/" + props.id + "/status")
-      .then((response) => {
-        status.value = response.data;
-        pollingTimer.value = window.setTimeout(
-          pollStatusChanges,
-          POLLING_INTERVALL_MILLISECONDS
-        );
-      })
-      .catch((error) => {
-        pollingError.value = error.response.data;
-      })
-      .finally(() => {
-        isPolling.value = false;
       });
   }
 }
