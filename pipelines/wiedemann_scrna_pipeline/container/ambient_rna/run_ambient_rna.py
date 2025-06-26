@@ -55,7 +55,7 @@ def process_data(file_path_filtered, file_path_raw, output_folder_path):
     print(f"Processing files {file_path_filtered} and {file_path_raw}", flush=True)
     print("\tReading filtered data...")
     adata_filtered = anndata.read_h5ad(file_path_filtered)
-    gene_ids_filtered = adata_filtered.var["gene_ids"].to_numpy()
+    gene_ids_filtered = adata_filtered.var["featureid"].to_numpy()
 
     print("\tNormalising data...")
     adata_filtered_tmp = adata_filtered.copy()
