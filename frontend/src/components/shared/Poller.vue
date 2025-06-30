@@ -4,10 +4,11 @@
 
 <script setup lang="ts">
 import axios from "axios";
-import { ref, onMounted, type Ref, onUnmounted } from "vue";
+import { ref, onMounted, type Ref, onUnmounted, type PropType } from "vue";
 import { matClose } from "@quasar/extras/material-icons";
 import { useQuasar } from "quasar";
 import { error_to_string, is_error_response } from "@/scripts/utilities";
+import type { PollerPostData } from "@/scripts/types";
 
 const isStopping = ref(false);
 const pollingTimer: Ref<number | null> = ref(null);
@@ -18,6 +19,11 @@ const props = defineProps({
   interval: {
     type: Number,
     default: 10000,
+    required: false,
+  },
+  postData: {
+    type: Object as PropType<PollerPostData>,
+    default: null,
     required: false,
   },
 });
@@ -53,8 +59,11 @@ function stopPolling() {
 function pollChanges() {
   // Stop polling if the component was shut down.
   if (!isStopping.value) {
-    axios
-      .get(props.url)
+    // Perform a POST request if respective data has been passed otherwise perform a GET request.
+    let pollRequest = props.postData
+      ? axios.post(props.url, props.postData.data, props.postData.config)
+      : axios.get(props.url);
+    pollRequest
       .then((response) => {
         emit("success", response.data);
         // Sends a brief message that everything works again after a previous error.

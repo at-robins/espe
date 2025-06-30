@@ -1,3 +1,5 @@
+import type { AxiosRequestConfig } from "axios";
+
 export type ExperimentUpload = {
   name: string;
   mail: string | undefined;
@@ -65,4 +67,9 @@ export type ExperimentStepLog = {
 export type ExperimentStepLogs = {
   build: ExperimentStepLog;
   run: ExperimentStepLog;
+};
+
+export type PollerPostData = {
+  config: AxiosRequestConfig;
+  data: any;
 };
