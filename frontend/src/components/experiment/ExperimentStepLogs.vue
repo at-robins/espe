@@ -33,6 +33,7 @@
       </q-tab-panel>
     </q-tab-panels>
     <poller
+      ref="logPollerReference"
       :url="logsUrl"
       :postData="postData"
       @success="logs = $event"
@@ -41,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { type ExperimentStepLogs } from "@/scripts/types";
+import { type ExperimentStepLogs, type PollerInterface } from "@/scripts/types";
 import SplitLogDisplay from "@/components/shared/SplitLogDisplay.vue";
 import { ref, watch, type Ref, computed } from "vue";
 import {
@@ -52,6 +53,7 @@ import Poller from "../shared/Poller.vue";
 
 const logs: Ref<ExperimentStepLogs | null> = ref(null);
 const tab = ref("run");
+const logPollerReference: Ref<PollerInterface | null> = ref(null);
 
 const props = defineProps({
   experimentId: { type: String, required: true },
@@ -63,6 +65,10 @@ watch(
   () => props.stepId,
   () => {
     logs.value = null;
+    // Do not wait for the next update but get the info immediatly after switching steps.
+    if (logPollerReference.value) {
+      logPollerReference.value.pollNow();
+    }
   },
   { immediate: true }
 );

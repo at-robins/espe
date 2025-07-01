@@ -32,10 +32,12 @@ const emit = defineEmits<{
   (event: "success", response: any): void;
 }>();
 
+defineExpose({ pollNow });
+
 const $q = useQuasar();
 
 onUnmounted(() => {
-  stopPolling();
+  shutdown();
 });
 
 onMounted(() => {
@@ -43,14 +45,29 @@ onMounted(() => {
 });
 
 /**
+ * Stops polling changes from the server and marks future polling requests as invalid.
+ */
+function shutdown() {
+  isStopping.value = true;
+  stopPolling();
+}
+
+/**
  * Stops polling changes from the server.
  */
 function stopPolling() {
-  isStopping.value = true;
   if (pollingTimer.value !== null) {
     clearTimeout(pollingTimer.value);
     pollingTimer.value = null;
   }
+}
+
+/**
+ * Performs an immidiate polling action.
+ */
+function pollNow() {
+  stopPolling();
+  pollChanges();
 }
 
 /**

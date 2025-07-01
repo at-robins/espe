@@ -1,4 +1,6 @@
 import type { AxiosRequestConfig } from "axios";
+import type { ComponentPublicInstance } from "vue";
+import Poller from "../components/shared/Poller.vue";
 
 export type ExperimentUpload = {
   name: string;
@@ -73,3 +75,14 @@ export type PollerPostData = {
   config: AxiosRequestConfig;
   data: any;
 };
+
+/**
+ * An interface to interact with the Poller component.
+ */
+export interface PollerInterface
+  extends ComponentPublicInstance<typeof Poller> {
+  /**
+   * Performs an immidiate polling action.
+   */
+  pollNow: () => void;
+}
