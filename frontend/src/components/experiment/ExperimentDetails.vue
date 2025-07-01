@@ -31,6 +31,7 @@
               :pipeline-id="experiment.pipelineId"
               :entity-id="experiment.id"
               endpoint-type="experiments"
+              :locked="isLocked"
               @update:selected-pipeline="selectedPipeline = $event"
             />
           </q-card-section>
@@ -47,6 +48,7 @@
               :pipeline="selectedPipeline"
               :entity-id="experiment.id"
               endpoint-type="experiments"
+              :locked="isLocked"
             />
           </q-card-section>
           <q-card-section>
@@ -156,7 +158,6 @@ import {
   matRestartAlt,
   matStopCircle,
 } from "@quasar/extras/material-icons";
-import { onBeforeRouteLeave } from "vue-router";
 
 const files: Ref<Array<FileDetails>> = ref([]);
 const experiment: Ref<ExperimentDetails | null> = ref(null);

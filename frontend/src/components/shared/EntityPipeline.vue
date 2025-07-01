@@ -12,7 +12,7 @@
         <q-select
           v-model="pipelineModel"
           :options="pipelineOptions"
-          :readonly="isUpdatingPipeline"
+          :readonly="isUpdatingPipeline || locked"
           option-label="name"
           option-value="id"
           clearable
@@ -23,7 +23,12 @@
           :error-message="pipelineErrorMessage"
           bottom-slots
           class="col"
-        />
+        >
+          <q-tooltip v-if="locked">
+            Altering the pipeline is not possible while the experiment is
+            executed or output information is downloaded.
+          </q-tooltip>
+        </q-select>
         <div class="q-ml-md q-mt-md">
           <q-btn
             round
@@ -63,6 +68,7 @@ const props = defineProps({
   },
   entityId: { type: Number, required: true },
   endpointType: { type: String, required: true },
+  locked: { type: Boolean, required: false, default: false },
 });
 
 const isLoading = ref(false);
