@@ -67,6 +67,7 @@
                 @deleted-path="deletePath"
                 @deleted-all="deleteAll"
                 class="col"
+                :locked="isLocked"
               />
             </div>
           </q-card-section>
@@ -127,8 +128,16 @@
     <q-dialog v-model="showServerError" v-if="serverError">
       <error-popup :error-response="serverError" />
     </q-dialog>
-    <poller :url="lock_url" @success="isLocked = $event"></poller>
-    <poller :url="status_url" @success="status = $event"></poller>
+    <poller
+      ref="lockPollerReference"
+      :url="lock_url"
+      @success="isLocked = $event"
+    ></poller>
+    <poller
+      ref="statusPollerReference"
+      :url="status_url"
+      @success="status = $event"
+    ></poller>
   </div>
 </template>
 
@@ -139,6 +148,7 @@ import {
   type FileTreeNode,
   type FilePath,
   type ExperimentDetails,
+  type PollerInterface,
 } from "@/scripts/types";
 import axios from "axios";
 import { ref, onMounted, type Ref, computed } from "vue";
@@ -172,6 +182,8 @@ const isRestarting = ref(false);
 const isSubmitting = ref(false);
 const isLocked = ref(false);
 const status = ref(ExperimentExecutionStatus.None);
+const lockPollerReference: Ref<PollerInterface | null> = ref(null);
+const statusPollerReference: Ref<PollerInterface | null> = ref(null);
 
 const lock_url = computed(() => {
   return "/api/experiments/" + props.id + "/locked";
@@ -379,6 +391,7 @@ function submitExperiment() {
       })
       .finally(() => {
         isSubmitting.value = false;
+        pollAllNow();
       });
   }
 }
@@ -397,6 +410,7 @@ function abortExperiment() {
       })
       .finally(() => {
         isAborting.value = false;
+        pollAllNow();
       });
   }
 }
@@ -418,7 +432,20 @@ function restartExperiment() {
       })
       .finally(() => {
         isRestarting.value = false;
+        pollAllNow();
       });
+  }
+}
+
+/**
+ * Immideatly polls all pollers.
+ */
+function pollAllNow() {
+  if (lockPollerReference.value) {
+    lockPollerReference.value.pollNow();
+  }
+  if (statusPollerReference.value) {
+    statusPollerReference.value.pollNow();
   }
 }
 </script>

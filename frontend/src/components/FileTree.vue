@@ -41,8 +41,8 @@
                   prop.node.isFile
                     ? symOutlinedFilePresent
                     : treeReference?.isExpanded(prop.node.id)
-                    ? symOutlinedFolderOpen
-                    : symOutlinedFolder
+                      ? symOutlinedFolderOpen
+                      : symOutlinedFolder
                 "
               />
             </div>
@@ -63,7 +63,7 @@
             touch-position
             context-menu
           >
-            <q-list dense>
+            <q-list v-if="!locked" dense>
               <q-item
                 v-if="!prop.node.isFile"
                 clickable
@@ -137,6 +137,24 @@
                 </q-item-section>
               </q-item>
             </q-list>
+            <q-list v-else dense>
+              <q-item v-close-popup>
+                <q-item-section
+                  ><div class="row flex-center no-wrap">
+                    <q-icon
+                      :name="matDisabledByDefault"
+                      color="primary"
+                      size="xs"
+                      class="q-mr-xs"
+                    />
+                    <div class="col">
+                      Uploading files is not possible while the experiment is
+                      executed or output information is downloaded.
+                    </div>
+                  </div></q-item-section
+                >
+              </q-item>
+            </q-list>
           </q-menu>
         </div>
       </template>
@@ -189,6 +207,7 @@ import {
   matDelete,
   matCreateNewFolder,
   matUploadFile,
+  matDisabledByDefault,
 } from "@quasar/extras/material-icons";
 import {
   symOutlinedError,
@@ -249,6 +268,7 @@ const MAX_PATH_LENGTH = 128;
 const props = defineProps({
   modelValue: { type: Object as PropType<FileTreeNode[]>, required: true },
   baseDirectoryLabel: { type: String, default: "Root", required: false },
+  locked: { type: Boolean, required: false, default: false },
 });
 
 const selectedNode: Ref<string | null> = ref(null);
