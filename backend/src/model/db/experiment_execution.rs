@@ -929,36 +929,36 @@ mod tests {
             &mut connection
         )
         .unwrap());
-    // Wrong pipeline ID.
-    assert!(!ExperimentExecution::is_executed_with_pipeline(
-        experiment_id_all,
-        (experiment_id_all + 1).to_string(),
-        &mut connection
-    )
-    .unwrap());
-    assert!(!ExperimentExecution::is_executed_with_pipeline(
-        experiment_id_waiting,
-        (experiment_id_waiting + 1).to_string(),
-        &mut connection
-    )
-    .unwrap());
-    assert!(!ExperimentExecution::is_executed_with_pipeline(
-        experiment_id_running,
-        (experiment_id_running + 1).to_string(),
-        &mut connection
-    )
-    .unwrap());
-    assert!(!ExperimentExecution::is_executed_with_pipeline(
-        experiment_id_not_executed,
-        (experiment_id_not_executed + 1).to_string(),
-        &mut connection
-    )
-    .unwrap());
-    assert!(!ExperimentExecution::is_executed_with_pipeline(
-        experiment_id_empty,
-        (experiment_id_empty + 1).to_string(),
-        &mut connection
-    )
-    .unwrap());
+        // Wrong pipeline ID.
+        assert!(!ExperimentExecution::is_executed_with_pipeline(
+            experiment_id_all,
+            (experiment_id_all + 1).to_string(),
+            &mut connection
+        )
+        .unwrap());
+        assert!(!ExperimentExecution::is_executed_with_pipeline(
+            experiment_id_waiting,
+            (experiment_id_waiting + 1).to_string(),
+            &mut connection
+        )
+        .unwrap());
+        assert!(!ExperimentExecution::is_executed_with_pipeline(
+            experiment_id_running,
+            (experiment_id_running + 1).to_string(),
+            &mut connection
+        )
+        .unwrap());
+        assert!(!ExperimentExecution::is_executed_with_pipeline(
+            experiment_id_not_executed,
+            (experiment_id_not_executed + 1).to_string(),
+            &mut connection
+        )
+        .unwrap());
+        assert!(!ExperimentExecution::is_executed_with_pipeline(
+            experiment_id_empty,
+            (experiment_id_empty + 1).to_string(),
+            &mut connection
+        )
+        .unwrap());
     }
 }

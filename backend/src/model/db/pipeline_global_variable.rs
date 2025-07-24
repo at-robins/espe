@@ -79,6 +79,30 @@ impl PipelineGlobalVariable {
             .load(connection)
     }
 
+    /// Returns all variable entries with the specified variable ID from the specified pipeline.
+    ///
+    /// # Parameters
+    ///
+    /// * `pipeline_id` - the ID of the pipeline the variable belongs to
+    /// * `variable_id` - the ID of the variable
+    /// * `connection` - the database connection
+    pub fn get_by_pipeline_and_variable_id<T: Into<String>, R: Into<String>>(
+        pipeline_id: T,
+        variable_id: R,
+        connection: &mut SqliteConnection,
+    ) -> Result<Vec<PipelineGlobalVariable>, diesel::result::Error> {
+        crate::schema::pipeline_global_variable::table
+            .filter(
+                crate::schema::pipeline_global_variable::variable_id
+                    .eq(variable_id.into())
+                    .and(
+                        crate::schema::pipeline_global_variable::pipeline_id.eq(pipeline_id.into()),
+                    ),
+            )
+            .select(PipelineGlobalVariable::as_select())
+            .load(connection)
+    }
+
     /// Returns all variable values belonging to the specified experiment and pipeline.
     /// The keys of the returned map are the variable IDs.
     /// The values of the map are the string representations of the variable values.

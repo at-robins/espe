@@ -80,6 +80,38 @@ impl PipelineStepVariable {
             .load(connection)
     }
 
+    /// Returns all variable entries with the specified variable ID from the specified pipeline step.
+    ///
+    /// # Parameters
+    ///
+    /// * `pipeline_id` - the ID of the pipeline the variable belongs to
+    /// * `pipeline_step_id` - the ID of the pipeline step the variable belongs to
+    /// * `variable_id` - the ID of the variable
+    /// * `connection` - the database connection
+    pub fn get_by_pipeline_step_and_variable_id<
+        T: Into<String>,
+        S: Into<String>,
+        R: Into<String>,
+    >(
+        pipeline_id: T,
+        pipeline_step_id: S,
+        variable_id: R,
+        connection: &mut SqliteConnection,
+    ) -> Result<Vec<PipelineStepVariable>, diesel::result::Error> {
+        crate::schema::pipeline_step_variable::table
+            .filter(
+                crate::schema::pipeline_step_variable::variable_id
+                    .eq(variable_id.into())
+                    .and(crate::schema::pipeline_step_variable::pipeline_id.eq(pipeline_id.into()))
+                    .and(
+                        crate::schema::pipeline_step_variable::pipeline_step_id
+                            .eq(pipeline_step_id.into()),
+                    ),
+            )
+            .select(PipelineStepVariable::as_select())
+            .load(connection)
+    }
+
     /// Returns all variable values belonging to the specified experiment and pipeline.
     /// The keys of the returned map is a concatenation of pipeline step ID and variable ID.
     /// The values of the map are the string representation of the variable value.

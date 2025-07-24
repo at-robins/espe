@@ -132,12 +132,12 @@
       ref="lockPollerReference"
       :url="lock_url"
       @success="isLocked = $event"
-    ></poller>
+    />
     <poller
       ref="statusPollerReference"
       :url="status_url"
       @success="status = $event"
-    ></poller>
+    />
   </div>
 </template>
 
