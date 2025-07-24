@@ -240,10 +240,10 @@ pub fn is_global_data_locked(
                 global_data_id, exp.experiment_id, exp.pipeline_id
             ))
         })? {
-            return Ok(false);
+            return Ok(true);
         }
     }
-    return Ok(true);
+    return Ok(false);
 }
 
 /// Returns [`Ok`] if the global data repo is currently locked
