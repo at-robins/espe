@@ -12,7 +12,7 @@ use diesel::{
 };
 use getset::Getters;
 
-#[derive(Identifiable, Queryable, Insertable, Selectable, PartialEq, Debug)]
+#[derive(Identifiable, Queryable, Insertable, Selectable, PartialEq, Debug, Clone)]
 #[diesel(belongs_to(Experiment, foreign_key = experiment_id))]
 #[diesel(table_name = pipeline_step_variable)]
 /// A queryable pipeline step variable database entry.
@@ -431,6 +431,79 @@ mod tests {
             .unwrap()
             .unwrap(),
             &pipeline_variable
+        );
+    }
+
+    #[test]
+    fn test_get_by_pipeline_step_and_variable_id() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let mut connection = context.get_connection();
+        // Create dummy experiments.
+        let experiment_0 = NewExperiment::new("0".to_string());
+        let experiment_1 = NewExperiment::new("1".to_string());
+        let experiment_id_0: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_0)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_1: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_1)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        // Dummy variable setup.
+        let pipeline_id = "Dummy pipeline";
+        assert!(PipelineStepVariable::get_by_experiment_and_pipeline(
+            experiment_id_1,
+            pipeline_id,
+            &mut connection
+        )
+        .unwrap()
+        .is_empty());
+        let number_of_records = 42;
+        let new_records_0: Vec<PipelineStepVariable> = (0..number_of_records)
+            .map(|id| PipelineStepVariable {
+                id,
+                experiment_id: experiment_id_0,
+                pipeline_id: pipeline_id.to_string(),
+                pipeline_step_id: id.to_string(),
+                variable_id: id.to_string(),
+                variable_value: Some(id.to_string()),
+                creation_time: chrono::Utc::now().naive_local(),
+            })
+            .collect();
+        let new_records_1: Vec<PipelineStepVariable> = new_records_0
+            .iter()
+            .map(|step_var_0| {
+                let mut step_var_1 = step_var_0.clone();
+                step_var_1.experiment_id = experiment_id_1;
+                step_var_1.id = step_var_1.id + number_of_records;
+                step_var_1
+            })
+            .collect();
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&new_records_0)
+            .execute(&mut connection)
+            .unwrap();
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&new_records_1)
+            .execute(&mut connection)
+            .unwrap();
+        let index_to_query = 15;
+        assert_eq!(
+            vec![
+                new_records_0[index_to_query].clone(),
+                new_records_1[index_to_query].clone()
+            ],
+            PipelineStepVariable::get_by_pipeline_step_and_variable_id(
+                pipeline_id,
+                index_to_query.to_string(),
+                index_to_query.to_string(),
+                &mut connection
+            )
+            .unwrap()
         );
     }
 }
