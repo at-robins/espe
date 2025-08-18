@@ -8,6 +8,7 @@ import os
 import pandas as pd
 import seaborn as sns
 
+from matplotlib import pyplot as plt
 from pathlib import Path
 
 
@@ -55,6 +56,7 @@ def plot_correlation_clustermap(cm_data, cm_output_path, cluster_rows, cluster_c
     plot.ax_col_dendrogram.set_visible(False)
     plot.ax_heatmap.grid(False)
     plot.savefig(cm_output_path)
+    plt.close()
 
 
 print("Loading annotations...", flush=True)
