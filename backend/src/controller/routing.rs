@@ -2,7 +2,9 @@ use actix_files::{Files, NamedFile};
 use actix_web::web::{self, ServiceConfig};
 use log::error;
 
-use crate::application::error::SeqError;
+use crate::{
+    application::error::SeqError, controller::global_data_controller::get_global_data_locked,
+};
 
 use super::{
     experiment_controller::{
@@ -79,6 +81,7 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/globals/{id}", web::get().to(get_global_data))
     .route("/api/globals/{id}", web::delete().to(delete_global_data))
     .route("/api/globals/{id}/comment", web::patch().to(patch_global_data_comment))
+    .route("/api/globals/{id}/locked", web::get().to(get_global_data_locked))
     .route("/api/globals/{id}/name", web::patch().to(patch_global_data_name))
     // Files
     .route("/api/files/{category}/{id}", web::get().to(get_files))
