@@ -143,13 +143,14 @@
                   ><div class="row flex-center no-wrap">
                     <q-icon
                       :name="matDisabledByDefault"
-                      color="primary"
+                      color="warning"
                       size="xs"
                       class="q-mr-xs"
                     />
                     <div class="col">
-                      Uploading files is not possible while the experiment is
-                      executed or output information is downloaded.
+                      Modifying the repository is not possible while an
+                      experiment is executed or output information is
+                      downloaded.
                     </div>
                   </div></q-item-section
                 >

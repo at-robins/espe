@@ -5,7 +5,11 @@ use crate::{
         db::global_data::{GlobalData, NewGlobalData},
         exchange::global_data_details::GlobalDataDetails,
     },
-    service::{global_data_service::is_global_data_locked_err, pipeline_service::LoadedPipelines, validation_service::{validate_comment, validate_entity_name}},
+    service::{
+        global_data_service::is_global_data_locked,
+        pipeline_service::LoadedPipelines,
+        validation_service::{validate_comment, validate_entity_name},
+    },
 };
 use actix_web::{web, HttpResponse};
 
@@ -126,7 +130,7 @@ pub async fn get_global_data_locked(
             id
         ))
     })?;
-    let is_locked = is_global_data_locked_err(id, pipelines, &mut connection)
+    let is_locked = is_global_data_locked(id, pipelines, &mut connection)
         .map_err(|err| SeqError::from(err).chain(format!("Lock state for global data repository {} could not be determined. Error while quering the database.", id)))?;
     Ok(HttpResponse::Ok().json(is_locked))
 }

@@ -39,6 +39,7 @@
                 @deleted-path="deletePath"
                 @deleted-all="deleteAll"
                 class="col"
+                :locked="isLocked"
               />
             </div>
           </q-card-section>
@@ -51,6 +52,10 @@
     <q-dialog v-model="showDeletionError" v-if="deletionError">
       <error-popup :error-response="deletionError" />
     </q-dialog>
+    <poller
+      :url="lock_url"
+      @success="isLocked = $event"
+    />
   </div>
 </template>
 
@@ -63,12 +68,13 @@ import {
   type FilePath,
 } from "@/scripts/types";
 import axios from "axios";
-import { ref, onMounted, type Ref } from "vue";
+import { ref, onMounted, type Ref, computed } from "vue";
 import ErrorPopup from "../ErrorPopup.vue";
 import FileTree from "../FileTree.vue";
 import EntityComment from "../shared/EntityComment.vue";
 import EntityTitle from "../shared/EntityTitle.vue";
 import { symOutlinedAccountTree } from "@quasar/extras/material-symbols-outlined";
+import Poller from "../shared/Poller.vue";
 
 const files: Ref<Array<FileDetails>> = ref([]);
 const globalData: Ref<GlobalDataDetails | null> = ref(null);
@@ -77,9 +83,14 @@ const isLoadingGlobalDataDetails = ref(false);
 const loadingError: Ref<ErrorResponse | null> = ref(null);
 const deletionError: Ref<ErrorResponse | null> = ref(null);
 const showDeletionError = ref(false);
+const isLocked = ref(false);
 
 const props = defineProps({
   id: { type: String, required: true },
+});
+
+const lock_url = computed(() => {
+  return "/api/globals/" + props.id + "/locked";
 });
 
 function updateTitle(title: string) {
