@@ -400,7 +400,7 @@ def plot_genomic_region_barplots():
                 )
                 print("\tCreating genomic location plot...", flush=True)
                 stacked_barplot_ax = location_summaries.plot.bar(
-                    color=LOCATION_PLOT_COLOURS, rot=0, stacked=True, figsize=(9, 5)
+                    color=LOCATION_PLOT_COLOURS, rot=0, stacked=True, figsize=(11, 5)
                 )
                 # Hides the axis labels.
                 stacked_barplot_ax.xaxis.label.set_visible(False)
@@ -417,7 +417,10 @@ def plot_genomic_region_barplots():
                     )
                 )
                 stacked_barplot_ax.legend(
-                    handles=ordered_handles, labels=LOCATION_PLOT_LABEL_ORDER_LEGEND
+                    handles=ordered_handles,
+                    labels=LOCATION_PLOT_LABEL_ORDER_LEGEND,
+                    bbox_to_anchor=(1, 1),
+                    loc="upper left",
                 )
                 # Converts negative Y axis labels to positve counts.
                 stacked_barplot_ax.set_yticklabels(
@@ -425,6 +428,7 @@ def plot_genomic_region_barplots():
                 )
                 # Saves the plot.
                 stacked_barplot_figure = stacked_barplot_ax.get_figure()
+                stacked_barplot_figure.tight_layout()
                 stacked_barplot_figure.savefig(output_path)
                 plt.close(stacked_barplot_figure)
 
@@ -479,7 +483,7 @@ def plot_volcanoplots():
                 )
 
                 print("\tCreating volcano plot...", flush=True)
-                fig, ax = plt.subplots(figsize=(6, 6))
+                fig, ax = plt.subplots(figsize=(8, 6))
                 sns.scatterplot(
                     data=filtered_da_table,
                     x=DAR_TABLE_KEY_LFC,
@@ -509,6 +513,7 @@ def plot_volcanoplots():
                 )
                 legend = ax.get_legend()
                 legend.set_title("Genomic accessiblity")
+                sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
 
                 # Adds labels for most significant features.
 
@@ -638,7 +643,7 @@ def plot_maplots():
                 )
 
                 print("\tCreating MA plot...", flush=True)
-                fig, ax = plt.subplots(figsize=(6, 6))
+                fig, ax = plt.subplots(figsize=(8, 6))
                 sns.scatterplot(
                     data=filtered_da_table,
                     x=MA_PLOT_KEY_LOG_EXPRESSION,
@@ -662,6 +667,7 @@ def plot_maplots():
                 )
                 legend = ax.get_legend()
                 legend.set_title("Genomic accessiblity")
+                sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
 
                 # Adds labels for most significant features.
 
