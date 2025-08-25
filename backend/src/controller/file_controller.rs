@@ -155,6 +155,7 @@ pub async fn get_files(
 pub async fn delete_files_by_path(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
+    pipelines: web::Data<LoadedPipelines>,
     params: web::Path<(FileRequestCategory, i32)>,
     path: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
@@ -163,6 +164,16 @@ pub async fn delete_files_by_path(
     let delete_path = delete_info.file_path();
     let mut connection = database_manager.database_connection()?;
     category.entity_exists(id, &mut connection)?;
+    category
+        .is_locked_err(id, pipelines, &mut connection)
+        .map_err(|err| {
+            err.chain(format!(
+                "The file deletion for path {} request failed as {:?}/{} is locked.",
+                delete_path.display(),
+                category,
+                id
+            ))
+        })?;
     if let Err(validation_error) = delete_info.validate() {
         return Err(SeqError::new(
             "Invalid request",
@@ -285,6 +296,7 @@ pub async fn post_add_file(
 pub async fn post_add_folder(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
+    pipelines: web::Data<LoadedPipelines>,
     params: web::Path<(FileRequestCategory, i32)>,
     upload_info: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
@@ -313,9 +325,21 @@ pub async fn post_add_folder(
     }
 
     let mut connection = database_manager.database_connection()?;
-
+    
     // Validate the existance of the entity.
     category.entity_exists(id, &mut connection)?;
+    
+        // Validate the according entity is not locked.
+        category
+        .is_locked_err(id, pipelines, &mut connection)
+        .map_err(|err| {
+            err.chain(format!(
+                "The folder creation for {:?} request failed as {:?}/{} is locked.",
+                upload_info,
+                category,
+                id
+            ))
+        })?;
 
     // Validate that the file path is not already existant.
     let full_path = category
