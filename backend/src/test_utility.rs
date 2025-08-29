@@ -8,7 +8,7 @@ use crate::{
     model::{
         db::{
             experiment::Experiment,
-            experiment_execution::{ExecutionStatus, NewExperimentExecution},
+            experiment_execution::{ExecutionStatus, NewExperimentExecution}, global_data::GlobalData,
         },
         internal::archive::ArchiveMetadata,
     },
@@ -167,12 +167,10 @@ impl From<&TestContext> for Configuration {
 }
 
 pub const DEFAULT_EXPERIMENT_ID: i32 = 42;
+pub const DEFAULT_GLOBAL_DATA_ID: i32 = 42;
 pub const DEFAULT_PIPELINE_ID: &str = "testing_pipeline";
 pub const DEFAULT_PIPELINE_STEP_ID: &str = "fastqc";
 pub const DEFAULT_ARCHIVE_ID: &str = "42";
-// let global_variable_id = "global_number";
-// let step_variable_id = "number";
-// let new_variable_value = "42";
 
 /// Creates a default dummy experiment for testing.
 ///
@@ -231,6 +229,24 @@ pub fn create_default_experiment_execution(
     )];
     diesel::insert_into(crate::schema::experiment_execution::table)
         .values(&new_execution)
+        .execute(connection)
+        .unwrap();
+}
+
+/// Creates a default dummy golbal data repository for testing.
+///
+/// # Parameters
+///
+/// * `connection` - a connection to the test database
+pub fn create_default_global_data(connection: &mut SqliteConnection) {
+    let new_record = GlobalData {
+        id: DEFAULT_GLOBAL_DATA_ID,
+        global_data_name: "Dummy record".to_string(),
+        comment: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::global_data::table)
+        .values(&new_record)
         .execute(connection)
         .unwrap();
 }
