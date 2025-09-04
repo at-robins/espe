@@ -1,7 +1,7 @@
 {
   "id": "wiedemann_genome_preprocess",
   "name": "Wiedemann reference genome preprocessing pipeline",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "description": "<espe-import>pipeline_description.html</espe-import>",
   "global_variables": [
     {
@@ -28,7 +28,7 @@
     {
       "id": "get_genome",
       "name": "Get genome",
-      "description": "<p>Downloads, unpacks and renames the genome files.</p>",
+      "description": "<espe-import>step_unpack_description.html</espe-import>",
       "container": "unpack",
       "dependencies": [],
       "variables": []
