@@ -275,192 +275,508 @@ pub fn is_global_data_locked_err(
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use actix_web::{http::StatusCode, ResponseError};
     use diesel::RunQueryDsl;
 
     use crate::{
-        model::db::{experiment::NewExperiment, experiment_execution::ExecutionStatus},
-        test_utility::TestContext,
+        application::config::Configuration,
+        model::db::{
+            experiment_execution::ExecutionStatus, pipeline_step_variable::NewPipelineStepVariable,
+        },
+        test_utility::{
+            create_default_experiment, create_default_global_data, TestContext,
+            DEFAULT_EXPERIMENT_ID, DEFAULT_GLOBAL_DATA_ID, DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID, TEST_RESOURCES_PATH,
+        },
     };
 
     use super::*;
 
-    // #[test]
-    // fn test_is_experiment_locked() {
-    //     // Use a reference to the context, so the context is not dropped early
-    //     // and messes up test context folder deletion.
-    //     let context = TestContext::new();
-    //     let mut connection = context.get_connection();
-    //     // Create an experiment containing all different stati.
-    //     let experiment_all = NewExperiment::new("all".to_string());
-    //     let experiment_waiting = NewExperiment::new("waiting".to_string());
-    //     let experiment_running = NewExperiment::new("running".to_string());
-    //     let experiment_not_executed = NewExperiment::new("not executed".to_string());
-    //     let experiment_empty = NewExperiment::new("empty".to_string());
-    //     let experiment_id_all: i32 = diesel::insert_into(crate::schema::experiment::table)
-    //         .values(&experiment_all)
-    //         .returning(crate::schema::experiment::id)
-    //         .get_result(&mut connection)
-    //         .unwrap();
-    //     let experiment_id_waiting: i32 = diesel::insert_into(crate::schema::experiment::table)
-    //         .values(&experiment_waiting)
-    //         .returning(crate::schema::experiment::id)
-    //         .get_result(&mut connection)
-    //         .unwrap();
-    //     let experiment_id_running: i32 = diesel::insert_into(crate::schema::experiment::table)
-    //         .values(&experiment_running)
-    //         .returning(crate::schema::experiment::id)
-    //         .get_result(&mut connection)
-    //         .unwrap();
-    //     let experiment_id_not_executed: i32 = diesel::insert_into(crate::schema::experiment::table)
-    //         .values(&experiment_not_executed)
-    //         .returning(crate::schema::experiment::id)
-    //         .get_result(&mut connection)
-    //         .unwrap();
-    //     let experiment_id_empty: i32 = diesel::insert_into(crate::schema::experiment::table)
-    //         .values(&experiment_empty)
-    //         .returning(crate::schema::experiment::id)
-    //         .get_result(&mut connection)
-    //         .unwrap();
-    //     let new_records_all: Vec<ExperimentExecution> = vec![
-    //         (ExecutionStatus::Aborted, experiment_id_all),
-    //         (ExecutionStatus::Failed, experiment_id_all),
-    //         (ExecutionStatus::Finished, experiment_id_all),
-    //         (ExecutionStatus::Running, experiment_id_all),
-    //         (ExecutionStatus::Finished, experiment_id_all),
-    //         (ExecutionStatus::Waiting, experiment_id_all),
-    //         (ExecutionStatus::Finished, experiment_id_waiting),
-    //         (ExecutionStatus::Waiting, experiment_id_waiting),
-    //         (ExecutionStatus::Aborted, experiment_id_waiting),
-    //         (ExecutionStatus::Finished, experiment_id_waiting),
-    //         (ExecutionStatus::Finished, experiment_id_running),
-    //         (ExecutionStatus::Running, experiment_id_running),
-    //         (ExecutionStatus::Aborted, experiment_id_running),
-    //         (ExecutionStatus::Finished, experiment_id_running),
-    //         (ExecutionStatus::Finished, experiment_id_not_executed),
-    //         (ExecutionStatus::Failed, experiment_id_not_executed),
-    //         (ExecutionStatus::Aborted, experiment_id_not_executed),
-    //         (ExecutionStatus::Finished, experiment_id_not_executed),
-    //     ]
-    //     .into_iter()
-    //     .enumerate()
-    //     .map(|(id, (status, experiment_id))| ExperimentExecution {
-    //         id: id as i32,
-    //         experiment_id,
-    //         pipeline_id: id.to_string(),
-    //         pipeline_step_id: id.to_string(),
-    //         execution_status: status.into(),
-    //         start_time: None,
-    //         end_time: None,
-    //         creation_time: chrono::Utc::now().naive_local(),
-    //     })
-    //     .collect();
-    //     diesel::insert_into(crate::schema::experiment_execution::table)
-    //         .values(&new_records_all)
-    //         .execute(&mut connection)
-    //         .unwrap();
-    //     assert!(is_experiment_locked(experiment_id_all, &mut connection).unwrap());
-    //     assert!(is_experiment_locked(experiment_id_waiting, &mut connection).unwrap());
-    //     assert!(is_experiment_locked(experiment_id_running, &mut connection).unwrap());
-    //     assert!(!is_experiment_locked(experiment_id_not_executed, &mut connection).unwrap());
-    //     assert!(!is_experiment_locked(experiment_id_empty, &mut connection).unwrap());
-    // }
+    #[test]
+    fn test_is_global_data_locked_aborted() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Aborted.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
 
-    // #[test]
-    // fn test_is_experiment_locked_err() {
-    //     // Use a reference to the context, so the context is not dropped early
-    //     // and messes up test context folder deletion.
-    //     let context = TestContext::new();
-    //     let mut connection = context.get_connection();
-    //     // Create an experiment containing all different stati.
-    //     let experiment_all = NewExperiment::new("all".to_string());
-    //     let experiment_waiting = NewExperiment::new("waiting".to_string());
-    //     let experiment_running = NewExperiment::new("running".to_string());
-    //     let experiment_not_executed = NewExperiment::new("not executed".to_string());
-    //     let experiment_empty = NewExperiment::new("empty".to_string());
-    //     let experiment_id_all: i32 = diesel::insert_into(crate::schema::experiment::table)
-    //         .values(&experiment_all)
-    //         .returning(crate::schema::experiment::id)
-    //         .get_result(&mut connection)
-    //         .unwrap();
-    //     let experiment_id_waiting: i32 = diesel::insert_into(crate::schema::experiment::table)
-    //         .values(&experiment_waiting)
-    //         .returning(crate::schema::experiment::id)
-    //         .get_result(&mut connection)
-    //         .unwrap();
-    //     let experiment_id_running: i32 = diesel::insert_into(crate::schema::experiment::table)
-    //         .values(&experiment_running)
-    //         .returning(crate::schema::experiment::id)
-    //         .get_result(&mut connection)
-    //         .unwrap();
-    //     let experiment_id_not_executed: i32 = diesel::insert_into(crate::schema::experiment::table)
-    //         .values(&experiment_not_executed)
-    //         .returning(crate::schema::experiment::id)
-    //         .get_result(&mut connection)
-    //         .unwrap();
-    //     let experiment_id_empty: i32 = diesel::insert_into(crate::schema::experiment::table)
-    //         .values(&experiment_empty)
-    //         .returning(crate::schema::experiment::id)
-    //         .get_result(&mut connection)
-    //         .unwrap();
-    //     let new_records_all: Vec<ExperimentExecution> = vec![
-    //         (ExecutionStatus::Aborted, experiment_id_all),
-    //         (ExecutionStatus::Failed, experiment_id_all),
-    //         (ExecutionStatus::Finished, experiment_id_all),
-    //         (ExecutionStatus::Running, experiment_id_all),
-    //         (ExecutionStatus::Finished, experiment_id_all),
-    //         (ExecutionStatus::Waiting, experiment_id_all),
-    //         (ExecutionStatus::Finished, experiment_id_waiting),
-    //         (ExecutionStatus::Waiting, experiment_id_waiting),
-    //         (ExecutionStatus::Aborted, experiment_id_waiting),
-    //         (ExecutionStatus::Finished, experiment_id_waiting),
-    //         (ExecutionStatus::Finished, experiment_id_running),
-    //         (ExecutionStatus::Running, experiment_id_running),
-    //         (ExecutionStatus::Aborted, experiment_id_running),
-    //         (ExecutionStatus::Finished, experiment_id_running),
-    //         (ExecutionStatus::Finished, experiment_id_not_executed),
-    //         (ExecutionStatus::Failed, experiment_id_not_executed),
-    //         (ExecutionStatus::Aborted, experiment_id_not_executed),
-    //         (ExecutionStatus::Finished, experiment_id_not_executed),
-    //     ]
-    //     .into_iter()
-    //     .enumerate()
-    //     .map(|(id, (status, experiment_id))| ExperimentExecution {
-    //         id: id as i32,
-    //         experiment_id,
-    //         pipeline_id: id.to_string(),
-    //         pipeline_step_id: id.to_string(),
-    //         execution_status: status.into(),
-    //         start_time: None,
-    //         end_time: None,
-    //         creation_time: chrono::Utc::now().naive_local(),
-    //     })
-    //     .collect();
-    //     diesel::insert_into(crate::schema::experiment_execution::table)
-    //         .values(&new_records_all)
-    //         .execute(&mut connection)
-    //         .unwrap();
-    //     assert_eq!(
-    //         is_experiment_locked_err(experiment_id_all, &mut connection)
-    //             .unwrap_err()
-    //             .status_code(),
-    //         StatusCode::PRECONDITION_FAILED
-    //     );
-    //     assert_eq!(
-    //         is_experiment_locked_err(experiment_id_waiting, &mut connection)
-    //             .unwrap_err()
-    //             .status_code(),
-    //         StatusCode::PRECONDITION_FAILED
-    //     );
-    //     assert_eq!(
-    //         is_experiment_locked_err(experiment_id_running, &mut connection)
-    //             .unwrap_err()
-    //             .status_code(),
-    //         StatusCode::PRECONDITION_FAILED
-    //     );
-    //     assert!(is_experiment_locked_err(experiment_id_not_executed, &mut connection).is_ok());
-    //     assert!(is_experiment_locked_err(experiment_id_empty, &mut connection).is_ok());
-    // }
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(!is_global_data_locked(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            &mut connection
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn test_is_global_data_locked_failed() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Failed.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(!is_global_data_locked(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            &mut connection
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn test_is_global_data_locked_finished() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Finished.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(!is_global_data_locked(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            &mut connection
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn test_is_global_data_locked_running() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Running.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(is_global_data_locked(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            &mut connection
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn test_is_global_data_locked_waiting() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Waiting.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(is_global_data_locked(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            &mut connection
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn test_is_global_data_locked_err_aborted() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Aborted.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(is_global_data_locked_err(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            &mut connection
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn test_is_global_data_locked_err_failed() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Failed.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(is_global_data_locked_err(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            &mut connection
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn test_is_global_data_locked_err_finished() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Finished.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(is_global_data_locked_err(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            &mut connection
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn test_is_global_data_locked_err_running() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Running.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert_eq!(
+            is_global_data_locked_err(
+                DEFAULT_EXPERIMENT_ID,
+                loaded_pipelines.clone(),
+                &mut connection
+            )
+            .unwrap_err()
+            .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
+    }
+
+    #[test]
+    fn test_is_global_data_locked_err_waiting() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Waiting.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert_eq!(
+            is_global_data_locked_err(
+                DEFAULT_EXPERIMENT_ID,
+                loaded_pipelines.clone(),
+                &mut connection
+            )
+            .unwrap_err()
+            .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
+    }
 }
