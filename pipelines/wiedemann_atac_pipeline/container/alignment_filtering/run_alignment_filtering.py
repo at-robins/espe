@@ -6,7 +6,6 @@ import math
 import multiprocessing
 import os
 import pysam
-import sys
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
@@ -73,21 +72,25 @@ def passes_mito_reads(bam_row):
 # Iterates over all sample directories and processes them conserving the directory structure.
 INPUT_SUFFIX = ".bam"
 for root, dirs, files in os.walk(INPUT_FOLDER):
-    for file in files:
-        if file.endswith(INPUT_SUFFIX):
-            file_base_name = file.removesuffix(INPUT_SUFFIX)
-            file_base_input_path = os.path.join(root, file_base_name)
-            file_base_output_path = os.path.join(
-                MOUNT_PATHS["output"],
-                file_base_input_path.removeprefix(INPUT_FOLDER + "/"),
-            )
-            os.makedirs(os.path.dirname(file_base_output_path), exist_ok=True)
-            print(f"Filtering file {file_base_input_path}{INPUT_SUFFIX}...", flush=True)
+    input_files = [file for file in files if file.endswith(INPUT_SUFFIX)]
+    if len(input_files) > 0:
+        output_directory = os.path.join(
+            MOUNT_PATHS["output"],
+            os.path.normpath(os.path.relpath(root, INPUT_FOLDER)),
+        )
+        os.makedirs(output_directory, exist_ok=True)
+        output_file_paths = []
+
+        for file in input_files:
+            input_file_path = os.path.join(root, file)
+            output_file_path = os.path.join(output_directory, file)
+            output_file_paths.append(output_file_path)
+            print(f"Filtering file {input_file_path}...", flush=True)
             with pysam.AlignmentFile(
-                f"{file_base_input_path}{INPUT_SUFFIX}", mode="rb", threads=threads
+                f"{input_file_path}", mode="rb", threads=threads
             ) as bam_file_in:
                 with pysam.AlignmentFile(
-                    f"{file_base_output_path}{INPUT_SUFFIX}",
+                    f"{output_file_path}",
                     mode="wb",
                     header=bam_file_in.header,
                     threads=threads,
@@ -100,3 +103,30 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
                             and passes_quality_filtering(alignment_row)
                         ):
                             bam_file_out.write(alignment_row)
+
+        # Normally there should not be multiple sequencing files
+        # per sample, but in rare cases samples might be sequenced
+        # on different lanes etc. and need to be merged for
+        # subsequent analysis.
+        if len(output_file_paths) > 1:
+            print(f"\tMerging {output_file_paths}...", flush=True)
+            merged_file_path = os.path.join(output_directory, f"merged{INPUT_SUFFIX}")
+            pysam.merge("@", threads, "-o", merged_file_path, *output_file_paths)
+            print("\tDeleting merged files...", flush=True)
+            for output_file in output_file_paths:
+                os.remove(output_file)
+            print("\tSorting merged file...", flush=True)
+            merged_sorted_file_path = os.path.join(
+                output_directory, f"merged_sorted{INPUT_SUFFIX}"
+            )
+            pysam.sort(
+                "-O",
+                "bam",
+                "@",
+                threads,
+                "-o",
+                merged_sorted_file_path,
+                merged_file_path,
+            )
+            print("\tDeleting unsorted file...", flush=True)
+            os.remove(merged_file_path)
