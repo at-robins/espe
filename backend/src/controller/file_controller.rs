@@ -15,12 +15,9 @@ use crate::{
         internal::archive::ArchiveMetadata,
     },
     service::{
-        experiment_service::is_experiment_locked_err,
-        global_data_service::is_global_data_locked_err,
-        multipart_service::{
+        download_service::DownloadTrackerManager, experiment_service::is_experiment_locked_err, global_data_service::is_global_data_locked_err, multipart_service::{
             create_temporary_file, delete_temporary_file, parse_multipart_file, UploadForm,
-        },
-        pipeline_service::LoadedPipelines,
+        }, pipeline_service::LoadedPipelines
     },
 };
 use actix_files::NamedFile;
@@ -413,10 +410,12 @@ async fn persist_multipart<P: AsRef<Path>>(
 pub async fn post_experiment_archive_step_results(
     database_manager: web::Data<DatabaseManager>,
     app_config: web::Data<Configuration>,
+    download_tracker_manager: web::Data<DownloadTrackerManager>,
     experiment_id: web::Path<i32>,
     step_id: web::Json<String>,
 ) -> Result<String, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
+    let _download_tracker = download_tracker_manager.track_experiment_output_download(experiment_id);
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection)?;
 

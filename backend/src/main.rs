@@ -24,6 +24,8 @@ use service::{
     temp_file_service::TemporaryFileManager,
 };
 
+use crate::service::download_service::DownloadTrackerManager;
+
 /// The intervall in seconds in which the pipeline execution process is updated.
 const PIPELINE_EXECUTION_UPDATE_INTERVALL: u64 = 5;
 /// The intervall in seconds in which temporary data is inspected.
@@ -175,6 +177,12 @@ fn setup_temporary_file_manager_scheduler(app_config: &Data<Configuration>) {
     });
 }
 
+/// Initialises and returns a [`DownloadTrackerManager`].
+fn setup_download_tracker(
+) -> Data<DownloadTrackerManager> {
+    Data::new(DownloadTrackerManager::new())
+}
+
 /// Starts the application.
 async fn start_application() -> Result<(), SeqError> {
     let app_config = setup_environment().and(setup_configuration())?;
@@ -182,6 +190,7 @@ async fn start_application() -> Result<(), SeqError> {
     let database_manager = setup_database(&app_config)?;
     let loaded_pipelines = setup_pipelines(&app_config)?;
     let scheduler = setup_execution_scheduler(&app_config, &database_manager, &loaded_pipelines);
+    let download_tracker = setup_download_tracker();
     setup_temporary_file_manager_scheduler(&app_config);
 
     // Setup the application.
@@ -205,6 +214,7 @@ async fn start_application() -> Result<(), SeqError> {
             .app_data(Data::clone(&loaded_pipelines))
             .app_data(Data::clone(&database_manager))
             .app_data(Data::clone(&scheduler))
+            .app_data(Data::clone(&download_tracker))
             .configure(routing_config)
     })
     .bind(server_address)?

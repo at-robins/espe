@@ -1,4 +1,5 @@
 pub mod container_service;
+pub mod download_service;
 pub mod execution_service;
 pub mod experiment_service;
 pub mod global_data_service;

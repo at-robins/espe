@@ -8,11 +8,15 @@ use crate::{
     model::{
         db::{
             experiment::Experiment,
-            experiment_execution::{ExecutionStatus, NewExperimentExecution}, global_data::GlobalData,
+            experiment_execution::{ExecutionStatus, NewExperimentExecution},
+            global_data::GlobalData,
         },
         internal::archive::ArchiveMetadata,
     },
-    service::{execution_service::ExecutionScheduler, pipeline_service::LoadedPipelines},
+    service::{
+        download_service::DownloadTrackerManager, execution_service::ExecutionScheduler,
+        pipeline_service::LoadedPipelines,
+    },
 };
 use actix_web::{
     body::MessageBody,
@@ -63,6 +67,7 @@ pub fn create_test_app(
             web::Data::clone(&database_manager),
             web::Data::clone(&loaded_pipelines),
         ))))
+        .app_data(web::Data::new(DownloadTrackerManager::new()))
         .configure(routing_config)
 }
 
