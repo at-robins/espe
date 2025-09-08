@@ -6,6 +6,7 @@ import math
 import multiprocessing
 import os
 import pysam
+import sys
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
@@ -111,7 +112,14 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
         if len(output_file_paths) > 1:
             print(f"\tMerging {output_file_paths}...", flush=True)
             merged_file_path = os.path.join(output_directory, f"merged{INPUT_SUFFIX}")
-            pysam.merge("@", threads, "-o", merged_file_path, *output_file_paths)
+            pysam.merge(
+                "-@",
+                str(threads),
+                "-o",
+                merged_file_path,
+                *output_file_paths,
+            )
+            print(pysam.merge.get_messages(), file=sys.stderr, flush=True)
             print("\tDeleting merged files...", flush=True)
             for output_file in output_file_paths:
                 os.remove(output_file)
@@ -122,11 +130,12 @@ for root, dirs, files in os.walk(INPUT_FOLDER):
             pysam.sort(
                 "-O",
                 "bam",
-                "@",
-                threads,
+                "-@",
+                str(threads),
                 "-o",
                 merged_sorted_file_path,
                 merged_file_path,
             )
+            print(pysam.sort.get_messages(), file=sys.stderr, flush=True)
             print("\tDeleting unsorted file...", flush=True)
             os.remove(merged_file_path)
