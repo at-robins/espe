@@ -13,7 +13,7 @@ use crate::{
         },
         internal::pipeline_blueprint::{PipelineBlueprint, PipelineStepVariableCategory},
     },
-    service::pipeline_service::LoadedPipelines,
+    service::{download_service::DownloadTrackerManager, pipeline_service::LoadedPipelines},
 };
 
 #[derive(PartialEq, Eq, Hash)]
@@ -195,10 +195,12 @@ impl<'a> GlobalStepVariableID<'a> {
 ///
 /// * `global_data_id` - the ID of the global data repo
 /// * `pipelines` - all loaded pipelines
+/// * `download_tracker` - the [`DownloadTrackerManager`] of the application
 /// * `connection` - a connection to the database
 pub fn is_global_data_locked(
     global_data_id: i32,
     pipelines: web::Data<LoadedPipelines>,
+    download_tracker_manager: web::Data<DownloadTrackerManager>,
     connection: &mut SqliteConnection,
 ) -> Result<bool, SeqError> {
     let global_experiments = GlobalGlobalVariableID::global_experiment_ids_with_pipeline(
@@ -239,7 +241,8 @@ pub fn is_global_data_locked(
                 when checking if experiment {} is currently executed with pipeline {}.",
                 global_data_id, exp.experiment_id, exp.pipeline_id
             ))
-        })? {
+        })? || download_tracker_manager.is_experiment_output_download_tracked(exp.experiment_id)
+        {
             return Ok(true);
         }
     }
@@ -253,24 +256,28 @@ pub fn is_global_data_locked(
 ///
 /// * `global_data_id` - the ID of the global data repo
 /// * `pipelines` - all loaded pipelines
+/// * `download_tracker` - the [`DownloadTrackerManager`] of the application
 /// * `connection` - a connection to the database
 pub fn is_global_data_locked_err(
     global_data_id: i32,
     pipelines: web::Data<LoadedPipelines>,
+    download_tracker_manager: web::Data<DownloadTrackerManager>,
     connection: &mut SqliteConnection,
 ) -> Result<(), SeqError> {
-    is_global_data_locked(global_data_id, pipelines, connection).and_then(|locked| {
-        if locked {
-            Err(SeqError::new(
-                "Global data repository locked",
-                SeqErrorType::PreconditionFailed,
-                format!("Global data repository {} is locked.", global_data_id),
-                "The global data repository is locked.",
-            ))
-        } else {
-            Ok(())
-        }
-    })
+    is_global_data_locked(global_data_id, pipelines, download_tracker_manager, connection).and_then(
+        |locked| {
+            if locked {
+                Err(SeqError::new(
+                    "Global data repository locked",
+                    SeqErrorType::PreconditionFailed,
+                    format!("Global data repository {} is locked.", global_data_id),
+                    "The global data repository is locked.",
+                ))
+            } else {
+                Ok(())
+            }
+        },
+    )
 }
 
 #[cfg(test)]
@@ -298,6 +305,7 @@ mod tests {
         // and messes up test context folder deletion.
         let mut context = TestContext::new();
         context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
         let mut connection = context.get_connection();
         let loaded_pipelines = web::Data::new(
             LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
@@ -335,6 +343,7 @@ mod tests {
         assert!(!is_global_data_locked(
             DEFAULT_EXPERIMENT_ID,
             loaded_pipelines.clone(),
+            download_tracker,
             &mut connection
         )
         .unwrap());
@@ -346,6 +355,7 @@ mod tests {
         // and messes up test context folder deletion.
         let mut context = TestContext::new();
         context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
         let mut connection = context.get_connection();
         let loaded_pipelines = web::Data::new(
             LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
@@ -383,6 +393,7 @@ mod tests {
         assert!(!is_global_data_locked(
             DEFAULT_EXPERIMENT_ID,
             loaded_pipelines.clone(),
+            download_tracker,
             &mut connection
         )
         .unwrap());
@@ -398,6 +409,7 @@ mod tests {
         let loaded_pipelines = web::Data::new(
             LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
         );
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
         // Create an experiment containing all different stati.
         create_default_experiment(&mut connection);
         let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
@@ -431,6 +443,82 @@ mod tests {
         assert!(!is_global_data_locked(
             DEFAULT_EXPERIMENT_ID,
             loaded_pipelines.clone(),
+            download_tracker,
+            &mut connection
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn test_is_global_data_locked_downloading() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Finished.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(!is_global_data_locked(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            download_tracker.clone(),
+            &mut connection
+        )
+        .unwrap());
+        let tracker_00 = download_tracker.track_experiment_output_download(DEFAULT_EXPERIMENT_ID);
+        let tracker_01 = download_tracker.track_experiment_output_download(DEFAULT_EXPERIMENT_ID);
+        assert!(is_global_data_locked(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            download_tracker.clone(),
+            &mut connection
+        )
+        .unwrap());
+        std::mem::drop(tracker_00);
+        assert!(is_global_data_locked(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            download_tracker.clone(),
+            &mut connection
+        )
+        .unwrap());
+        std::mem::drop(tracker_01);
+        assert!(!is_global_data_locked(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            download_tracker.clone(),
             &mut connection
         )
         .unwrap());
@@ -446,6 +534,7 @@ mod tests {
         let loaded_pipelines = web::Data::new(
             LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
         );
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
         // Create an experiment containing all different stati.
         create_default_experiment(&mut connection);
         let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
@@ -479,6 +568,7 @@ mod tests {
         assert!(is_global_data_locked(
             DEFAULT_EXPERIMENT_ID,
             loaded_pipelines.clone(),
+            download_tracker,
             &mut connection
         )
         .unwrap());
@@ -494,6 +584,7 @@ mod tests {
         let loaded_pipelines = web::Data::new(
             LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
         );
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
         // Create an experiment containing all different stati.
         create_default_experiment(&mut connection);
         let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
@@ -527,6 +618,7 @@ mod tests {
         assert!(is_global_data_locked(
             DEFAULT_EXPERIMENT_ID,
             loaded_pipelines.clone(),
+            download_tracker,
             &mut connection
         )
         .unwrap());
@@ -542,6 +634,7 @@ mod tests {
         let loaded_pipelines = web::Data::new(
             LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
         );
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
         // Create an experiment containing all different stati.
         create_default_experiment(&mut connection);
         let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
@@ -575,6 +668,7 @@ mod tests {
         assert!(is_global_data_locked_err(
             DEFAULT_EXPERIMENT_ID,
             loaded_pipelines.clone(),
+            download_tracker,
             &mut connection
         )
         .is_ok());
@@ -590,6 +684,7 @@ mod tests {
         let loaded_pipelines = web::Data::new(
             LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
         );
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
         // Create an experiment containing all different stati.
         create_default_experiment(&mut connection);
         let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
@@ -623,6 +718,7 @@ mod tests {
         assert!(is_global_data_locked_err(
             DEFAULT_EXPERIMENT_ID,
             loaded_pipelines.clone(),
+            download_tracker,
             &mut connection
         )
         .is_ok());
@@ -638,6 +734,7 @@ mod tests {
         let loaded_pipelines = web::Data::new(
             LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
         );
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
         // Create an experiment containing all different stati.
         create_default_experiment(&mut connection);
         let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
@@ -671,6 +768,90 @@ mod tests {
         assert!(is_global_data_locked_err(
             DEFAULT_EXPERIMENT_ID,
             loaded_pipelines.clone(),
+            download_tracker,
+            &mut connection
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn test_is_global_data_locked_err_downloading() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        let mut connection = context.get_connection();
+        let loaded_pipelines = web::Data::new(
+            LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
+        );
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
+        // Create an experiment containing all different stati.
+        create_default_experiment(&mut connection);
+        let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+            id: 0,
+            experiment_id: DEFAULT_EXPERIMENT_ID,
+            pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+            pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+            execution_status: ExecutionStatus::Finished.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        }];
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+
+        create_default_global_data(&mut connection);
+        // Associates the running pipeline with the test global data repository.
+        let association_variable = NewPipelineStepVariable::new(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            "global",
+            Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+        );
+        diesel::insert_into(crate::schema::pipeline_step_variable::table)
+            .values(&association_variable)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(is_global_data_locked_err(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            download_tracker.clone(),
+            &mut connection
+        )
+        .is_ok());
+        let tracker_00 = download_tracker.track_experiment_output_download(DEFAULT_EXPERIMENT_ID);
+        let tracker_01 = download_tracker.track_experiment_output_download(DEFAULT_EXPERIMENT_ID);
+        assert_eq!(
+            is_global_data_locked_err(
+                DEFAULT_EXPERIMENT_ID,
+                loaded_pipelines.clone(),
+                download_tracker.clone(),
+                &mut connection
+            )
+            .unwrap_err()
+            .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
+        std::mem::drop(tracker_00);
+        assert_eq!(
+            is_global_data_locked_err(
+                DEFAULT_EXPERIMENT_ID,
+                loaded_pipelines.clone(),
+                download_tracker.clone(),
+                &mut connection
+            )
+            .unwrap_err()
+            .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
+        std::mem::drop(tracker_01);
+        assert!(is_global_data_locked_err(
+            DEFAULT_EXPERIMENT_ID,
+            loaded_pipelines.clone(),
+            download_tracker.clone(),
             &mut connection
         )
         .is_ok());
@@ -686,6 +867,7 @@ mod tests {
         let loaded_pipelines = web::Data::new(
             LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
         );
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
         // Create an experiment containing all different stati.
         create_default_experiment(&mut connection);
         let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
@@ -720,6 +902,7 @@ mod tests {
             is_global_data_locked_err(
                 DEFAULT_EXPERIMENT_ID,
                 loaded_pipelines.clone(),
+                download_tracker,
                 &mut connection
             )
             .unwrap_err()
@@ -738,6 +921,7 @@ mod tests {
         let loaded_pipelines = web::Data::new(
             LoadedPipelines::new(web::Data::new(Configuration::from(&context))).unwrap(),
         );
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
         // Create an experiment containing all different stati.
         create_default_experiment(&mut connection);
         let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
@@ -772,6 +956,7 @@ mod tests {
             is_global_data_locked_err(
                 DEFAULT_EXPERIMENT_ID,
                 loaded_pipelines.clone(),
+                download_tracker,
                 &mut connection
             )
             .unwrap_err()

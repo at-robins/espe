@@ -85,14 +85,17 @@ impl FileRequestCategory {
         connection: &mut SqliteConnection,
     ) -> Result<(), SeqError> {
         match self {
-            FileRequestCategory::Globals => is_global_data_locked_err(id, pipelines, connection)
-                .map_err(|err| {
-                    err.chain(format!(
-                        "The file request could not be processed as \
-                        global data repository {} is locked.",
-                        id
-                    ))
-                }),
+            FileRequestCategory::Globals => {
+                is_global_data_locked_err(id, pipelines, download_tracker, connection).map_err(
+                    |err| {
+                        err.chain(format!(
+                            "The file request could not be processed as \
+                            global data repository {} is locked.",
+                            id
+                        ))
+                    },
+                )
+            },
             FileRequestCategory::Experiments => {
                 is_experiment_locked_err(id, download_tracker, connection).map_err(|err| {
                     err.chain(format!(

@@ -6,6 +6,7 @@ use crate::{
         exchange::global_data_details::GlobalDataDetails,
     },
     service::{
+        download_service::DownloadTrackerManager,
         global_data_service::is_global_data_locked,
         pipeline_service::LoadedPipelines,
         validation_service::{validate_comment, validate_entity_name},
@@ -120,6 +121,7 @@ pub async fn list_global_data(
 pub async fn get_global_data_locked(
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
+    download_tracker_manager: web::Data<DownloadTrackerManager>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
@@ -130,8 +132,14 @@ pub async fn get_global_data_locked(
             id
         ))
     })?;
-    let is_locked = is_global_data_locked(id, pipelines, &mut connection)
-        .map_err(|err| SeqError::from(err).chain(format!("Lock state for global data repository {} could not be determined. Error while quering the database.", id)))?;
+    let is_locked = is_global_data_locked(id, pipelines, download_tracker_manager, &mut connection)
+        .map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Lock state for global data repository {} could \
+                not be determined. Error while quering the database.",
+                id
+            ))
+        })?;
     Ok(HttpResponse::Ok().json(is_locked))
 }
 
