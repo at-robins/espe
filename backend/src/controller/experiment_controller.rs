@@ -21,6 +21,7 @@ use crate::{
         },
     },
     service::{
+        download_service::DownloadTrackerManager,
         execution_service::ExecutionScheduler,
         experiment_service::{
             delete_step_logs, delete_step_output, is_experiment_locked, is_experiment_locked_err,
@@ -185,6 +186,7 @@ pub async fn patch_experiment_comment(
 pub async fn patch_experiment_pipeline(
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     id: web::Path<i32>,
     new_pipeline: web::Json<Option<String>>,
 ) -> Result<HttpResponse, SeqError> {
@@ -207,7 +209,7 @@ pub async fn patch_experiment_pipeline(
             new_pipeline, id
         ))
     })?;
-    is_experiment_locked_err(id, &mut connection).map_err(|err| {
+    is_experiment_locked_err(id, download_tracker, &mut connection).map_err(|err| {
         err.chain(format!(
             "Pipeline {:?} cannot be set for experiment {} as the experiment is locked.",
             new_pipeline, id
@@ -311,6 +313,7 @@ pub async fn get_experiment_pipeline_run(
 pub async fn post_experiment_pipeline_step_variable(
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     experiment_id: web::Path<i32>,
     new_variable: web::Json<PipelineStepVariableUpload>,
 ) -> Result<HttpResponse, SeqError> {
@@ -333,7 +336,16 @@ pub async fn post_experiment_pipeline_step_variable(
     }
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection).map_err(|err| err.chain(format!("Step variable {} - {} - {} of experiment {} could not be set as the experiment does not exis.", new_variable.pipeline_id, new_variable.pipeline_step_id, new_variable.variable_id, experiment_id)))?;
-    is_experiment_locked_err(experiment_id, &mut connection).map_err(|err| err.chain(format!("Step variable {} - {} - {} of experiment {} could not be set as the experiment is locked.", new_variable.pipeline_id, new_variable.pipeline_step_id, new_variable.variable_id, experiment_id)))?;
+    is_experiment_locked_err(experiment_id, download_tracker, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "Step variable {} - {} - {} of experiment {} could not be set as \
+            the experiment is locked.",
+            new_variable.pipeline_id,
+            new_variable.pipeline_step_id,
+            new_variable.variable_id,
+            experiment_id
+        ))
+    })?;
 
     connection.immediate_transaction(|connection| {
         if let Some(existing_variable) = PipelineStepVariable::get(
@@ -373,6 +385,7 @@ pub async fn post_experiment_pipeline_step_variable(
 pub async fn post_experiment_pipeline_global_variable(
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     experiment_id: web::Path<i32>,
     new_variable: web::Json<PipelineGlobalVariableUpload>,
 ) -> Result<HttpResponse, SeqError> {
@@ -391,7 +404,13 @@ pub async fn post_experiment_pipeline_global_variable(
     }
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection).map_err(|err| err.chain(format!("Global variable {} - {} of experiment {} could not be set as the experiment does not exist.", new_variable.pipeline_id, new_variable.variable_id, experiment_id)))?;
-    is_experiment_locked_err(experiment_id, &mut connection).map_err(|err| err.chain(format!("Global variable {} - {} of experiment {} could not be set as the experiment is locked.", new_variable.pipeline_id, new_variable.variable_id, experiment_id)))?;
+    is_experiment_locked_err(experiment_id, download_tracker, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "Global variable {} - {} of experiment {} could not \
+            be set as the experiment is locked.",
+            new_variable.pipeline_id, new_variable.variable_id, experiment_id
+        ))
+    })?;
 
     connection.immediate_transaction(|connection| {
         if let Some(existing_variable) = PipelineGlobalVariable::get(
@@ -762,6 +781,7 @@ pub async fn post_experiment_execution_reset(
 
 pub async fn get_experiment_locked(
     database_manager: web::Data<DatabaseManager>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     experiment_id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
@@ -772,8 +792,14 @@ pub async fn get_experiment_locked(
             experiment_id
         ))
     })?;
-    let is_locked = is_experiment_locked(experiment_id, &mut connection)
-        .map_err(|err| SeqError::from(err).chain(format!("Lock state for experiment {} could not be determined. Error while quering the database.", experiment_id)))?;
+    let is_locked = is_experiment_locked(experiment_id, download_tracker, &mut connection)
+        .map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Lock state for experiment {} could not be determined. \
+                Error while quering the database.",
+                experiment_id
+            ))
+        })?;
     Ok(HttpResponse::Ok().json(is_locked))
 }
 

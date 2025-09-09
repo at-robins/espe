@@ -15,9 +15,13 @@ use crate::{
         internal::archive::ArchiveMetadata,
     },
     service::{
-        download_service::DownloadTrackerManager, experiment_service::is_experiment_locked_err, global_data_service::is_global_data_locked_err, multipart_service::{
+        download_service::DownloadTrackerManager,
+        experiment_service::is_experiment_locked_err,
+        global_data_service::is_global_data_locked_err,
+        multipart_service::{
             create_temporary_file, delete_temporary_file, parse_multipart_file, UploadForm,
-        }, pipeline_service::LoadedPipelines
+        },
+        pipeline_service::LoadedPipelines,
     },
 };
 use actix_files::NamedFile;
@@ -77,20 +81,23 @@ impl FileRequestCategory {
         &self,
         id: i32,
         pipelines: web::Data<LoadedPipelines>,
+        download_tracker: web::Data<DownloadTrackerManager>,
         connection: &mut SqliteConnection,
     ) -> Result<(), SeqError> {
         match self {
             FileRequestCategory::Globals => is_global_data_locked_err(id, pipelines, connection)
                 .map_err(|err| {
                     err.chain(format!(
-                        "The file request could not be processed as global data repository {} is locked.",
+                        "The file request could not be processed as \
+                        global data repository {} is locked.",
                         id
                     ))
                 }),
             FileRequestCategory::Experiments => {
-                is_experiment_locked_err(id, connection).map_err(|err| {
+                is_experiment_locked_err(id, download_tracker, connection).map_err(|err| {
                     err.chain(format!(
-                        "The file request could not be processed as experiment {} is locked.",
+                        "The file request could not be \
+                        processed as experiment {} is locked.",
                         id
                     ))
                 })
@@ -153,6 +160,7 @@ pub async fn delete_files_by_path(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     params: web::Path<(FileRequestCategory, i32)>,
     path: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
@@ -162,7 +170,7 @@ pub async fn delete_files_by_path(
     let mut connection = database_manager.database_connection()?;
     category.entity_exists(id, &mut connection)?;
     category
-        .is_locked_err(id, pipelines, &mut connection)
+        .is_locked_err(id, pipelines, download_tracker, &mut connection)
         .map_err(|err| {
             err.chain(format!(
                 "The file deletion for path {} request failed as {:?}/{} is locked.",
@@ -213,6 +221,7 @@ async fn setup_post_add_file(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     params: web::Path<(FileRequestCategory, i32)>,
 ) -> Result<
     (
@@ -241,7 +250,7 @@ async fn setup_post_add_file(
         ))
     })?;
     category
-        .is_locked_err(id, pipelines, &mut connection)
+        .is_locked_err(id, pipelines, download_tracker, &mut connection)
         .map_err(|err| {
             err.chain(format!("The file upload request failed as {:?}/{} is locked.", category, id))
         })?;
@@ -253,11 +262,18 @@ pub async fn post_add_file(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     params: web::Path<(FileRequestCategory, i32)>,
     mut payload: Multipart,
 ) -> Result<HttpResponse, SeqError> {
-    match setup_post_add_file(web::Data::clone(&app_config), database_manager, pipelines, params)
-        .await
+    match setup_post_add_file(
+        web::Data::clone(&app_config),
+        database_manager,
+        pipelines,
+        download_tracker,
+        params,
+    )
+    .await
     {
         Ok((category, id, temporary_file_path, temporary_file_id, mut connection)) => {
             persist_multipart(
@@ -294,6 +310,7 @@ pub async fn post_add_folder(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
     pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     params: web::Path<(FileRequestCategory, i32)>,
     upload_info: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
@@ -322,19 +339,17 @@ pub async fn post_add_folder(
     }
 
     let mut connection = database_manager.database_connection()?;
-    
+
     // Validate the existance of the entity.
     category.entity_exists(id, &mut connection)?;
-    
-        // Validate the according entity is not locked.
-        category
-        .is_locked_err(id, pipelines, &mut connection)
+
+    // Validate the according entity is not locked.
+    category
+        .is_locked_err(id, pipelines, download_tracker, &mut connection)
         .map_err(|err| {
             err.chain(format!(
                 "The folder creation for {:?} request failed as {:?}/{} is locked.",
-                upload_info,
-                category,
-                id
+                upload_info, category, id
             ))
         })?;
 
@@ -415,7 +430,8 @@ pub async fn post_experiment_archive_step_results(
     step_id: web::Json<String>,
 ) -> Result<String, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
-    let _download_tracker = download_tracker_manager.track_experiment_output_download(experiment_id);
+    let _download_tracker =
+        download_tracker_manager.track_experiment_output_download(experiment_id);
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection)?;
 

@@ -178,8 +178,7 @@ fn setup_temporary_file_manager_scheduler(app_config: &Data<Configuration>) {
 }
 
 /// Initialises and returns a [`DownloadTrackerManager`].
-fn setup_download_tracker(
-) -> Data<DownloadTrackerManager> {
+fn setup_download_tracker() -> Data<DownloadTrackerManager> {
     Data::new(DownloadTrackerManager::new())
 }
 
