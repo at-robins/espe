@@ -754,11 +754,23 @@ pub async fn post_experiment_execution_abort(
 pub async fn post_experiment_execution_reset(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     experiment_id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
-    let mut connection = database_manager.database_connection()?;
-    Experiment::exists_err(experiment_id, &mut connection)?;
+    let mut connection = database_manager.database_connection().map_err(|err| {
+        err.chain(format!(
+            "Resetting experiment {} failed as no database \
+            connection could be established.",
+            experiment_id
+        ))
+    })?;
+    Experiment::exists_err(experiment_id, &mut connection).map_err(|err| {
+        err.chain(format!("Experiment {} cannot be reset as it does not exist.", experiment_id))
+    })?;
+    is_experiment_locked_err(experiment_id, download_tracker, &mut connection).map_err(|err| {
+        err.chain(format!("Experiment {} cannot be reset as it is locked.", experiment_id))
+    })?;
     // Delete output files and logs.
     log::info!("Deleting output from experiment with ID {}.", experiment_id);
     let experiment_steps_path = app_config.experiment_steps_path(experiment_id.to_string());
@@ -767,14 +779,29 @@ pub async fn post_experiment_execution_reset(
     }
     let experiment_logs_path = app_config.experiment_logs_path(experiment_id.to_string());
     if experiment_logs_path.exists() {
-        std::fs::remove_dir_all(experiment_logs_path)?;
+        std::fs::remove_dir_all(&experiment_logs_path).map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Resetting experiment {} failed as the \
+                data directory {} could not be removed.",
+                experiment_id,
+                experiment_logs_path.display()
+            ))
+        })?;
     }
     // Delete execution steps from the database.
-    connection.immediate_transaction(|connection| {
-        diesel::delete(crate::schema::experiment_execution::table)
-            .filter(crate::schema::experiment_execution::experiment_id.eq(experiment_id))
-            .execute(connection)
-    })?;
+    connection
+        .immediate_transaction(|connection| {
+            diesel::delete(crate::schema::experiment_execution::table)
+                .filter(crate::schema::experiment_execution::experiment_id.eq(experiment_id))
+                .execute(connection)
+        })
+        .map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Resetting experiment {} failed as it \
+                could not be deleted from the database.",
+                experiment_id
+            ))
+        })?;
 
     Ok(HttpResponse::Ok().finish())
 }

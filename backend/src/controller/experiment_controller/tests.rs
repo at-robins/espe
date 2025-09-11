@@ -1924,12 +1924,16 @@ async fn test_experiment_locked() {
             .set_json(Option::<String>::None)
             .to_request(),
         // TestRequest::post()
+        //     .uri(&base_url)
+        //     .to_request(),
+        // TestRequest::post()
         //     .uri(&format!("{}/rerun", base_url))
         //     .set_json(pipeline_step_id)
         //     .to_request(),
-        // TestRequest::post()
-        //     .uri(&format!("{}/reset", base_url))
-        //     .to_request(),
+        // TODO: delete
+        TestRequest::post()
+            .uri(&format!("{}/reset", base_url))
+            .to_request(),
         TestRequest::post()
             .uri(&format!("{}/variable/global", base_url))
             .set_json(PipelineGlobalVariableUpload {
