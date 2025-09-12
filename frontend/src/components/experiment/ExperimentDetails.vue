@@ -113,6 +113,7 @@
                   color="positive"
                   :loading="isRestarting"
                   @click="restartExperiment"
+                  :disable="isLocked"
                 >
                   <q-tooltip> Restart the experiment execution. </q-tooltip>
                 </q-btn>

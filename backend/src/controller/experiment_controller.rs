@@ -55,24 +55,46 @@ pub async fn create_experiment(
 pub async fn delete_experiment(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
-    let id: i32 = id.into_inner();
-    // Retrieve the app config.
-    let mut connection = database_manager.database_connection()?;
-    Experiment::exists_err(id, &mut connection)?;
-    log::info!("Deleting experiment with ID {}.", id);
+    let experiment_id: i32 = id.into_inner();
+    let mut connection = database_manager.database_connection().map_err(|err| {
+        err.chain(format!(
+            "Deleting experiment {} failed as no database \
+            connection could be established.",
+            experiment_id
+        ))
+    })?;
+    Experiment::exists_err(experiment_id, &mut connection).map_err(|err| {
+        err.chain(format!("Experiment {} cannot be deleted as it does not exist.", experiment_id))
+    })?;
+    is_experiment_locked_err(experiment_id, download_tracker, &mut connection).map_err(|err| {
+        err.chain(format!("Experiment {} cannot be deleted as it is locked.", experiment_id))
+    })?;
+    log::info!("Deleting experiment with ID {}.", experiment_id);
     // Remove all files belonging to the experiment.
-    let experiment_path = app_config.experiment_path(id.to_string());
+    let experiment_path = app_config.experiment_path(experiment_id.to_string());
     if experiment_path.exists() {
-        std::fs::remove_dir_all(experiment_path)?;
+        std::fs::remove_dir_all(experiment_path).map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Deleting experiment {} failed as its \
+                context directory could not be removed.",
+                experiment_id
+            ))
+        })?;
     }
     // Delete the experiment from the database.
-    connection.immediate_transaction(|connection| {
-        diesel::delete(crate::schema::experiment::table)
-            .filter(crate::schema::experiment::id.eq(id))
-            .execute(connection)
-    })?;
+    connection
+        .immediate_transaction(|connection| {
+            diesel::delete(crate::schema::experiment::table)
+                .filter(crate::schema::experiment::id.eq(experiment_id))
+                .execute(connection)
+        })
+        .map_err(|err| {
+            SeqError::from(err)
+                .chain(format!("Deleting database entry for experiment {} failed.", experiment_id))
+        })?;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -447,12 +469,24 @@ pub async fn post_experiment_pipeline_global_variable(
 
 pub async fn post_execute_experiment(
     database_manager: web::Data<DatabaseManager>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     experiment_id: web::Path<i32>,
     pipelines: web::Data<LoadedPipelines>,
 ) -> Result<HttpResponse, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
-    let mut connection = database_manager.database_connection()?;
-    Experiment::exists_err(experiment_id, &mut connection)?;
+    let mut connection = database_manager.database_connection().map_err(|err| {
+        err.chain(format!(
+            "Executing experiment {} failed as no database \
+            connection could be established.",
+            experiment_id
+        ))
+    })?;
+    Experiment::exists_err(experiment_id, &mut connection).map_err(|err| {
+        err.chain(format!("Experiment {} cannot be executed as it does not exist.", experiment_id))
+    })?;
+    is_experiment_locked_err(experiment_id, download_tracker, &mut connection).map_err(|err| {
+        err.chain(format!("Experiment {} cannot be executed as it is locked.", experiment_id))
+    })?;
     // Error if the experiment was already submitted for execution.
     if ExperimentExecution::has_experiment_execution_entries(experiment_id, &mut connection)? {
         return Err(SeqError::new(
@@ -534,7 +568,8 @@ pub async fn post_execute_experiment_step(
     let step_id: String = step_id.into_inner();
     let mut connection = database_manager.database_connection().map_err(|err| {
         err.chain(format!(
-            "Connection to the database could not be aquired when executing pipeline step {} of experiment {}.",
+            "Connection to the database could not be aquired when \
+            executing pipeline step {} of experiment {}.",
             step_id, experiment_id
         ))
     })?;
@@ -545,53 +580,87 @@ pub async fn post_execute_experiment_step(
             experiment_id, step_id
         ))
     })?;
-    if let Some(pipeline_id) = Experiment::get(experiment_id, &mut connection)
+
+    let pipeline_id = Experiment::get(experiment_id, &mut connection)
         .map_err(|err| {
             SeqError::from(err).chain(format!(
             "Reading experiment data of experiment {} from the database failed during start of step {}.",
             experiment_id, step_id
         ))
         })?
-        .pipeline_id
-    {
-        if let Some(pipeline) = pipelines.get(&pipeline_id) {
-            let pipeline = pipeline.pipeline();
-            // Checks if the step exists within the currently selected pipeline
-            if let Some(step) = pipeline.steps().iter().find(|step| step.id() == &step_id) {
-                // Checks if the dependencies are satisfied.
-                let executions: Vec<ExperimentExecution> =
-                    ExperimentExecution::get_by_experiment(experiment_id, &mut connection).map_err(|err| {
-                            SeqError::from(err).chain(format!(
-                                "Reading pipeline step execution ({}/{}) of experiment {} from the database failed.",
-                                pipeline_id, step_id, experiment_id
-                            ))
-                        })?
-                        .into_iter()
-                        .filter(|s| &s.pipeline_id == &pipeline_id)
-                        .collect();
-                let satisfied_dependencies: Vec<&String> = executions
-                    .iter()
-                    .filter(|s| {
-                        s.execution_status == ExecutionStatus::Finished.to_string()
-                            || s.execution_status == ExecutionStatus::Running.to_string()
-                            || s.execution_status == ExecutionStatus::Waiting.to_string()
-                    })
-                    .map(|s| &s.pipeline_step_id)
-                    .collect();
-                let are_dependencies_satisfied: bool = step
-                    .dependencies()
-                    .iter()
-                    .all(|dependency| satisfied_dependencies.contains(&dependency));
-                if !are_dependencies_satisfied {
-                    return Err(SeqError::new(
+        .pipeline_id.ok_or(SeqError::new(
+            "Invalid run",
+            SeqErrorType::BadRequestError,
+            format!(
+                "No pipeline was selected for experiment {}, so it cannot be run.",
+                experiment_id
+            ),
+            "The requested run parameters are invalid.",
+        ))?;
+
+    let pipeline = pipelines.get(&pipeline_id).ok_or(SeqError::new(
+        "Invalid run",
+        SeqErrorType::BadRequestError,
+        format!(
+            "The selected pipeline {} for experiment {} is not loaded.",
+            pipeline_id, experiment_id
+        ),
+        "The requested run parameters are invalid.",
+    ))?;
+    let pipeline = pipeline.pipeline();
+    // Checks if the step exists within the currently selected pipeline
+    let step = pipeline
+        .steps()
+        .iter()
+        .find(|step| step.id() == &step_id)
+        .ok_or(SeqError::new(
+            "Invalid run",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The selected pipeline {} for experiment {} is does not contain step {}.",
+                pipeline_id, experiment_id, step_id
+            ),
+            "The requested run parameters are invalid.",
+        ))?;
+
+    // Checks if the dependencies are satisfied.
+    let executions: Vec<ExperimentExecution> = ExperimentExecution::get_by_experiment(
+        experiment_id,
+        &mut connection,
+    )
+    .map_err(|err| {
+        SeqError::from(err).chain(format!(
+            "Reading pipeline step execution ({}/{}) of experiment {} from the database failed.",
+            pipeline_id, step_id, experiment_id
+        ))
+    })?
+    .into_iter()
+    .filter(|s| &s.pipeline_id == &pipeline_id)
+    .collect();
+    let satisfied_dependencies: Vec<&String> = executions
+        .iter()
+        .filter(|s| {
+            s.execution_status == ExecutionStatus::Finished.to_string()
+                || s.execution_status == ExecutionStatus::Running.to_string()
+                || s.execution_status == ExecutionStatus::Waiting.to_string()
+        })
+        .map(|s| &s.pipeline_step_id)
+        .collect();
+    let are_dependencies_satisfied: bool = step
+        .dependencies()
+        .iter()
+        .all(|dependency| satisfied_dependencies.contains(&dependency));
+    if !are_dependencies_satisfied {
+        return Err(SeqError::new(
                         "Invalid run",
                         SeqErrorType::BadRequestError,
                         format!("The experiment {} is missing dependencies for execution of pipeline {} step {}.\nRequired dependencies: {:?}\nSatisfied dependencies: {:?}", experiment_id, pipeline.id(), step.id(), step.dependencies(), satisfied_dependencies),
                         "The requested run parameters are invalid.",
                     ));
-                }
-                // Checks if the required variables are set.
-                PipelineGlobalVariable::validate_global_variables(
+    }
+
+    // Checks if the required variables are set.
+    PipelineGlobalVariable::validate_global_variables(
                     pipeline,
                     experiment_id,
                     &mut connection,
@@ -601,7 +670,7 @@ pub async fn post_execute_experiment_step(
                         pipeline_id, step_id, experiment_id
                     ))
                 })?;
-                PipelineStepVariable::validate_step_variables(
+    PipelineStepVariable::validate_step_variables(
                     step,
                     experiment_id,
                     &pipeline_id,
@@ -612,33 +681,31 @@ pub async fn post_execute_experiment_step(
                         pipeline_id, step_id, experiment_id
                     ))
                 })?;
-                // Submits execution step.
-                if let Some(existing_execution) =
-                    executions.iter().find(|s| s.pipeline_step_id == step_id)
-                {
-                    // Restart an existing pipeline step.
-                    if existing_execution.execution_status == ExecutionStatus::Running.to_string()
-                        || existing_execution.execution_status
-                            == ExecutionStatus::Waiting.to_string()
-                    {
-                        // Error if the step is currently scheduled for execution.
-                        return Err(SeqError::new(
+                
+    // Submits execution step.
+    if let Some(existing_execution) = executions.iter().find(|s| s.pipeline_step_id == step_id) {
+        // Restart an existing pipeline step.
+        if existing_execution.execution_status == ExecutionStatus::Running.to_string()
+            || existing_execution.execution_status == ExecutionStatus::Waiting.to_string()
+        {
+            // Error if the step is currently scheduled for execution.
+            return Err(SeqError::new(
                             "Invalid run",
                             SeqErrorType::BadRequestError,
                             format!("The experiment {} pipeline {} step {} is already scheduled for execution and can thus not be restarted.", experiment_id, pipeline.id(), step.id()),
                             "The requested run parameters are invalid.",
                         ));
-                    }
-                    // Deletes the output folder and run logs, but keeps the build logs
-                    // as the build process might be cached / skipped.
-                    delete_step_output(&step_id, experiment_id, web::Data::clone(&app_config))
+        }
+        // Deletes the output folder and run logs, but keeps the build logs
+        // as the build process might be cached / skipped.
+        delete_step_output(&step_id, experiment_id, web::Data::clone(&app_config))
                         .map_err(|err| {
                             err.chain(format!(
                                 "Deletion of pipeline step output ({}/{}) of experiment {} failed during restart request.",
                                 pipeline_id, step_id, experiment_id
                             ))
                         })?;
-                    delete_step_logs(
+        delete_step_logs(
                         &pipeline_id,
                         &step_id,
                         experiment_id,
@@ -650,89 +717,51 @@ pub async fn post_execute_experiment_step(
                             pipeline_id, step_id, experiment_id
                         ))
                     })?;
-                    connection
-                        .immediate_transaction(|connection| {
-                            let clear_time: Option<NaiveDateTime> = None;
-                            diesel::update(
-                                crate::schema::experiment_execution::table
-                                    .find(existing_execution.id),
-                            )
-                            .set((
-                                crate::schema::experiment_execution::execution_status
-                                    .eq(ExecutionStatus::Waiting.to_string()),
-                                crate::schema::experiment_execution::start_time
-                                    .eq(clear_time.clone()),
-                                crate::schema::experiment_execution::end_time.eq(clear_time),
-                            ))
-                            .execute(connection)
-                        })
-                        .map_err(|err| {
-                            SeqError::from(err).chain(format!(
-                            "Failed to update the pipeline execution step {:?} in the database.",
-                            existing_execution
-                        ))
-                        })?;
-                } else {
-                    // Create a newly added pipeline step.
-                    let execution_step: NewExperimentExecution =
-                        NewExperimentExecution::new(experiment_id, pipeline.id(), step.id());
-
-                    connection
-                        .immediate_transaction(|connection| {
-                            diesel::insert_into(crate::schema::experiment_execution::table)
-                                .values(&execution_step)
-                                .execute(connection)
-                        })
-                        .map_err(|err| {
-                            SeqError::from(err).chain(format!(
-                                "Failed to persist the pipeline execution step {:?} in the database.",
-                                execution_step
-                            ))
-                        })?;
-                }
-                log::info!(
-                    "Submitted experiment {} with pipeline {} step {} for execution.",
-                    experiment_id,
-                    pipeline.id(),
-                    step_id
-                );
-                Ok(HttpResponse::Ok().finish())
-            } else {
-                // Error the pipeline does not contain the step.
-                Err(SeqError::new(
-                    "Invalid run",
-                    SeqErrorType::BadRequestError,
-                    format!(
-                        "The selected pipeline {} for experiment {} is does not contain step {}.",
-                        pipeline_id, experiment_id, step_id
-                    ),
-                    "The requested run parameters are invalid.",
+        connection
+            .immediate_transaction(|connection| {
+                let clear_time: Option<NaiveDateTime> = None;
+                diesel::update(
+                    crate::schema::experiment_execution::table.find(existing_execution.id),
+                )
+                .set((
+                    crate::schema::experiment_execution::execution_status
+                        .eq(ExecutionStatus::Waiting.to_string()),
+                    crate::schema::experiment_execution::start_time.eq(clear_time.clone()),
+                    crate::schema::experiment_execution::end_time.eq(clear_time),
                 ))
-            }
-        } else {
-            // Error if the pipeline is not loaded.
-            Err(SeqError::new(
-                "Invalid run",
-                SeqErrorType::BadRequestError,
-                format!(
-                    "The selected pipeline {} for experiment {} is not loaded.",
-                    pipeline_id, experiment_id
-                ),
-                "The requested run parameters are invalid.",
-            ))
-        }
+                .execute(connection)
+            })
+            .map_err(|err| {
+                SeqError::from(err).chain(format!(
+                    "Failed to update the pipeline execution step {:?} in the database.",
+                    existing_execution
+                ))
+            })?;
     } else {
-        // Error if no pipeline was selected.
-        Err(SeqError::new(
-            "Invalid run",
-            SeqErrorType::BadRequestError,
-            format!(
-                "No pipeline was selected for experiment {}, so it cannot be run.",
-                experiment_id
-            ),
-            "The requested run parameters are invalid.",
-        ))
+        // Create a newly added pipeline step.
+        let execution_step: NewExperimentExecution =
+            NewExperimentExecution::new(experiment_id, pipeline.id(), step.id());
+
+        connection
+            .immediate_transaction(|connection| {
+                diesel::insert_into(crate::schema::experiment_execution::table)
+                    .values(&execution_step)
+                    .execute(connection)
+            })
+            .map_err(|err| {
+                SeqError::from(err).chain(format!(
+                    "Failed to persist the pipeline execution step {:?} in the database.",
+                    execution_step
+                ))
+            })?;
     }
+    log::info!(
+        "Submitted experiment {} with pipeline {} step {} for execution.",
+        experiment_id,
+        pipeline.id(),
+        step_id
+    );
+    Ok(HttpResponse::Ok().finish())
 }
 
 pub async fn post_experiment_execution_abort(

@@ -1435,7 +1435,7 @@ async fn test_post_execute_experiment_unset_required_global_variable() {
 }
 
 #[actix_web::test]
-async fn test_post_execute_experiment_already_running() {
+async fn test_post_execute_experiment_already_executed() {
     // Use a reference to the context, so the context is not dropped early
     // and messes up test context folder deletion.
     let mut db_context = TestContext::new();
@@ -1483,7 +1483,14 @@ async fn test_post_execute_experiment_already_running() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    // Second execution should fail since the experiment pipeline is already scheduled for execution.
+    // Arborting the process is necessery, as a running pipeline
+    // would be locked and throw a different error.
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}/abort", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    // Second execution should fail since the experiment pipeline has already been started before.
     let req = test::TestRequest::post()
         .uri(&format!("/api/experiments/{}", experiment_id))
         .to_request();
@@ -1923,14 +1930,8 @@ async fn test_experiment_locked() {
             .uri(&format!("{}/pipeline", base_url))
             .set_json(Option::<String>::None)
             .to_request(),
-        // TestRequest::post()
-        //     .uri(&base_url)
-        //     .to_request(),
-        // TestRequest::post()
-        //     .uri(&format!("{}/rerun", base_url))
-        //     .set_json(pipeline_step_id)
-        //     .to_request(),
-        // TODO: delete
+        TestRequest::post().uri(&base_url).to_request(),
+        TestRequest::delete().uri(&base_url).to_request(),
         TestRequest::post()
             .uri(&format!("{}/reset", base_url))
             .to_request(),
