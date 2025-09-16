@@ -7,7 +7,7 @@ use crate::{
     },
     service::{
         download_service::DownloadTrackerManager,
-        global_data_service::is_global_data_locked,
+        global_data_service::{is_global_data_locked, is_global_data_locked_err},
         pipeline_service::LoadedPipelines,
         validation_service::{validate_comment, validate_entity_name},
     },
@@ -34,23 +34,46 @@ pub async fn create_global_data(
 pub async fn delete_global_data(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
+    pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, SeqError> {
     let id: i32 = id.into_inner();
     let mut connection = database_manager.database_connection()?;
     GlobalData::exists_err(id, &mut connection)?;
+    is_global_data_locked_err(id, pipelines, download_tracker, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "Global data repository {} cannot \
+            be deleted as it is locked.",
+            id
+        ))
+    })?;
     log::info!("Deleting global data repository with ID {}.", id);
     // Remove all files belonging to the global data repository.
     let global_path = app_config.global_data_path(id.to_string());
     if global_path.exists() {
-        std::fs::remove_dir_all(global_path)?;
+        std::fs::remove_dir_all(global_path).map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Deletion of global data repository {} failed \
+                as its context folder could not be deleted.",
+                id
+            ))
+        })?;
     }
     // Delete the repository from the database.
-    connection.immediate_transaction(|connection| {
-        diesel::delete(crate::schema::global_data::table)
-            .filter(crate::schema::global_data::id.eq(id))
-            .execute(connection)
-    })?;
+    connection
+        .immediate_transaction(|connection| {
+            diesel::delete(crate::schema::global_data::table)
+                .filter(crate::schema::global_data::id.eq(id))
+                .execute(connection)
+        })
+        .map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Deletion of global data repository {} failed \
+                as it could not be removed from the database.",
+                id
+            ))
+        })?;
     Ok(HttpResponse::Ok().finish())
 }
 

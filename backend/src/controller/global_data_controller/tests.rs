@@ -1,7 +1,20 @@
-use crate::test_utility::{create_test_app, TestContext};
+use crate::{
+    model::db::{
+        experiment_execution::{ExecutionStatus, ExperimentExecution},
+        pipeline_step_variable::NewPipelineStepVariable,
+    },
+    test_utility::{
+        create_default_experiment, create_default_global_data,
+        create_test_app, TestContext, DEFAULT_EXPERIMENT_ID, DEFAULT_GLOBAL_DATA_ID,
+        DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID, TEST_RESOURCES_PATH,
+    },
+};
 
 use super::*;
-use actix_web::{http::StatusCode, test};
+use actix_web::{
+    http::StatusCode,
+    test::{self, TestRequest},
+};
 
 #[actix_web::test]
 async fn test_create_global_data() {
@@ -327,4 +340,63 @@ async fn test_patch_global_data_name_too_long() {
             .unwrap()
             .global_data_name
     );
+}
+
+#[actix_web::test]
+async fn test_global_data_locked() {
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+
+    create_default_experiment(&mut connection);
+    create_default_global_data(&mut connection);
+
+    let new_records_all: Vec<ExperimentExecution> = vec![ExperimentExecution {
+        id: 0,
+        experiment_id: DEFAULT_EXPERIMENT_ID,
+        pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+        pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+        execution_status: ExecutionStatus::Running.into(),
+        start_time: None,
+        end_time: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    }];
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_records_all)
+        .execute(&mut connection)
+        .unwrap();
+
+    // Associates the running pipeline with the test global data repository.
+    let association_variable = NewPipelineStepVariable::new(
+        DEFAULT_EXPERIMENT_ID,
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+        "global",
+        Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&association_variable)
+        .execute(&mut connection)
+        .unwrap();
+
+    let base_url = format!("/api/experiments/{}", DEFAULT_GLOBAL_DATA_ID);
+    let test_requests = [TestRequest::delete().uri(&base_url).to_request()];
+
+    for test_request in test_requests {
+        let test_url = test_request.uri().to_string();
+        let resp = test::call_service(&app, test_request).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::PRECONDITION_FAILED,
+            "Accessing {} while the experiment was locked did return status code {} but should return {}. Message: {:?}",
+            test_url,
+            resp.status(),
+            StatusCode::PRECONDITION_FAILED,
+            resp.response()
+        );
+    }
+
+    // Makes sure the global data repo did not get deleted.
+    assert!(GlobalData::exists(DEFAULT_GLOBAL_DATA_ID, &mut connection).unwrap())
 }
