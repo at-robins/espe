@@ -434,7 +434,7 @@ pub async fn post_experiment_archive_step_results(
 ) -> Result<String, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
     let _download_tracker =
-        download_tracker_manager.track_experiment_output_download(experiment_id);
+        download_tracker_manager.track_experiment_output_download_experiment(experiment_id);
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection)?;
 

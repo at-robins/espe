@@ -222,7 +222,7 @@ pub fn is_experiment_locked(
         SeqError::from(err)
             .chain(format!("Obtaining lock state for experiment {} failed.", experiment_id))
     })?;
-    let downloaded = download_tracker.is_experiment_output_download_tracked(experiment_id);
+    let downloaded = download_tracker.is_experiment_output_download_experiment_tracked(experiment_id);
     Ok(executed || downloaded)
 }
 
@@ -656,9 +656,9 @@ mod tests {
         )
         .unwrap());
         let tracker_00 =
-            download_tracker.track_experiment_output_download(experiment_id_not_executed);
+            download_tracker.track_experiment_output_download_experiment(experiment_id_not_executed);
         let tracker_01 =
-            download_tracker.track_experiment_output_download(experiment_id_not_executed);
+            download_tracker.track_experiment_output_download_experiment(experiment_id_not_executed);
         assert!(is_experiment_locked(
             experiment_id_not_executed,
             download_tracker.clone(),
@@ -839,9 +839,9 @@ mod tests {
         )
         .is_ok());
         let tracker_00 =
-            download_tracker.track_experiment_output_download(experiment_id_not_executed);
+            download_tracker.track_experiment_output_download_experiment(experiment_id_not_executed);
         let tracker_01 =
-            download_tracker.track_experiment_output_download(experiment_id_not_executed);
+            download_tracker.track_experiment_output_download_experiment(experiment_id_not_executed);
         assert_eq!(
             is_experiment_locked_err(
                 experiment_id_not_executed,

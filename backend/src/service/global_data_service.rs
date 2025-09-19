@@ -241,7 +241,7 @@ pub fn is_global_data_locked(
                 when checking if experiment {} is currently executed with pipeline {}.",
                 global_data_id, exp.experiment_id, exp.pipeline_id
             ))
-        })? || download_tracker_manager.is_experiment_output_download_tracked(exp.experiment_id)
+        })? || download_tracker_manager.is_experiment_output_download_experiment_tracked(exp.experiment_id)
         {
             return Ok(true);
         }
@@ -497,8 +497,8 @@ mod tests {
             &mut connection
         )
         .unwrap());
-        let tracker_00 = download_tracker.track_experiment_output_download(DEFAULT_EXPERIMENT_ID);
-        let tracker_01 = download_tracker.track_experiment_output_download(DEFAULT_EXPERIMENT_ID);
+        let tracker_00 = download_tracker.track_experiment_output_download_experiment(DEFAULT_EXPERIMENT_ID);
+        let tracker_01 = download_tracker.track_experiment_output_download_experiment(DEFAULT_EXPERIMENT_ID);
         assert!(is_global_data_locked(
             DEFAULT_EXPERIMENT_ID,
             loaded_pipelines.clone(),
@@ -822,8 +822,8 @@ mod tests {
             &mut connection
         )
         .is_ok());
-        let tracker_00 = download_tracker.track_experiment_output_download(DEFAULT_EXPERIMENT_ID);
-        let tracker_01 = download_tracker.track_experiment_output_download(DEFAULT_EXPERIMENT_ID);
+        let tracker_00 = download_tracker.track_experiment_output_download_experiment(DEFAULT_EXPERIMENT_ID);
+        let tracker_01 = download_tracker.track_experiment_output_download_experiment(DEFAULT_EXPERIMENT_ID);
         assert_eq!(
             is_global_data_locked_err(
                 DEFAULT_EXPERIMENT_ID,
