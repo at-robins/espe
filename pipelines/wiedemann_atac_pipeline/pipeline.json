@@ -265,7 +265,7 @@
       "name": "Peak calling",
       "description": "<espe-import>step_peak_calling_description.html</espe-import>",
       "container": "peak_calling",
-      "dependencies": ["blacklist_removal"],
+      "dependencies": ["blacklist_removal", "mappable_size"],
       "variables": []
     },
     {

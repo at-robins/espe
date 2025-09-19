@@ -4,6 +4,8 @@
 import csv
 import json
 import logging
+import math
+import multiprocessing
 import os
 import pandas as pd
 import pathvalidate
@@ -26,6 +28,10 @@ COUNT_MATRIX_PATH = os.path.join(INPUT_FOLDER_COUNTS, "counts/count_matrix_final
 ANNOTATION_PATH = os.path.join(INPUT_FOLDER_ANNOTATIONS, "merged.mergedPeak")
 SAMPLE_COMPARISON_PATH = os.path.join(MOUNT_PATHS["input"], "sample_comparison.csv")
 VALID_R_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+
+threads = math.floor(multiprocessing.cpu_count() * 0.8)
+if threads < 1:
+    threads = 1
 
 
 def convert_string_to_r(val: str) -> str:
@@ -88,6 +94,7 @@ r_count_matrix = ro.r.matrix(
 
 print("Loading R dependencies...", flush=True)
 importr("ggplot2")
+importr("BiocParallel")
 importr("DESeq2")
 print("Running R...", flush=True)
 deseq_function = ro.r(
@@ -102,8 +109,10 @@ deseq_function = ro.r(
         condition_names_test,
         condition_names_reference,
         output_path,
-        output_suffixes
+        output_suffixes,
+        threads
     ) {
+        register(MulticoreParam(threads))
         # Creates a mapping between groups and their names.
         names(group_names) <- groups
         cat("Preprocessing data matrix...\\n", sep="")
@@ -203,6 +212,7 @@ deseq_function(
     ro.StrVector(samples_reference),
     MOUNT_PATHS["output"],
     ro.StrVector(sample_comparisons_output_suffixes),
+    threads,
 )
 
 print("Loading annotations...", flush=True)
