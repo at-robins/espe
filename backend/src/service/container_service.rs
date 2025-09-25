@@ -120,7 +120,7 @@ pub fn run_pipeline_step(
         web::Data::clone(&app_config),
     )?;
     let experiment_id_string = experiment_id.to_string();
-    let output_path = app_config.experiment_step_path(&experiment_id_string, step.id());
+    let output_path = app_config.experiment_step_path(&experiment_id_string, pipeline.id(), step.id());
     let mut arguments: Vec<OsString> = vec![
         "run".into(),
         "--name".into(),
@@ -142,7 +142,7 @@ pub fn run_pipeline_step(
         mount_map_dependencies
             .insert(dependency_id.to_string(), serde_json::Value::String(target.clone()));
         arguments.extend(pipeline_step_mount(
-            app_config.experiment_step_path(&experiment_id_string, dependency_id),
+            app_config.experiment_step_path(&experiment_id_string, pipeline.id(), dependency_id),
             target,
             true,
         ));

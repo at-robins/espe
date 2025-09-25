@@ -15,7 +15,7 @@ use crate::{
         internal::archive::ArchiveMetadata,
     },
     service::{
-        download_service::DownloadTrackerManager,
+        download_service::{DownloadTrackerManager, PipelineStepRequestInfo},
         experiment_service::is_experiment_locked_err,
         global_data_service::is_global_data_locked_err,
         multipart_service::{
@@ -430,7 +430,7 @@ pub async fn post_experiment_archive_step_results(
     app_config: web::Data<Configuration>,
     download_tracker_manager: web::Data<DownloadTrackerManager>,
     experiment_id: web::Path<i32>,
-    step_id: web::Json<String>,
+    step_info: web::Json<PipelineStepRequestInfo>,
 ) -> Result<String, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
     let _download_tracker =
@@ -439,12 +439,15 @@ pub async fn post_experiment_archive_step_results(
     Experiment::exists_err(experiment_id, &mut connection)?;
 
     // Sets up the required information.
-    let step_id: String = step_id.into_inner();
     let archive_id = Configuration::generate_uuid();
-    let archive_meta = ArchiveMetadata::new(format!("{}.zip", &step_id));
+    let archive_meta = ArchiveMetadata::new(format!("{}.zip", &step_info.step_id));
 
     // Defines source and target paths.
-    let source = app_config.experiment_step_path(experiment_id.to_string(), &step_id);
+    let source = app_config.experiment_step_path(
+        experiment_id.to_string(),
+        &step_info.pipeline_id,
+        &step_info.step_id,
+    );
     let target = app_config.temporary_download_file_path(archive_id);
     let target_meta = ArchiveMetadata::metadata_path(&target);
 
@@ -461,7 +464,16 @@ pub async fn post_experiment_archive_step_results(
         SeqError::new(
             "Archiving error",
             SeqErrorType::InternalServerError,
-            format!("Creation of a downloadable archive for experiment {} ({}) from {} to {} failed with error: {}", experiment_id, step_id, source.display(), target.display(), err),
+            format!(
+                "Creation of a downloadable archive for experiment \
+                {} ({}/{}) from {} to {} failed with error: {}",
+                experiment_id,
+                step_info.pipeline_id,
+                step_info.step_id,
+                source.display(),
+                target.display(),
+                err
+            ),
             "Downloadable archive could not be created.",
         )
     })?;

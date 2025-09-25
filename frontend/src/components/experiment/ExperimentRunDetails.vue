@@ -116,7 +116,7 @@
           </q-card>
         </q-expansion-item>
       </q-card-section>
-      <div v-if="selectedStep" class="q-gutter-md q-pa-md col">
+      <div v-if="selectedStep && pipeline" class="q-gutter-md q-pa-md col">
         <div class="row">
           <q-btn
             label="Download output"
@@ -125,7 +125,7 @@
             :color="downloadError ? 'negative' : 'primary'"
             :loading="isArchiving"
             :disable="selectedStep.status !== PipelineStepStatus.Finished"
-            @click="downloadStepResults(selectedStep)"
+            @click="downloadStepResults(pipeline.id, selectedStep)"
           >
             <template v-slot:loading>
               <span class="block">
@@ -134,10 +134,10 @@
               </span>
             </template>
             <q-tooltip>
-              <div v-if="downloadError">
+              <div v-if="downloadError" class="text-black">
                 <error-popup :error-response="downloadError" />
               </div>
-              <div>Downloads the output of the execution step.</div>
+              <div v-else>Downloads the output of the execution step.</div>
             </q-tooltip>
           </q-btn>
 
@@ -151,10 +151,10 @@
             @click="restartStep(selectedStep)"
           >
             <q-tooltip>
-              <div v-if="restartingError">
+              <div v-if="restartingError" class="text-black">
                 <error-popup :error-response="restartingError" />
               </div>
-              <div>Restarts the experiment execution step.</div>
+              <div v-else>Restarts the experiment execution step.</div>
             </q-tooltip>
           </q-btn>
         </div>
@@ -378,10 +378,11 @@ function restartStep(step: PipelineStepBlueprint | null) {
  *
  * @param step the step to download
  */
-function downloadStepResults(step: PipelineStepBlueprint | null) {
-  if (step && step.status == PipelineStepStatus.Finished) {
+function downloadStepResults(pipelineId: string | null, step: PipelineStepBlueprint | null) {
+  if (pipelineId && step && step.status == PipelineStepStatus.Finished) {
     isArchiving.value = true;
     downloadError.value = null;
+    const requestStepInfo = {pipelineId: pipelineId, stepId: step.id}
     const config = {
       headers: {
         "content-type": "application/json",
@@ -390,7 +391,7 @@ function downloadStepResults(step: PipelineStepBlueprint | null) {
     axios
       .post(
         "/api/experiments/" + props.id + "/archive",
-        JSON.stringify(step.id),
+        JSON.stringify(requestStepInfo),
         config
       )
       .then((response) => {

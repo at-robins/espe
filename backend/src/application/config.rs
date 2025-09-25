@@ -306,15 +306,17 @@ impl Configuration {
     /// # Parameters
     ///
     /// * `experiment_id` - the ID of the experiment
+    /// * `pipeline_id` - the ID of the pipeline
     /// * `step_id` - the ID of the step
-    pub fn experiment_step_path<P: AsRef<str>, Q: AsRef<str>>(
+    pub fn experiment_step_path<P: AsRef<str>, Q: AsRef<str>, R: AsRef<str>>(
         &self,
         experiment_id: P,
-        step_id: Q,
+        pipeline_id: Q,
+        step_id: R,
     ) -> PathBuf {
         let mut path: PathBuf = self.experiment_steps_path(experiment_id);
         // Hashing the ID prevents invalid characters in file paths.
-        path.push(Self::hash_string(step_id));
+        path.push(format!("{}{}", Self::hash_string(pipeline_id), Self::hash_string(step_id)));
         path
     }
 
@@ -698,8 +700,8 @@ mod tests {
         );
         // Hash of step_id.
         let path: PathBuf =
-            "./application/context/experiments/experiment_id/steps/4363919453614495606".into();
-        assert_eq!(config.experiment_step_path("experiment_id", "step_id"), path);
+            "./application/context/experiments/experiment_id/steps/164733973000995240344363919453614495606".into();
+        assert_eq!(config.experiment_step_path("experiment_id", "pipeline_id", "step_id"), path);
     }
 
     #[test]

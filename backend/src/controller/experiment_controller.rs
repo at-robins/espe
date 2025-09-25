@@ -624,19 +624,17 @@ pub async fn post_execute_experiment_step(
         ))?;
 
     // Checks if the dependencies are satisfied.
-    let executions: Vec<ExperimentExecution> = ExperimentExecution::get_by_experiment(
-        experiment_id,
-        &mut connection,
-    )
-    .map_err(|err| {
-        SeqError::from(err).chain(format!(
+    let executions: Vec<ExperimentExecution> =
+        ExperimentExecution::get_by_experiment(experiment_id, &mut connection)
+            .map_err(|err| {
+                SeqError::from(err).chain(format!(
             "Reading pipeline step execution ({}/{}) of experiment {} from the database failed.",
             pipeline_id, step_id, experiment_id
         ))
-    })?
-    .into_iter()
-    .filter(|s| &s.pipeline_id == &pipeline_id)
-    .collect();
+            })?
+            .into_iter()
+            .filter(|s| &s.pipeline_id == &pipeline_id)
+            .collect();
     let satisfied_dependencies: Vec<&String> = executions
         .iter()
         .filter(|s| {
@@ -681,7 +679,7 @@ pub async fn post_execute_experiment_step(
                         pipeline_id, step_id, experiment_id
                     ))
                 })?;
-                
+
     // Submits execution step.
     if let Some(existing_execution) = executions.iter().find(|s| s.pipeline_step_id == step_id) {
         // Restart an existing pipeline step.
@@ -698,13 +696,14 @@ pub async fn post_execute_experiment_step(
         }
         // Deletes the output folder and run logs, but keeps the build logs
         // as the build process might be cached / skipped.
-        delete_step_output(&step_id, experiment_id, web::Data::clone(&app_config))
-                        .map_err(|err| {
-                            err.chain(format!(
-                                "Deletion of pipeline step output ({}/{}) of experiment {} failed during restart request.",
-                                pipeline_id, step_id, experiment_id
-                            ))
-                        })?;
+        delete_step_output(&pipeline_id, &step_id, experiment_id, web::Data::clone(&app_config))
+            .map_err(|err| {
+                err.chain(format!(
+                    "Deletion of pipeline step output ({}/{}) of \
+                    experiment {} failed during restart request.",
+                    pipeline_id, step_id, experiment_id
+                ))
+            })?;
         delete_step_logs(
                         &pipeline_id,
                         &step_id,

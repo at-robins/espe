@@ -11,6 +11,7 @@ use crate::{
         exchange::experiment_step_logs::ExperimentStepLogRequest,
         internal::{archive::ArchiveMetadata, pipeline_blueprint::PipelineStepVariableCategory},
     },
+    service::download_service::PipelineStepRequestInfo,
     test_utility::{
         create_default_experiment, create_default_experiment_execution,
         create_default_temporary_download_archive, create_test_app, TestContext,
@@ -1702,7 +1703,10 @@ async fn test_experiment_exists_not_found() {
             .to_request(),
         TestRequest::post()
             .uri(&format!("{}/archive", base_url))
-            .set_json(pipeline_step_id)
+            .set_json(PipelineStepRequestInfo {
+                pipeline_id: pipeline_id.to_string(),
+                step_id: pipeline_step_id.to_string(),
+            })
             .to_request(),
         TestRequest::patch()
             .uri(&format!("{}/comment", base_url))

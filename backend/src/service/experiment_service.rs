@@ -16,16 +16,18 @@ use crate::{
 ///
 /// # Parameters
 ///
+/// * `pipeline_id` - the ID of the [`PipelineBlueprint`](crate::model::internal::pipeline_blueprint::PipelineBlueprint)
 /// * `step_id` - the ID of the [`PipelineStepBlueprint`](crate::model::internal::pipeline_blueprint::PipelineStepBlueprint)
 /// * `experiment_id` - the ID of the experiment
 /// * `app_cofig` - the app [`Configuration`]
-pub fn delete_step_output<S: AsRef<str>>(
-    step_id: S,
+pub fn delete_step_output<S: AsRef<str>, T: AsRef<str>>(
+    pipeline_id: S,
+    step_id: T,
     experiment_id: i32,
     app_config: web::Data<Configuration>,
 ) -> Result<(), SeqError> {
     let experiment_id = experiment_id.to_string();
-    let output_path = app_config.experiment_step_path(&experiment_id, step_id);
+    let output_path = app_config.experiment_step_path(&experiment_id, &pipeline_id, step_id);
     if output_path.exists() {
         std::fs::remove_dir_all(&output_path)?;
     }
@@ -79,11 +81,13 @@ pub fn delete_step_logs<P: AsRef<str>, S: AsRef<str>>(
 ///
 /// # Parameters
 ///
+/// * `pipeline_id` - the ID of the [`PipelineBlueprint`](crate::model::internal::pipeline_blueprint::PipelineBlueprint)
 /// * `step_id` - the ID of the [`PipelineStepBlueprint`](crate::model::internal::pipeline_blueprint::PipelineStepBlueprint)
 /// * `experiment_id` - the ID of the experiment
 /// * `app_cofig` - the app [`Configuration`]
-pub fn create_run_context<S: AsRef<str>>(
-    step_id: S,
+pub fn create_run_context<S: AsRef<str>, T: AsRef<str>>(
+    pipeline_id: S,
+    step_id: T,
     experiment_id: i32,
     app_config: web::Data<Configuration>,
 ) -> Result<(), SeqError> {
@@ -91,7 +95,7 @@ pub fn create_run_context<S: AsRef<str>>(
     // Creates input directory in case an empty pipeline is run.
     std::fs::create_dir_all(app_config.experiment_input_path(&experiment_id))?;
     // (Re-)Creates the output directory.
-    let output_path = app_config.experiment_step_path(&experiment_id, &step_id);
+    let output_path = app_config.experiment_step_path(&experiment_id, &pipeline_id, &step_id);
     // Then create the output directory.
     std::fs::create_dir_all(&output_path)?;
     // Creates the log directory.
@@ -139,8 +143,8 @@ pub fn prepare_context_for_run<P: AsRef<str>, S: AsRef<str>>(
         &[LogProcessType::Run],
         web::Data::clone(&app_config),
     )?;
-    delete_step_output(&step_id, experiment_id, web::Data::clone(&app_config))?;
-    create_run_context(&step_id, experiment_id, app_config)?;
+    delete_step_output(&pipeline_id, &step_id, experiment_id, web::Data::clone(&app_config))?;
+    create_run_context(&pipeline_id, &step_id, experiment_id, app_config)?;
     Ok(())
 }
 
@@ -222,7 +226,8 @@ pub fn is_experiment_locked(
         SeqError::from(err)
             .chain(format!("Obtaining lock state for experiment {} failed.", experiment_id))
     })?;
-    let downloaded = download_tracker.is_experiment_output_download_experiment_tracked(experiment_id);
+    let downloaded =
+        download_tracker.is_experiment_output_download_experiment_tracked(experiment_id);
     Ok(executed || downloaded)
 }
 
@@ -284,13 +289,16 @@ mod tests {
         let context = TestContext::new();
         let app_config: Configuration = (&context).into();
         let experiment_id = 42;
+        let pipeline_id = "ABCDEFG";
         let step_id = "123456789";
-        let output_path = app_config.experiment_step_path(experiment_id.to_string(), step_id);
+        let output_path =
+            app_config.experiment_step_path(experiment_id.to_string(), pipeline_id, step_id);
         let test_output_path = output_path.join("test_dir/test.txt");
         create_dummy_file(&test_output_path);
         assert!(output_path.exists());
         assert!(test_output_path.exists());
-        delete_step_output(step_id, experiment_id, web::Data::new(app_config)).unwrap();
+        delete_step_output(pipeline_id, step_id, experiment_id, web::Data::new(app_config))
+            .unwrap();
         assert!(!output_path.exists());
         assert!(!test_output_path.exists());
     }
@@ -342,15 +350,18 @@ mod tests {
         let app_config: Configuration = (&context).into();
         let experiment_id = 42;
         let step_id = "123456789";
+        let pipeline_id = "test_pipeline";
 
         let input_path = app_config.experiment_input_path(experiment_id.to_string());
-        let output_path = app_config.experiment_step_path(experiment_id.to_string(), step_id);
+        let output_path =
+            app_config.experiment_step_path(experiment_id.to_string(), pipeline_id, step_id);
         let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
 
         assert!(!input_path.exists());
         assert!(!output_path.exists());
         assert!(!logs_path.exists());
-        create_run_context(step_id, experiment_id, web::Data::new(app_config)).unwrap();
+        create_run_context(pipeline_id, step_id, experiment_id, web::Data::new(app_config))
+            .unwrap();
         assert!(input_path.exists());
         assert!(output_path.exists());
         assert!(logs_path.exists());
@@ -377,7 +388,8 @@ mod tests {
         let pipeline_id = "test_pipeline";
 
         let input_path = app_config.experiment_input_path(experiment_id.to_string());
-        let output_path = app_config.experiment_step_path(experiment_id.to_string(), step_id);
+        let output_path =
+            app_config.experiment_step_path(experiment_id.to_string(), pipeline_id, step_id);
         let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
 
         assert!(!input_path.exists());
@@ -401,7 +413,8 @@ mod tests {
         let pipeline_id = "test_pipeline";
 
         let input_path = app_config.experiment_input_path(experiment_id.to_string());
-        let output_path = app_config.experiment_step_path(experiment_id.to_string(), step_id);
+        let output_path =
+            app_config.experiment_step_path(experiment_id.to_string(), pipeline_id, step_id);
         let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
         let build_log_paths = app_config.experiment_log_paths(
             experiment_id.to_string(),
@@ -469,7 +482,8 @@ mod tests {
         let pipeline_id = "test_pipeline";
 
         let input_path = app_config.experiment_input_path(experiment_id.to_string());
-        let output_path = app_config.experiment_step_path(experiment_id.to_string(), step_id);
+        let output_path =
+            app_config.experiment_step_path(experiment_id.to_string(), pipeline_id, step_id);
         let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
         let build_log_paths = app_config.experiment_log_paths(
             experiment_id.to_string(),
@@ -655,10 +669,10 @@ mod tests {
             &mut connection
         )
         .unwrap());
-        let tracker_00 =
-            download_tracker.track_experiment_output_download_experiment(experiment_id_not_executed);
-        let tracker_01 =
-            download_tracker.track_experiment_output_download_experiment(experiment_id_not_executed);
+        let tracker_00 = download_tracker
+            .track_experiment_output_download_experiment(experiment_id_not_executed);
+        let tracker_01 = download_tracker
+            .track_experiment_output_download_experiment(experiment_id_not_executed);
         assert!(is_experiment_locked(
             experiment_id_not_executed,
             download_tracker.clone(),
@@ -838,10 +852,10 @@ mod tests {
             &mut connection
         )
         .is_ok());
-        let tracker_00 =
-            download_tracker.track_experiment_output_download_experiment(experiment_id_not_executed);
-        let tracker_01 =
-            download_tracker.track_experiment_output_download_experiment(experiment_id_not_executed);
+        let tracker_00 = download_tracker
+            .track_experiment_output_download_experiment(experiment_id_not_executed);
+        let tracker_01 = download_tracker
+            .track_experiment_output_download_experiment(experiment_id_not_executed);
         assert_eq!(
             is_experiment_locked_err(
                 experiment_id_not_executed,
