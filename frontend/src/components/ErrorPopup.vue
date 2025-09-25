@@ -12,12 +12,14 @@
       <q-btn icon="close" flat round dense v-close-popup />
     </q-card-section>
 
-    <q-card-section v-if="is_error_response(errorResponse)">
-      <p>{{ errorResponse.message }}</p>
-      <p>Error-ID: {{ errorResponse.uuid }}</p>
-    </q-card-section>
-    <q-card-section v-else">
-      <p>{{ String(errorResponse) }}</p>
+    <q-card-section>
+      <div v-if="is_error_response(errorResponse)">
+        <p>{{ errorResponse.message }}</p>
+        <p>Error-ID: {{ errorResponse.uuid }}</p>
+      </div>
+      <div v-else>
+        <p>{{ String(errorResponse) }}</p>
+      </div>
     </q-card-section>
   </q-card>
 </template>

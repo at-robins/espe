@@ -417,7 +417,7 @@ impl Configuration {
     pub fn hash_string<T: AsRef<str>>(value: T) -> String {
         let mut hasher = XxHash64::with_seed(154);
         value.as_ref().hash(&mut hasher);
-        hasher.finish().to_string()
+        format!("{:0>20}", hasher.finish())
     }
 }
 
@@ -700,7 +700,7 @@ mod tests {
         );
         // Hash of step_id.
         let path: PathBuf =
-            "./application/context/experiments/experiment_id/steps/164733973000995240344363919453614495606".into();
+            "./application/context/experiments/experiment_id/steps/1647339730009952403404363919453614495606".into();
         assert_eq!(config.experiment_step_path("experiment_id", "pipeline_id", "step_id"), path);
     }
 
