@@ -433,8 +433,11 @@ pub async fn post_experiment_archive_step_results(
     step_info: web::Json<PipelineStepRequestInfo>,
 ) -> Result<String, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
-    let _download_tracker =
-        download_tracker_manager.track_experiment_output_download_experiment(experiment_id);
+    let _download_tracker = download_tracker_manager.track_experiment_output_download_step(
+        experiment_id,
+        &step_info.pipeline_id,
+        &step_info.step_id,
+    );
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection)?;
 

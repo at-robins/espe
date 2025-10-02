@@ -52,6 +52,7 @@ pub fn create_test_app(
 > {
     dotenv().unwrap();
     env_logger::try_init_from_env(env_logger::Env::new().filter(LOG_LEVEL)).ok();
+    let download_tracker = context.download_tracker();
     let app_config = &web::Data::<Configuration>::new(context.into());
     let database_manager =
         web::Data::new(DatabaseManager::new(web::Data::clone(&app_config)).unwrap());
@@ -67,7 +68,7 @@ pub fn create_test_app(
             web::Data::clone(&database_manager),
             web::Data::clone(&loaded_pipelines),
         ))))
-        .app_data(web::Data::new(DownloadTrackerManager::new()))
+        .app_data(download_tracker)
         .configure(routing_config)
 }
 
@@ -76,6 +77,7 @@ pub fn create_test_app(
 pub struct TestContext {
     id: Uuid,
     pipeline_folder_override: Option<String>,
+    download_tracker: Option<web::Data<DownloadTrackerManager>>,
 }
 
 impl TestContext {
@@ -85,6 +87,7 @@ impl TestContext {
         let context = TestContext {
             id,
             pipeline_folder_override: None,
+            download_tracker: None,
         };
         std::fs::create_dir_all(context.context_folder()).unwrap();
         std::fs::create_dir_all(context.pipeline_folder()).unwrap();
@@ -122,6 +125,24 @@ impl TestContext {
     /// * `pipeline_folder` - the custom testing pipeline folder
     pub fn set_pipeline_folder<T: Into<String>>(&mut self, pipeline_folder: T) {
         self.pipeline_folder_override = Some(pipeline_folder.into());
+    }
+
+    /// Returns the [`DownloadTrackerManager`].
+    pub fn download_tracker(&self) -> web::Data<DownloadTrackerManager> {
+        if let Some(manager) = &self.download_tracker {
+            manager.clone()
+        } else {
+            web::Data::new(DownloadTrackerManager::new())
+        }
+    }
+
+    /// Overrides the default [`DownloadTrackerManager`] with a custom one.
+    ///
+    /// # Parameters
+    ///
+    /// * `tracker` - the download tracker manager to use
+    pub fn set_download_tracker(&mut self, tracker: web::Data<DownloadTrackerManager>) {
+        self.download_tracker = Some(tracker);
     }
 
     /// Opens a connection to the test database.

@@ -560,6 +560,7 @@ pub async fn post_execute_experiment(
 pub async fn post_execute_experiment_step(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     experiment_id: web::Path<i32>,
     step_id: web::Json<String>,
     pipelines: web::Data<LoadedPipelines>,
@@ -597,6 +598,24 @@ pub async fn post_execute_experiment_step(
             ),
             "The requested run parameters are invalid.",
         ))?;
+
+    if download_tracker.is_experiment_output_download_step_tracked(
+        experiment_id,
+        &pipeline_id,
+        &step_id,
+    ) {
+        return Err(SeqError::new(
+            "Onging download",
+            SeqErrorType::PreconditionFailed,
+            format!(
+                "Step {} - {} of experiment {} is \
+                currently archived for downloading. \
+                Its context can thus not be deleted / reset.",
+                &pipeline_id, &step_id, experiment_id
+            ),
+            "The step is currently downloaded and can thus not be deleted.",
+        ));
+    }
 
     let pipeline = pipelines.get(&pipeline_id).ok_or(SeqError::new(
         "Invalid run",

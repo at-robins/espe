@@ -148,6 +148,7 @@
             class="q-ml-md"
             :color="restartingError ? 'negative' : 'positive'"
             :loading="isRestarting"
+            :disable="isArchiving"
             @click="restartStep(selectedStep)"
           >
             <q-tooltip>

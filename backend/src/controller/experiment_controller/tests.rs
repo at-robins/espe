@@ -2034,3 +2034,44 @@ async fn test_experiment_locked() {
             .pipeline_id
     );
 }
+
+#[actix_web::test]
+async fn test_experiment_step_rerun_download() {
+    let download_tracker = web::Data::new(DownloadTrackerManager::new());
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    db_context.set_download_tracker(download_tracker.clone());
+    let app = test::init_service(create_test_app(&db_context)).await;
+    create_default_experiment(&mut db_context.get_connection());
+
+    let experiment_id = DEFAULT_EXPERIMENT_ID;
+    let pipeline_id = "testing_pipeline";
+    let pipeline_step_id = "fastqc";
+
+    // Tracks a download so the step should not be able to be restarted.
+    let _tracker_01 = download_tracker.track_experiment_output_download_step(
+        experiment_id,
+        pipeline_id,
+        pipeline_step_id,
+    );
+
+    let base_url = format!("/api/experiments/{}", experiment_id);
+    let test_requests = [TestRequest::post()
+        .uri(&format!("{}/rerun", base_url))
+        .set_json(pipeline_step_id)
+        .to_request()];
+
+    for test_request in test_requests {
+        let test_url = test_request.uri().to_string();
+        let resp = test::call_service(&app, test_request).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::PRECONDITION_FAILED,
+            "Accessing {} while the experiment was locked did return status code {} but should return {}. Message: {:?}",
+            test_url,
+            resp.status(),
+            StatusCode::PRECONDITION_FAILED,
+            resp.response()
+        );
+    }
+}
