@@ -36,7 +36,7 @@ pub async fn parse_multipart_file<T: UploadForm, P: AsRef<Path>>(
     // Iterate over the multipart stream and save the file.
     while let Some(mut field) = payload.try_next().await? {
         match field.name() {
-            "form" => {
+            Some("form") => {
                 let mut body = web::BytesMut::new();
                 while let Some(chunk) = field.try_next().await? {
                     let current_length = body.len() + chunk.len();
@@ -52,7 +52,7 @@ pub async fn parse_multipart_file<T: UploadForm, P: AsRef<Path>>(
                 }
                 upload_info = Some(serde_json::from_slice::<T>(&body)?);
             },
-            "file" => {
+            Some("file") => {
                 // Write the file to disk.
                 let file_path_ref = Arc::clone(&temp_file_path);
                 let mut file = web::block(|| std::fs::File::create(file_path_ref)).await??;
@@ -61,7 +61,7 @@ pub async fn parse_multipart_file<T: UploadForm, P: AsRef<Path>>(
                 }
                 is_file_provided = true;
             },
-            name => log::warn!("Unknown content name: {}", name),
+            name => log::warn!("Unknown content name option: {:?}", name),
         }
     }
 

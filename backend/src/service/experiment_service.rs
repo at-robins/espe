@@ -1,26 +1,33 @@
 use std::fs::File;
 
 use actix_web::web;
+use diesel::SqliteConnection;
 
-use crate::application::{
-    config::{Configuration, LogOutputType, LogProcessType},
-    error::{SeqError, SeqErrorType},
+use crate::{
+    application::{
+        config::{Configuration, LogOutputType, LogProcessType},
+        error::{SeqError, SeqErrorType},
+    },
+    model::db::experiment_execution::ExperimentExecution,
+    service::download_service::DownloadTrackerManager,
 };
 
 /// Deletes the specific pipeline step output of the specified experiment.
 ///
 /// # Parameters
 ///
+/// * `pipeline_id` - the ID of the [`PipelineBlueprint`](crate::model::internal::pipeline_blueprint::PipelineBlueprint)
 /// * `step_id` - the ID of the [`PipelineStepBlueprint`](crate::model::internal::pipeline_blueprint::PipelineStepBlueprint)
 /// * `experiment_id` - the ID of the experiment
 /// * `app_cofig` - the app [`Configuration`]
-pub fn delete_step_output<S: AsRef<str>>(
-    step_id: S,
+pub fn delete_step_output<S: AsRef<str>, T: AsRef<str>>(
+    pipeline_id: S,
+    step_id: T,
     experiment_id: i32,
     app_config: web::Data<Configuration>,
 ) -> Result<(), SeqError> {
     let experiment_id = experiment_id.to_string();
-    let output_path = app_config.experiment_step_path(&experiment_id, step_id);
+    let output_path = app_config.experiment_step_path(&experiment_id, &pipeline_id, step_id);
     if output_path.exists() {
         std::fs::remove_dir_all(&output_path)?;
     }
@@ -74,11 +81,13 @@ pub fn delete_step_logs<P: AsRef<str>, S: AsRef<str>>(
 ///
 /// # Parameters
 ///
+/// * `pipeline_id` - the ID of the [`PipelineBlueprint`](crate::model::internal::pipeline_blueprint::PipelineBlueprint)
 /// * `step_id` - the ID of the [`PipelineStepBlueprint`](crate::model::internal::pipeline_blueprint::PipelineStepBlueprint)
 /// * `experiment_id` - the ID of the experiment
 /// * `app_cofig` - the app [`Configuration`]
-pub fn create_run_context<S: AsRef<str>>(
-    step_id: S,
+pub fn create_run_context<S: AsRef<str>, T: AsRef<str>>(
+    pipeline_id: S,
+    step_id: T,
     experiment_id: i32,
     app_config: web::Data<Configuration>,
 ) -> Result<(), SeqError> {
@@ -86,7 +95,7 @@ pub fn create_run_context<S: AsRef<str>>(
     // Creates input directory in case an empty pipeline is run.
     std::fs::create_dir_all(app_config.experiment_input_path(&experiment_id))?;
     // (Re-)Creates the output directory.
-    let output_path = app_config.experiment_step_path(&experiment_id, &step_id);
+    let output_path = app_config.experiment_step_path(&experiment_id, &pipeline_id, &step_id);
     // Then create the output directory.
     std::fs::create_dir_all(&output_path)?;
     // Creates the log directory.
@@ -134,8 +143,8 @@ pub fn prepare_context_for_run<P: AsRef<str>, S: AsRef<str>>(
         &[LogProcessType::Run],
         web::Data::clone(&app_config),
     )?;
-    delete_step_output(&step_id, experiment_id, web::Data::clone(&app_config))?;
-    create_run_context(&step_id, experiment_id, app_config)?;
+    delete_step_output(&pipeline_id, &step_id, experiment_id, web::Data::clone(&app_config))?;
+    create_run_context(&pipeline_id, &step_id, experiment_id, app_config)?;
     Ok(())
 }
 
@@ -201,11 +210,65 @@ pub fn open_step_log<P: AsRef<str>, S: AsRef<str>>(
     Ok(log_file)
 }
 
+/// Returns `true` if the experiment is currently locked.
+///
+/// # Parameters
+///
+/// * `experiment_id` - the ID of the experiment
+/// * `download_tracker` - the [`DownloadTrackerManager`] of the application
+/// * `connection` - a connection to the database
+pub fn is_experiment_locked(
+    experiment_id: i32,
+    download_tracker: web::Data<DownloadTrackerManager>,
+    connection: &mut SqliteConnection,
+) -> Result<bool, SeqError> {
+    let executed = ExperimentExecution::is_executed(experiment_id, connection).map_err(|err| {
+        SeqError::from(err)
+            .chain(format!("Obtaining lock state for experiment {} failed.", experiment_id))
+    })?;
+    let downloaded =
+        download_tracker.is_experiment_output_download_experiment_tracked(experiment_id);
+    Ok(executed || downloaded)
+}
+
+/// Returns [`Ok`] if the experiment is currently locked
+/// and an error otherwise.
+///
+/// # Parameters
+///
+/// * `experiment_id` - the ID of the experiment
+/// * `download_tracker` - the [`DownloadTrackerManager`] of the application
+/// * `connection` - a connection to the database
+pub fn is_experiment_locked_err(
+    experiment_id: i32,
+    download_tracker: web::Data<DownloadTrackerManager>,
+    connection: &mut SqliteConnection,
+) -> Result<(), SeqError> {
+    is_experiment_locked(experiment_id, download_tracker, connection).and_then(|locked| {
+        if locked {
+            Err(SeqError::new(
+                "Experiment locked",
+                SeqErrorType::PreconditionFailed,
+                format!("Experiment {} is locked.", experiment_id),
+                "The experiment is locked.",
+            ))
+        } else {
+            Ok(())
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
-    use crate::test_utility::TestContext;
+    use actix_web::{http::StatusCode, ResponseError};
+    use diesel::RunQueryDsl;
+
+    use crate::{
+        model::db::{experiment::NewExperiment, experiment_execution::ExecutionStatus},
+        test_utility::TestContext,
+    };
 
     use super::*;
 
@@ -226,13 +289,16 @@ mod tests {
         let context = TestContext::new();
         let app_config: Configuration = (&context).into();
         let experiment_id = 42;
+        let pipeline_id = "ABCDEFG";
         let step_id = "123456789";
-        let output_path = app_config.experiment_step_path(experiment_id.to_string(), step_id);
+        let output_path =
+            app_config.experiment_step_path(experiment_id.to_string(), pipeline_id, step_id);
         let test_output_path = output_path.join("test_dir/test.txt");
         create_dummy_file(&test_output_path);
         assert!(output_path.exists());
         assert!(test_output_path.exists());
-        delete_step_output(step_id, experiment_id, web::Data::new(app_config)).unwrap();
+        delete_step_output(pipeline_id, step_id, experiment_id, web::Data::new(app_config))
+            .unwrap();
         assert!(!output_path.exists());
         assert!(!test_output_path.exists());
     }
@@ -284,15 +350,18 @@ mod tests {
         let app_config: Configuration = (&context).into();
         let experiment_id = 42;
         let step_id = "123456789";
+        let pipeline_id = "test_pipeline";
 
         let input_path = app_config.experiment_input_path(experiment_id.to_string());
-        let output_path = app_config.experiment_step_path(experiment_id.to_string(), step_id);
+        let output_path =
+            app_config.experiment_step_path(experiment_id.to_string(), pipeline_id, step_id);
         let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
 
         assert!(!input_path.exists());
         assert!(!output_path.exists());
         assert!(!logs_path.exists());
-        create_run_context(step_id, experiment_id, web::Data::new(app_config)).unwrap();
+        create_run_context(pipeline_id, step_id, experiment_id, web::Data::new(app_config))
+            .unwrap();
         assert!(input_path.exists());
         assert!(output_path.exists());
         assert!(logs_path.exists());
@@ -319,7 +388,8 @@ mod tests {
         let pipeline_id = "test_pipeline";
 
         let input_path = app_config.experiment_input_path(experiment_id.to_string());
-        let output_path = app_config.experiment_step_path(experiment_id.to_string(), step_id);
+        let output_path =
+            app_config.experiment_step_path(experiment_id.to_string(), pipeline_id, step_id);
         let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
 
         assert!(!input_path.exists());
@@ -343,7 +413,8 @@ mod tests {
         let pipeline_id = "test_pipeline";
 
         let input_path = app_config.experiment_input_path(experiment_id.to_string());
-        let output_path = app_config.experiment_step_path(experiment_id.to_string(), step_id);
+        let output_path =
+            app_config.experiment_step_path(experiment_id.to_string(), pipeline_id, step_id);
         let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
         let build_log_paths = app_config.experiment_log_paths(
             experiment_id.to_string(),
@@ -411,7 +482,8 @@ mod tests {
         let pipeline_id = "test_pipeline";
 
         let input_path = app_config.experiment_input_path(experiment_id.to_string());
-        let output_path = app_config.experiment_step_path(experiment_id.to_string(), step_id);
+        let output_path =
+            app_config.experiment_step_path(experiment_id.to_string(), pipeline_id, step_id);
         let logs_path = app_config.experiment_logs_path(experiment_id.to_string());
         let build_log_paths = app_config.experiment_log_paths(
             experiment_id.to_string(),
@@ -450,5 +522,367 @@ mod tests {
         for run_log_path in run_log_paths {
             assert!(run_log_path.exists());
         }
+    }
+
+    #[test]
+    fn test_is_experiment_locked_execution() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
+        let mut connection = context.get_connection();
+        // Create an experiment containing all different stati.
+        let experiment_all = NewExperiment::new("all".to_string());
+        let experiment_waiting = NewExperiment::new("waiting".to_string());
+        let experiment_running = NewExperiment::new("running".to_string());
+        let experiment_not_executed = NewExperiment::new("not executed".to_string());
+        let experiment_empty = NewExperiment::new("empty".to_string());
+        let experiment_id_all: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_all)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_waiting: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_waiting)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_running: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_running)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_not_executed: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_not_executed)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_empty: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_empty)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let new_records_all: Vec<ExperimentExecution> = vec![
+            (ExecutionStatus::Aborted, experiment_id_all),
+            (ExecutionStatus::Failed, experiment_id_all),
+            (ExecutionStatus::Finished, experiment_id_all),
+            (ExecutionStatus::Running, experiment_id_all),
+            (ExecutionStatus::Finished, experiment_id_all),
+            (ExecutionStatus::Waiting, experiment_id_all),
+            (ExecutionStatus::Finished, experiment_id_waiting),
+            (ExecutionStatus::Waiting, experiment_id_waiting),
+            (ExecutionStatus::Aborted, experiment_id_waiting),
+            (ExecutionStatus::Finished, experiment_id_waiting),
+            (ExecutionStatus::Finished, experiment_id_running),
+            (ExecutionStatus::Running, experiment_id_running),
+            (ExecutionStatus::Aborted, experiment_id_running),
+            (ExecutionStatus::Finished, experiment_id_running),
+            (ExecutionStatus::Finished, experiment_id_not_executed),
+            (ExecutionStatus::Failed, experiment_id_not_executed),
+            (ExecutionStatus::Aborted, experiment_id_not_executed),
+            (ExecutionStatus::Finished, experiment_id_not_executed),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(id, (status, experiment_id))| ExperimentExecution {
+            id: id as i32,
+            experiment_id,
+            pipeline_id: id.to_string(),
+            pipeline_step_id: id.to_string(),
+            execution_status: status.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        })
+        .collect();
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(is_experiment_locked(experiment_id_all, download_tracker.clone(), &mut connection)
+            .unwrap());
+        assert!(is_experiment_locked(
+            experiment_id_waiting,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .unwrap());
+        assert!(is_experiment_locked(
+            experiment_id_running,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .unwrap());
+        assert!(!is_experiment_locked(
+            experiment_id_not_executed,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .unwrap());
+        assert!(!is_experiment_locked(
+            experiment_id_empty,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn test_is_experiment_locked_download() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
+        let mut connection = context.get_connection();
+        let experiment_not_executed = NewExperiment::new("not executed".to_string());
+        let experiment_id_not_executed: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_not_executed)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let new_records_all: Vec<ExperimentExecution> = vec![
+            (ExecutionStatus::Finished, experiment_id_not_executed),
+            (ExecutionStatus::Failed, experiment_id_not_executed),
+            (ExecutionStatus::Aborted, experiment_id_not_executed),
+            (ExecutionStatus::Finished, experiment_id_not_executed),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(id, (status, experiment_id))| ExperimentExecution {
+            id: id as i32,
+            experiment_id,
+            pipeline_id: id.to_string(),
+            pipeline_step_id: id.to_string(),
+            execution_status: status.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        })
+        .collect();
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(!is_experiment_locked(
+            experiment_id_not_executed,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .unwrap());
+        let tracker_00 = download_tracker
+            .track_experiment_output_download_experiment(experiment_id_not_executed);
+        let tracker_01 = download_tracker
+            .track_experiment_output_download_experiment(experiment_id_not_executed);
+        assert!(is_experiment_locked(
+            experiment_id_not_executed,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .unwrap());
+        std::mem::drop(tracker_01);
+        assert!(is_experiment_locked(
+            experiment_id_not_executed,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .unwrap());
+        std::mem::drop(tracker_00);
+        assert!(!is_experiment_locked(
+            experiment_id_not_executed,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn test_is_experiment_locked_err_execution() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
+        let mut connection = context.get_connection();
+        // Create an experiment containing all different stati.
+        let experiment_all = NewExperiment::new("all".to_string());
+        let experiment_waiting = NewExperiment::new("waiting".to_string());
+        let experiment_running = NewExperiment::new("running".to_string());
+        let experiment_not_executed = NewExperiment::new("not executed".to_string());
+        let experiment_empty = NewExperiment::new("empty".to_string());
+        let experiment_id_all: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_all)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_waiting: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_waiting)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_running: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_running)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_not_executed: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_not_executed)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_empty: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_empty)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let new_records_all: Vec<ExperimentExecution> = vec![
+            (ExecutionStatus::Aborted, experiment_id_all),
+            (ExecutionStatus::Failed, experiment_id_all),
+            (ExecutionStatus::Finished, experiment_id_all),
+            (ExecutionStatus::Running, experiment_id_all),
+            (ExecutionStatus::Finished, experiment_id_all),
+            (ExecutionStatus::Waiting, experiment_id_all),
+            (ExecutionStatus::Finished, experiment_id_waiting),
+            (ExecutionStatus::Waiting, experiment_id_waiting),
+            (ExecutionStatus::Aborted, experiment_id_waiting),
+            (ExecutionStatus::Finished, experiment_id_waiting),
+            (ExecutionStatus::Finished, experiment_id_running),
+            (ExecutionStatus::Running, experiment_id_running),
+            (ExecutionStatus::Aborted, experiment_id_running),
+            (ExecutionStatus::Finished, experiment_id_running),
+            (ExecutionStatus::Finished, experiment_id_not_executed),
+            (ExecutionStatus::Failed, experiment_id_not_executed),
+            (ExecutionStatus::Aborted, experiment_id_not_executed),
+            (ExecutionStatus::Finished, experiment_id_not_executed),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(id, (status, experiment_id))| ExperimentExecution {
+            id: id as i32,
+            experiment_id,
+            pipeline_id: id.to_string(),
+            pipeline_step_id: id.to_string(),
+            execution_status: status.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        })
+        .collect();
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+        assert_eq!(
+            is_experiment_locked_err(experiment_id_all, download_tracker.clone(), &mut connection)
+                .unwrap_err()
+                .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
+        assert_eq!(
+            is_experiment_locked_err(
+                experiment_id_waiting,
+                download_tracker.clone(),
+                &mut connection
+            )
+            .unwrap_err()
+            .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
+        assert_eq!(
+            is_experiment_locked_err(
+                experiment_id_running,
+                download_tracker.clone(),
+                &mut connection
+            )
+            .unwrap_err()
+            .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
+        assert!(is_experiment_locked_err(
+            experiment_id_not_executed,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .is_ok());
+        assert!(is_experiment_locked_err(
+            experiment_id_empty,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn test_is_experiment_locked_err_download() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let download_tracker = web::Data::new(DownloadTrackerManager::new());
+        let mut connection = context.get_connection();
+        let experiment_not_executed = NewExperiment::new("not executed".to_string());
+        let experiment_id_not_executed: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_not_executed)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let new_records_all: Vec<ExperimentExecution> = vec![
+            (ExecutionStatus::Finished, experiment_id_not_executed),
+            (ExecutionStatus::Failed, experiment_id_not_executed),
+            (ExecutionStatus::Aborted, experiment_id_not_executed),
+            (ExecutionStatus::Finished, experiment_id_not_executed),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(id, (status, experiment_id))| ExperimentExecution {
+            id: id as i32,
+            experiment_id,
+            pipeline_id: id.to_string(),
+            pipeline_step_id: id.to_string(),
+            execution_status: status.into(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        })
+        .collect();
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_all)
+            .execute(&mut connection)
+            .unwrap();
+        assert!(is_experiment_locked_err(
+            experiment_id_not_executed,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .is_ok());
+        let tracker_00 = download_tracker
+            .track_experiment_output_download_experiment(experiment_id_not_executed);
+        let tracker_01 = download_tracker
+            .track_experiment_output_download_experiment(experiment_id_not_executed);
+        assert_eq!(
+            is_experiment_locked_err(
+                experiment_id_not_executed,
+                download_tracker.clone(),
+                &mut connection
+            )
+            .unwrap_err()
+            .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
+        std::mem::drop(tracker_01);
+        assert_eq!(
+            is_experiment_locked_err(
+                experiment_id_not_executed,
+                download_tracker.clone(),
+                &mut connection
+            )
+            .unwrap_err()
+            .status_code(),
+            StatusCode::PRECONDITION_FAILED
+        );
+        std::mem::drop(tracker_00);
+        assert!(is_experiment_locked_err(
+            experiment_id_not_executed,
+            download_tracker.clone(),
+            &mut connection
+        )
+        .is_ok());
     }
 }

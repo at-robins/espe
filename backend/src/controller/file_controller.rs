@@ -14,14 +14,21 @@ use crate::{
         exchange::file_path::{FileDetails, FilePath},
         internal::archive::ArchiveMetadata,
     },
-    service::multipart_service::{
-        create_temporary_file, delete_temporary_file, parse_multipart_file, UploadForm,
+    service::{
+        download_service::{DownloadTrackerManager, PipelineStepRequestInfo},
+        experiment_service::is_experiment_locked_err,
+        global_data_service::is_global_data_locked_err,
+        multipart_service::{
+            create_temporary_file, delete_temporary_file, parse_multipart_file, UploadForm,
+        },
+        pipeline_service::LoadedPipelines,
     },
 };
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
 use actix_web::{web, HttpResponse};
 use diesel::SqliteConnection;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use zip_extensions::zip_create_from_directory_with_options;
 
@@ -52,7 +59,7 @@ impl FileRequestCategory {
     ///
     /// # Parameters
     /// * `id` - the ID corresponding to the request category entity
-    /// * `connection` - a databse connection
+    /// * `connection` - a database connection
     pub fn entity_exists(
         &self,
         id: i32,
@@ -61,6 +68,43 @@ impl FileRequestCategory {
         match self {
             FileRequestCategory::Globals => GlobalData::exists_err(id, connection),
             FileRequestCategory::Experiments => Experiment::exists_err(id, connection),
+        }
+    }
+
+    /// Returns an error if the corresponding entity is locked.
+    ///
+    /// # Parameters
+    /// * `id` - the ID corresponding to the request category entity
+    /// * `pipelines` - all currently loaded pipelines
+    /// * `connection` - a database connection
+    pub fn is_locked_err(
+        &self,
+        id: i32,
+        pipelines: web::Data<LoadedPipelines>,
+        download_tracker: web::Data<DownloadTrackerManager>,
+        connection: &mut SqliteConnection,
+    ) -> Result<(), SeqError> {
+        match self {
+            FileRequestCategory::Globals => {
+                is_global_data_locked_err(id, pipelines, download_tracker, connection).map_err(
+                    |err| {
+                        err.chain(format!(
+                            "The file request could not be processed as \
+                            global data repository {} is locked.",
+                            id
+                        ))
+                    },
+                )
+            },
+            FileRequestCategory::Experiments => {
+                is_experiment_locked_err(id, download_tracker, connection).map_err(|err| {
+                    err.chain(format!(
+                        "The file request could not be \
+                        processed as experiment {} is locked.",
+                        id
+                    ))
+                })
+            },
         }
     }
 }
@@ -118,6 +162,8 @@ pub async fn get_files(
 pub async fn delete_files_by_path(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
+    pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     params: web::Path<(FileRequestCategory, i32)>,
     path: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
@@ -126,6 +172,16 @@ pub async fn delete_files_by_path(
     let delete_path = delete_info.file_path();
     let mut connection = database_manager.database_connection()?;
     category.entity_exists(id, &mut connection)?;
+    category
+        .is_locked_err(id, pipelines, download_tracker, &mut connection)
+        .map_err(|err| {
+            err.chain(format!(
+                "The file deletion for path {} request failed as {:?}/{} is locked.",
+                delete_path.display(),
+                category,
+                id
+            ))
+        })?;
     if let Err(validation_error) = delete_info.validate() {
         return Err(SeqError::new(
             "Invalid request",
@@ -155,43 +211,109 @@ pub async fn delete_files_by_path(
     Ok(HttpResponse::Ok().finish())
 }
 
+/// This function is needed as an unhandled payload, which might be caused
+/// by a preceeding error, causes the connection / request to hang.
+/// Dropping the payload strangely causes the next request to hang,
+/// so the payload is handled in case of an error as long as this bug exists.
+async fn mock_handle_payload_on_error(payload: &mut Multipart) {
+    while let Some(_) = payload.next().await {}
+}
+
+/// Necessary to mitigate the bug described in [`mock_handle_payload_on_error`].
+async fn setup_post_add_file(
+    app_config: web::Data<Configuration>,
+    database_manager: web::Data<DatabaseManager>,
+    pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
+    params: web::Path<(FileRequestCategory, i32)>,
+) -> Result<
+    (
+        FileRequestCategory,
+        i32,
+        PathBuf,
+        uuid::Uuid,
+        diesel::r2d2::PooledConnection<diesel::r2d2::ConnectionManager<SqliteConnection>>,
+    ),
+    SeqError,
+> {
+    let (category, id) = params.into_inner();
+
+    let (temporary_file_path, temporary_file_id) = create_temporary_file(Arc::clone(&app_config))
+        .map_err(|err| {
+        err.chain(format!(
+            "Temporary file creation for file upload failed for {:?}/{}.",
+            category, id
+        ))
+    })?;
+
+    let mut connection = database_manager.database_connection().map_err(|err| {
+        SeqError::from(err).chain(format!(
+            "No database connection could be obtained when trying to add a file to {:?}/{}.",
+            category, id
+        ))
+    })?;
+    category
+        .is_locked_err(id, pipelines, download_tracker, &mut connection)
+        .map_err(|err| {
+            err.chain(format!("The file upload request failed as {:?}/{} is locked.", category, id))
+        })?;
+
+    Ok((category, id, temporary_file_path, temporary_file_id, connection))
+}
+
 pub async fn post_add_file(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
+    pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     params: web::Path<(FileRequestCategory, i32)>,
-    payload: Multipart,
+    mut payload: Multipart,
 ) -> Result<HttpResponse, SeqError> {
-    let (category, id) = params.into_inner();
-
-    let (temporary_file_path, temporary_file_id) = create_temporary_file(Arc::clone(&app_config))?;
-
-    persist_multipart(
-        payload,
-        id,
-        category,
-        temporary_file_path.as_path(),
+    match setup_post_add_file(
         web::Data::clone(&app_config),
-        web::Data::clone(&database_manager),
+        database_manager,
+        pipelines,
+        download_tracker,
+        params,
     )
     .await
-    .map_err(|error| {
-        // Delete temporary file on error.
-        if delete_temporary_file(temporary_file_id, Arc::clone(&app_config)).is_err() {
-            log::error!(
-                "Failed to delete temporary file {} upon error {}.",
-                temporary_file_path.display(),
+    {
+        Ok((category, id, temporary_file_path, temporary_file_id, mut connection)) => {
+            persist_multipart(
+                payload,
+                id,
+                category,
+                temporary_file_path.as_path(),
+                web::Data::clone(&app_config),
+                &mut connection,
+            )
+            .await
+            .map_err(|error| {
+                // Delete temporary file on error.
+                if delete_temporary_file(temporary_file_id, Arc::clone(&app_config)).is_err() {
+                    log::error!(
+                        "Failed to delete temporary file {} upon error {}.",
+                        temporary_file_path.display(),
+                        error
+                    );
+                }
                 error
-            );
-        }
-        error
-    })?;
+            })?;
 
-    Ok(HttpResponse::Created().finish())
+            Ok(HttpResponse::Created().finish())
+        },
+        Err(err) => {
+            mock_handle_payload_on_error(&mut payload).await;
+            Err(err.chain("File upload validation failed before the payload was handled."))
+        },
+    }
 }
 
 pub async fn post_add_folder(
     app_config: web::Data<Configuration>,
     database_manager: web::Data<DatabaseManager>,
+    pipelines: web::Data<LoadedPipelines>,
+    download_tracker: web::Data<DownloadTrackerManager>,
     params: web::Path<(FileRequestCategory, i32)>,
     upload_info: web::Json<FilePath>,
 ) -> Result<HttpResponse, SeqError> {
@@ -224,6 +346,16 @@ pub async fn post_add_folder(
     // Validate the existance of the entity.
     category.entity_exists(id, &mut connection)?;
 
+    // Validate the according entity is not locked.
+    category
+        .is_locked_err(id, pipelines, download_tracker, &mut connection)
+        .map_err(|err| {
+            err.chain(format!(
+                "The folder creation for {:?} request failed as {:?}/{} is locked.",
+                upload_info, category, id
+            ))
+        })?;
+
     // Validate that the file path is not already existant.
     let full_path = category
         .base_path(app_config, id)
@@ -252,10 +384,8 @@ async fn persist_multipart<P: AsRef<Path>>(
     category: FileRequestCategory,
     temporary_file_path: P,
     app_config: web::Data<Configuration>,
-    database_manager: web::Data<DatabaseManager>,
+    connection: &mut SqliteConnection,
 ) -> Result<(), SeqError> {
-    let mut connection = database_manager.database_connection()?;
-
     let (upload_info, temp_file_path) =
         parse_multipart_file::<FilePath, P>(payload, temporary_file_path).await?;
 
@@ -270,7 +400,7 @@ async fn persist_multipart<P: AsRef<Path>>(
     }
 
     // Validate the existance of the entity.
-    category.entity_exists(id, &mut connection)?;
+    category.entity_exists(id, connection)?;
 
     // Validate that the file path is not already existent.
     let full_path = category
@@ -298,20 +428,29 @@ async fn persist_multipart<P: AsRef<Path>>(
 pub async fn post_experiment_archive_step_results(
     database_manager: web::Data<DatabaseManager>,
     app_config: web::Data<Configuration>,
+    download_tracker_manager: web::Data<DownloadTrackerManager>,
     experiment_id: web::Path<i32>,
-    step_id: web::Json<String>,
+    step_info: web::Json<PipelineStepRequestInfo>,
 ) -> Result<String, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
+    let _download_tracker = download_tracker_manager.track_experiment_output_download_step(
+        experiment_id,
+        &step_info.pipeline_id,
+        &step_info.step_id,
+    );
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection)?;
 
     // Sets up the required information.
-    let step_id: String = step_id.into_inner();
     let archive_id = Configuration::generate_uuid();
-    let archive_meta = ArchiveMetadata::new(format!("{}.zip", &step_id));
+    let archive_meta = ArchiveMetadata::new(format!("{}.zip", &step_info.step_id));
 
     // Defines source and target paths.
-    let source = app_config.experiment_step_path(experiment_id.to_string(), &step_id);
+    let source = app_config.experiment_step_path(
+        experiment_id.to_string(),
+        &step_info.pipeline_id,
+        &step_info.step_id,
+    );
     let target = app_config.temporary_download_file_path(archive_id);
     let target_meta = ArchiveMetadata::metadata_path(&target);
 
@@ -328,7 +467,16 @@ pub async fn post_experiment_archive_step_results(
         SeqError::new(
             "Archiving error",
             SeqErrorType::InternalServerError,
-            format!("Creation of a downloadable archive for experiment {} ({}) from {} to {} failed with error: {}", experiment_id, step_id, source.display(), target.display(), err),
+            format!(
+                "Creation of a downloadable archive for experiment \
+                {} ({}/{}) from {} to {} failed with error: {}",
+                experiment_id,
+                step_info.pipeline_id,
+                step_info.step_id,
+                source.display(),
+                target.display(),
+                err
+            ),
             "Downloadable archive could not be created.",
         )
     })?;

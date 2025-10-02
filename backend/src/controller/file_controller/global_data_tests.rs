@@ -1,4 +1,13 @@
-use crate::test_utility::{create_test_app, TestContext};
+use crate::{
+    model::db::{
+        experiment_execution::ExecutionStatus, pipeline_step_variable::NewPipelineStepVariable,
+    },
+    test_utility::{
+        create_default_experiment, create_default_experiment_execution, create_default_global_data,
+        create_test_app, TestContext, DEFAULT_EXPERIMENT_ID, DEFAULT_GLOBAL_DATA_ID,
+        DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID, TEST_RESOURCES_PATH,
+    },
+};
 
 use super::*;
 use actix_web::{
@@ -308,6 +317,73 @@ async fn test_delete_global_data_files_by_path_all() {
 }
 
 #[actix_web::test]
+async fn test_delete_global_data_files_by_path_locked() {
+    let mut context = TestContext::new();
+    context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Running);
+    create_default_global_data(&mut connection);
+    // Associates the running pipeline with the test global data repository.
+    let association_variable = NewPipelineStepVariable::new(
+        DEFAULT_EXPERIMENT_ID,
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+        "global",
+        Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&association_variable)
+        .execute(&mut connection)
+        .unwrap();
+
+    let global_data_path = app_config.global_data_path(DEFAULT_GLOBAL_DATA_ID.to_string());
+    let folders = vec![
+        global_data_path.join("1/11/111"),
+        global_data_path.join("1/11/112"),
+        global_data_path.join("1/11/113"),
+        global_data_path.join("2/21"),
+        global_data_path.join("2/22"),
+        global_data_path.join("3"),
+    ];
+    for folder in folders {
+        std::fs::create_dir_all(folder).unwrap();
+    }
+    std::fs::write(global_data_path.join("1/11/112/test_file_1.txt"), "test_content").unwrap();
+    std::fs::write(global_data_path.join("3/test_file_2.txt"), "test_content").unwrap();
+    // Assert that all files and folder exist.
+    assert!(global_data_path.join("1/11/111").exists());
+    assert!(global_data_path.join("1/11/112").exists());
+    assert!(global_data_path.join("1/11/112/test_file_1.txt").exists());
+    assert!(global_data_path.join("1/11/113").exists());
+    assert!(global_data_path.join("2/21").exists());
+    assert!(global_data_path.join("2/22").exists());
+    assert!(global_data_path.join("3").exists());
+    assert!(global_data_path.join("3/test_file_2.txt").exists());
+    let root_path = FilePath {
+        path_components: vec![],
+    };
+    let req = test::TestRequest::delete()
+        .uri(&format!("/api/files/globals/{}", DEFAULT_GLOBAL_DATA_ID))
+        .set_json(root_path)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::PRECONDITION_FAILED);
+    // Assert that all files and folder still exist.
+    assert!(global_data_path.join("1/11/111").exists());
+    assert!(global_data_path.join("1/11/112").exists());
+    assert!(global_data_path.join("1/11/112/test_file_1.txt").exists());
+    assert!(global_data_path.join("1/11/113").exists());
+    assert!(global_data_path.join("2/21").exists());
+    assert!(global_data_path.join("2/22").exists());
+    assert!(global_data_path.join("3").exists());
+    assert!(global_data_path.join("3/test_file_2.txt").exists());
+}
+
+#[actix_web::test]
 async fn test_delete_global_data_files_non_existent() {
     let context = TestContext::new();
     let app = test::init_service(create_test_app(&context)).await;
@@ -436,6 +512,47 @@ async fn test_post_global_data_add_file_super() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     assert!(!global_data_path.join("../test_file.txt").exists());
+}
+
+#[actix_web::test]
+async fn test_post_global_data_add_file_locked() {
+    let mut context = TestContext::new();
+    context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Running);
+    create_default_global_data(&mut connection);
+    // Associates the running pipeline with the test global data repository.
+    let association_variable = NewPipelineStepVariable::new(
+        DEFAULT_EXPERIMENT_ID,
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+        "global",
+        Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&association_variable)
+        .execute(&mut connection)
+        .unwrap();
+    let global_data_path = app_config.global_data_path(DEFAULT_GLOBAL_DATA_ID.to_string());
+    let payload_file = "../testing_resources/requests/file_upload/multipart_file_root";
+    let payload = std::fs::read(payload_file).unwrap();
+    let content_type: mime::Mime =
+        "multipart/form-data; boundary=---------------------------5851692324164894962235391524"
+            .parse()
+            .unwrap();
+    assert!(!global_data_path.join("test_file.txt").exists());
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/files/globals/{}", DEFAULT_GLOBAL_DATA_ID))
+        .insert_header(ContentType(content_type))
+        .set_payload(payload)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::PRECONDITION_FAILED);
+    assert!(!global_data_path.join("test_file.txt").exists());
 }
 
 #[actix_web::test]
@@ -630,6 +747,43 @@ async fn test_post_global_data_add_folder_super() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     assert!(!global_data_path.join("../1").exists());
+}
+
+#[actix_web::test]
+async fn test_post_global_data_add_folder_locked() {
+    let mut context = TestContext::new();
+    context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Running);
+    create_default_global_data(&mut connection);
+    // Associates the running pipeline with the test global data repository.
+    let association_variable = NewPipelineStepVariable::new(
+        DEFAULT_EXPERIMENT_ID,
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+        "global",
+        Some(DEFAULT_GLOBAL_DATA_ID.to_string()),
+    );
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&association_variable)
+        .execute(&mut connection)
+        .unwrap();
+    let global_data_path = app_config.global_data_path(DEFAULT_GLOBAL_DATA_ID.to_string());
+    let folder_path = FilePath {
+        path_components: vec!["1".to_string()],
+    };
+    assert!(!global_data_path.join("1").exists());
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/folders/globals/{}", DEFAULT_GLOBAL_DATA_ID))
+        .set_json(folder_path)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::PRECONDITION_FAILED);
+    assert!(!global_data_path.join("1").exists());
 }
 
 #[actix_web::test]

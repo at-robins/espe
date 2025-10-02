@@ -8,12 +8,21 @@ use crate::{
             pipeline_global_variable::NewPipelineGlobalVariable,
             pipeline_step_variable::{NewPipelineStepVariable, PipelineStepVariable},
         },
-        internal::pipeline_blueprint::PipelineStepVariableCategory,
+        exchange::experiment_step_logs::ExperimentStepLogRequest,
+        internal::{archive::ArchiveMetadata, pipeline_blueprint::PipelineStepVariableCategory},
     },
-    test_utility::{create_test_app, TestContext, TEST_RESOURCES_PATH},
+    service::download_service::PipelineStepRequestInfo,
+    test_utility::{
+        create_default_experiment, create_default_experiment_execution,
+        create_default_temporary_download_archive, create_test_app, TestContext,
+        DEFAULT_EXPERIMENT_ID, DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID, TEST_RESOURCES_PATH,
+    },
 };
 
-use actix_web::{http::StatusCode, test};
+use actix_web::{
+    http::StatusCode,
+    test::{self, TestRequest},
+};
 use diesel::{BoolExpressionMethods, RunQueryDsl};
 
 #[actix_web::test]
@@ -1427,7 +1436,7 @@ async fn test_post_execute_experiment_unset_required_global_variable() {
 }
 
 #[actix_web::test]
-async fn test_post_execute_experiment_already_running() {
+async fn test_post_execute_experiment_already_executed() {
     // Use a reference to the context, so the context is not dropped early
     // and messes up test context folder deletion.
     let mut db_context = TestContext::new();
@@ -1475,10 +1484,594 @@ async fn test_post_execute_experiment_already_running() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    // Second execution should fail since the experiment pipeline is already scheduled for execution.
+    // Arborting the process is necessery, as a running pipeline
+    // would be locked and throw a different error.
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/experiments/{}/abort", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    // Second execution should fail since the experiment pipeline has already been started before.
     let req = test::TestRequest::post()
         .uri(&format!("/api/experiments/{}", experiment_id))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_execution_locked_running() {
+    let db_context = TestContext::new();
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id = 42;
+    let pipeline_id = "Dummy ID";
+    let new_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let new_execution = [
+        ExperimentExecution {
+            id: 42,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "1".to_string(),
+            execution_status: ExecutionStatus::Finished.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+        ExperimentExecution {
+            id: 43,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "2".to_string(),
+            execution_status: ExecutionStatus::Running.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+    ];
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/experiments/{}/locked", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let is_locked: bool = test::read_body_json(resp).await;
+    assert!(is_locked);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_execution_locked_waiting() {
+    let db_context = TestContext::new();
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id = 42;
+    let pipeline_id = "Dummy ID";
+    let new_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let new_execution = [
+        ExperimentExecution {
+            id: 42,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "1".to_string(),
+            execution_status: ExecutionStatus::Aborted.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+        ExperimentExecution {
+            id: 43,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "2".to_string(),
+            execution_status: ExecutionStatus::Waiting.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+    ];
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/experiments/{}/locked", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let is_locked: bool = test::read_body_json(resp).await;
+    assert!(is_locked);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_execution_locked_finished() {
+    let db_context = TestContext::new();
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let experiment_id = 42;
+    let pipeline_id = "Dummy ID";
+    let new_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    let new_execution = [
+        ExperimentExecution {
+            id: 42,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "1".to_string(),
+            execution_status: ExecutionStatus::Finished.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+        ExperimentExecution {
+            id: 43,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "2".to_string(),
+            execution_status: ExecutionStatus::Failed.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+    ];
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
+        .execute(&mut connection)
+        .unwrap();
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/experiments/{}/locked", experiment_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let is_locked: bool = test::read_body_json(resp).await;
+    assert!(!is_locked);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_execution_locked_not_found() {
+    let db_context = TestContext::new();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let req = test::TestRequest::get()
+        .uri("/api/experiments/42/locked")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_experiment_exists_not_found() {
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let test_config = Configuration::from(&db_context);
+
+    let experiment_id = 42;
+    let archive_id = 42;
+    let pipeline_id = "testing_pipeline";
+    let pipeline_step_id = "fastqc";
+
+    // Creates a dummy archive file.
+    std::fs::create_dir_all(test_config.temporary_download_path()).unwrap();
+    let archive_path = test_config.temporary_download_file_path(archive_id.to_string());
+    std::fs::File::create_new(&archive_path).unwrap();
+    let archive_metadata = ArchiveMetadata::new(format!("{}.zip", archive_id));
+    let archive_metadata_path = ArchiveMetadata::metadata_path(&archive_path);
+    serde_json::to_writer(
+        std::fs::File::create_new(archive_metadata_path).unwrap(),
+        &archive_metadata,
+    )
+    .unwrap();
+
+    let base_url = format!("/api/experiments/{}", experiment_id);
+    let test_requests = [
+        TestRequest::post()
+            .uri(&format!("{}/abort", base_url))
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/archive", base_url))
+            .set_json(PipelineStepRequestInfo {
+                pipeline_id: pipeline_id.to_string(),
+                step_id: pipeline_step_id.to_string(),
+            })
+            .to_request(),
+        TestRequest::patch()
+            .uri(&format!("{}/comment", base_url))
+            .set_json("Comment")
+            .to_request(),
+        TestRequest::get()
+            .uri(&format!("{}/download/{}", base_url, archive_id))
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/logs", base_url))
+            .set_json(ExperimentStepLogRequest {
+                pipeline_id: pipeline_id.to_string(),
+                step_id: pipeline_step_id.to_string(),
+            })
+            .to_request(),
+        TestRequest::get()
+            .uri(&format!("{}/locked", base_url))
+            .to_request(),
+        TestRequest::patch()
+            .uri(&format!("{}/mail", base_url))
+            .set_json("a.b@c.de")
+            .to_request(),
+        TestRequest::patch()
+            .uri(&format!("{}/name", base_url))
+            .set_json("Name")
+            .to_request(),
+        TestRequest::patch()
+            .uri(&format!("{}/pipeline", base_url))
+            .set_json(Some(pipeline_id))
+            .to_request(),
+        TestRequest::get()
+            .uri(&format!("{}/pipelines", base_url))
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/rerun", base_url))
+            .set_json(pipeline_step_id)
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/reset", base_url))
+            .to_request(),
+        TestRequest::get()
+            .uri(&format!("{}/run", base_url))
+            .to_request(),
+        TestRequest::get()
+            .uri(&format!("{}/status", base_url))
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/variable/global", base_url))
+            .set_json(PipelineGlobalVariableUpload {
+                pipeline_id: pipeline_id.to_string(),
+                variable_id: "global_number".to_string(),
+                variable_value: None,
+            })
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/variable/step", base_url))
+            .set_json(PipelineStepVariableUpload {
+                pipeline_id: pipeline_id.to_string(),
+                pipeline_step_id: pipeline_step_id.to_string(),
+                variable_id: "number".to_string(),
+                variable_value: None,
+            })
+            .to_request(),
+    ];
+
+    for test_request in test_requests {
+        let test_url = test_request.uri().to_string();
+        let resp = test::call_service(&app, test_request).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::NOT_FOUND,
+            "Accessing {} without the experiment did return status code {} instead of status code {}. Message: {:?}",
+            test_url,
+            resp.status(),
+            StatusCode::NOT_FOUND,
+            resp.response()
+        );
+    }
+}
+
+#[actix_web::test]
+async fn test_experiment_exists_found() {
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let test_config = Configuration::from(&db_context);
+
+    let experiment_id = 42;
+    let archive_id = 42;
+    let pipeline_id = "testing_pipeline";
+    let pipeline_step_id = "fastqc";
+
+    // Creates a dummy archive file.
+    std::fs::create_dir_all(test_config.temporary_download_path()).unwrap();
+    let archive_path = test_config.temporary_download_file_path(archive_id.to_string());
+    std::fs::File::create_new(&archive_path).unwrap();
+    let archive_metadata = ArchiveMetadata::new(format!("{}.zip", archive_id));
+    let archive_metadata_path = ArchiveMetadata::metadata_path(&archive_path);
+    serde_json::to_writer(
+        std::fs::File::create_new(archive_metadata_path).unwrap(),
+        &archive_metadata,
+    )
+    .unwrap();
+
+    let base_url = format!("/api/experiments/{}", experiment_id);
+    let test_requests = [
+        TestRequest::post()
+            .uri(&format!("{}/abort", base_url))
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/archive", base_url))
+            .set_json(pipeline_step_id)
+            .to_request(),
+        TestRequest::patch()
+            .uri(&format!("{}/comment", base_url))
+            .set_json("Comment")
+            .to_request(),
+        TestRequest::get()
+            .uri(&format!("{}/download/{}", base_url, archive_id))
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/logs", base_url))
+            .set_json(ExperimentStepLogRequest {
+                pipeline_id: pipeline_id.to_string(),
+                step_id: pipeline_step_id.to_string(),
+            })
+            .to_request(),
+        TestRequest::get()
+            .uri(&format!("{}/locked", base_url))
+            .to_request(),
+        TestRequest::patch()
+            .uri(&format!("{}/mail", base_url))
+            .set_json("a.b@c.de")
+            .to_request(),
+        TestRequest::patch()
+            .uri(&format!("{}/name", base_url))
+            .set_json("Name")
+            .to_request(),
+        TestRequest::patch()
+            .uri(&format!("{}/pipeline", base_url))
+            .set_json(Some(pipeline_id))
+            .to_request(),
+        TestRequest::get()
+            .uri(&format!("{}/pipelines", base_url))
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/rerun", base_url))
+            .set_json(pipeline_step_id)
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/reset", base_url))
+            .to_request(),
+        TestRequest::get()
+            .uri(&format!("{}/run", base_url))
+            .to_request(),
+        TestRequest::get()
+            .uri(&format!("{}/status", base_url))
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/variable/global", base_url))
+            .set_json(PipelineGlobalVariableUpload {
+                pipeline_id: pipeline_id.to_string(),
+                variable_id: "global_number".to_string(),
+                variable_value: None,
+            })
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/variable/step", base_url))
+            .set_json(PipelineStepVariableUpload {
+                pipeline_id: pipeline_id.to_string(),
+                pipeline_step_id: pipeline_step_id.to_string(),
+                variable_id: "number".to_string(),
+                variable_value: None,
+            })
+            .to_request(),
+    ];
+
+    // Creates a dummy experiment.
+    let new_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+
+    for test_request in test_requests {
+        let test_url = test_request.uri().to_string();
+        let resp = test::call_service(&app, test_request).await;
+        assert_ne!(
+            resp.status(),
+            StatusCode::NOT_FOUND,
+            "Accessing {} with an existing experiment did return status code {} but should return another status code. Message: {:?}",
+            test_url,
+            resp.status(),
+            resp.response()
+        );
+    }
+}
+
+#[actix_web::test]
+async fn test_experiment_locked() {
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Running);
+    create_default_temporary_download_archive(&db_context);
+
+    let global_variable_id = "global_number";
+    let step_variable_id = "number";
+    let new_variable_value = "42";
+
+    let base_url = format!("/api/experiments/{}", DEFAULT_EXPERIMENT_ID);
+    let test_requests = [
+        TestRequest::patch()
+            .uri(&format!("{}/pipeline", base_url))
+            .set_json(Option::<String>::None)
+            .to_request(),
+        TestRequest::post().uri(&base_url).to_request(),
+        TestRequest::delete().uri(&base_url).to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/reset", base_url))
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/variable/global", base_url))
+            .set_json(PipelineGlobalVariableUpload {
+                pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+                variable_id: global_variable_id.to_string(),
+                variable_value: Some(new_variable_value.to_string()),
+            })
+            .to_request(),
+        TestRequest::post()
+            .uri(&format!("{}/variable/step", base_url))
+            .set_json(PipelineStepVariableUpload {
+                pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+                pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
+                variable_id: step_variable_id.to_string(),
+                variable_value: Some(new_variable_value.to_string()),
+            })
+            .to_request(),
+    ];
+
+    // Make sure variables are unset.
+    assert_eq!(
+        None,
+        PipelineGlobalVariable::get(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            global_variable_id,
+            &mut connection
+        )
+        .unwrap()
+    );
+    assert_eq!(
+        None,
+        PipelineStepVariable::get(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            step_variable_id,
+            &mut connection
+        )
+        .unwrap()
+    );
+
+    // Make sure the pipeline ID is correct.
+    assert_eq!(
+        Some(DEFAULT_PIPELINE_ID.to_string()),
+        Experiment::get(DEFAULT_EXPERIMENT_ID, &mut connection)
+            .unwrap()
+            .pipeline_id
+    );
+
+    for test_request in test_requests {
+        let test_url = test_request.uri().to_string();
+        let resp = test::call_service(&app, test_request).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::PRECONDITION_FAILED,
+            "Accessing {} while the experiment was locked did return status code {} but should return {}. Message: {:?}",
+            test_url,
+            resp.status(),
+            StatusCode::PRECONDITION_FAILED,
+            resp.response()
+        );
+    }
+
+    // Make sure variables are still unset.
+    assert_eq!(
+        None,
+        PipelineGlobalVariable::get(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            global_variable_id,
+            &mut connection
+        )
+        .unwrap()
+    );
+    assert_eq!(
+        None,
+        PipelineStepVariable::get(
+            DEFAULT_EXPERIMENT_ID,
+            DEFAULT_PIPELINE_ID,
+            DEFAULT_PIPELINE_STEP_ID,
+            step_variable_id,
+            &mut connection
+        )
+        .unwrap()
+    );
+
+    // Make sure the pipeline ID did not change.
+    assert_eq!(
+        Some(DEFAULT_PIPELINE_ID.to_string()),
+        Experiment::get(DEFAULT_EXPERIMENT_ID, &mut connection)
+            .unwrap()
+            .pipeline_id
+    );
+}
+
+#[actix_web::test]
+async fn test_experiment_step_rerun_download() {
+    let download_tracker = web::Data::new(DownloadTrackerManager::new());
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    db_context.set_download_tracker(download_tracker.clone());
+    let app = test::init_service(create_test_app(&db_context)).await;
+    create_default_experiment(&mut db_context.get_connection());
+
+    let experiment_id = DEFAULT_EXPERIMENT_ID;
+    let pipeline_id = "testing_pipeline";
+    let pipeline_step_id = "fastqc";
+
+    // Tracks a download so the step should not be able to be restarted.
+    let _tracker_01 = download_tracker.track_experiment_output_download_step(
+        experiment_id,
+        pipeline_id,
+        pipeline_step_id,
+    );
+
+    let base_url = format!("/api/experiments/{}", experiment_id);
+    let test_requests = [TestRequest::post()
+        .uri(&format!("{}/rerun", base_url))
+        .set_json(pipeline_step_id)
+        .to_request()];
+
+    for test_request in test_requests {
+        let test_url = test_request.uri().to_string();
+        let resp = test::call_service(&app, test_request).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::PRECONDITION_FAILED,
+            "Accessing {} while the experiment was locked did return status code {} but should return {}. Message: {:?}",
+            test_url,
+            resp.status(),
+            StatusCode::PRECONDITION_FAILED,
+            resp.response()
+        );
+    }
 }

@@ -22,3 +22,19 @@ export function equality_shallow_object(
 export function error_to_string(error: ErrorResponse): string {
   return error.uuid + " | " + error.name + ": " + error.message;
 }
+
+/**
+ * Checks if the passed value is an error response.
+ *
+ * @param data the value to check
+ */
+export function is_error_response(data: any): boolean {
+  return (
+    data &&
+    typeof data === "object" &&
+    typeof data["code"] === "number" &&
+    typeof data["uuid"] === "string" &&
+    typeof data["name"] === "string" &&
+    typeof data["message"] === "string"
+  );
+}

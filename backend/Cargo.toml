@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actix-files = "0.6.2"
-actix-multipart = "0.6.0"
-actix-web = {version="4.3.1", features=["openssl"]}
+actix-files = "0.6.6"
+actix-multipart = "0.7.2"
+actix-web = {version="4.11.0", features=["openssl"]}
 ammonia = "3.3.0"
 chrono = { version = "0.4.24", features = ["serde"] }
 diesel = { version = "2.1.3", features = ["chrono", "r2d2", "sqlite", "returning_clauses_for_sqlite_3_35"] }
@@ -16,22 +16,19 @@ email_address = "0.2.4"
 env_logger = "0.10.0"
 futures = "0.3.28"
 futures-util = "0.3.28"
-lazy_static = "1.4.0"
-log = "0.4.17"
-getset = "0.1.2"
-openssl = "0.10.52"
-parking_lot = "0.12.1"
-rand = "0.8.5"
-regex = "1.8.1"
-sanitize-filename = "0.5.0"
-serde = { version = "1.0.163", features = ["derive"] }
-serde_json = "1.0.96"
-twox-hash = "1.6.3"
-uuid = { version = "1.5.0", features = ["serde", "v1", "v4"] }
-walkdir = "2.3.3"
+log = "0.4.27"
+getset = "0.1.5"
+openssl = "0.10.72"
+parking_lot = "0.12.3"
+sanitize-filename = "0.6.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+twox-hash = "2.1.0"
+uuid = { version = "1.16.0", features = ["serde", "v1", "v4"] }
+walkdir = "2.5.0"
 zip = "0.6.6"
 zip-extensions = "0.6.2"
 
 [dev-dependencies]
 mime = "0.3.17"
-serial_test = "2.0.0"
+serial_test = "3.2.0"
