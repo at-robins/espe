@@ -1,10 +1,18 @@
 use std::{
     collections::HashMap,
+    io::{Cursor, Seek},
+    path::{Path, PathBuf},
     sync::{Arc, Weak},
+    task::Poll,
 };
 
+use actix_web::web::Bytes;
+use log::info;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use zip::{write::StreamWriter, ZipWriter};
+
+use crate::application::error::{SeqError, DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -168,6 +176,164 @@ impl DownloadTracker {
             // Keeps the map reasonable in size even with a lot of experiments.
             map_lock.remove(&key);
             map_lock.shrink_to_fit();
+        }
+    }
+}
+
+const ARCHIVE_STREAM_WRITE_BUFFER_SIZE: usize = 12 * 1024 * 1024;
+const ARCHIVE_STREAM_READ_BUFFER_SIZE: usize = 12 * 1024 * 1024;
+pub struct ArchiveStream {
+    // buffer_read: Cursor<[u8; ARCHIVE_STREAM_READ_BUFFER_SIZE]>,
+    source: PathBuf,
+    path_queue: Vec<PathBuf>,
+    writer: Option<ZipWriter<StreamWriter<Cursor<[u8; ARCHIVE_STREAM_WRITE_BUFFER_SIZE]>>>>,
+}
+
+impl ArchiveStream {
+    pub fn new<T: AsRef<Path>>(source: T) -> Result<Self, SeqError> {
+        // // Creates the archive.
+        // let options = zip::write::FileOptions::default()
+        //     .large_file(true)
+        //     .compression_method(zip::CompressionMethod::Stored)
+        //     .compression_level(None);
+        let source = std::fs::canonicalize(&source).map_err(|err| {
+            SeqError::from(err)
+                .chain(format!("Failed to resolve path {}.", source.as_ref().display()))
+        })?;
+        if source.is_file() {
+            Ok(Self {
+                source: source
+                    .parent()
+                    .ok_or(SeqError::new(
+                        "Archive stream generation error",
+                        crate::application::error::SeqErrorType::InternalServerError,
+                        format!(
+                            "The specified file \"{}\"does not have a parent.",
+                            source.display()
+                        ),
+                        DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+                    ))?
+                    .to_path_buf(),
+                path_queue: vec![source],
+                writer: Some(ZipWriter::new_stream(Cursor::new(
+                    [0; ARCHIVE_STREAM_WRITE_BUFFER_SIZE],
+                ))),
+            })
+        } else {
+            let path_queue = Self::directory_paths(&source).map_err(|err| {
+                err.chain(format!(
+                    "Failed to get directory entries for archive generation of \"{}\"",
+                    source.display()
+                ))
+            })?;
+            Ok(Self {
+                source,
+                path_queue,
+                writer: Some(ZipWriter::new_stream(Cursor::new(
+                    [0; ARCHIVE_STREAM_WRITE_BUFFER_SIZE],
+                ))),
+            })
+        }
+    }
+
+    /// Get the relative path of a path queue element.
+    ///
+    /// # Panics
+    ///
+    /// If the supplied path is not a child of the source path.
+    fn relative_path<'a, T: AsRef<Path>>(&self, path: &'a T) -> &'a Path {
+        path.as_ref().strip_prefix(&self.source).expect(&format!(
+            "The specified path \"{}\" must be a child of the source path \"{}\"!",
+            path.as_ref().display(),
+            &self.source.display()
+        ))
+    }
+
+    /// Gets all the entries inside the specified directory as paths.
+    ///
+    /// # Parameters
+    ///
+    /// * `path` - the directory to get the entry paths from
+    fn directory_paths<T: AsRef<Path>>(path: T) -> Result<Vec<PathBuf>, SeqError> {
+        match std::fs::read_dir(&path) {
+            Ok(dir) => {
+                let mut valid_paths = Vec::new();
+                for entry in dir {
+                    match entry {
+                        Ok(valid_entry) => valid_paths.push(valid_entry.path()),
+                        Err(err) => {
+                            return Err(SeqError::from(err).chain(format!(
+                                "Failed to retrieve directory entry in \"{}\".",
+                                path.as_ref().display()
+                            )))
+                        },
+                    }
+                }
+                Ok(valid_paths)
+            },
+            Err(err) => Err(SeqError::from(err)
+                .chain(format!("Failed to read directory \"{}\".", path.as_ref().display()))),
+        }
+    }
+}
+
+impl futures::Stream for ArchiveStream {
+    type Item = Result<Bytes, SeqError>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        let mut archive_stream = self.get_mut();
+        if archive_stream.writer.is_none() {
+            // All contents have been written.
+            Poll::Ready(None)
+        } else if archive_stream.path_queue.is_empty() {
+            // All files and directories have been processed.
+            // Finialises the archive.
+            // The unwrap works, as the contents of the writer have been tested above.
+            let finished_writer = archive_stream.writer.take().unwrap();
+            match finished_writer.finish() {
+                Ok(mut closed_writer) => match closed_writer.stream_position() {
+                    Ok(pos) => {
+                        info!("Finalised archive with {} bytes.", pos);
+                        Poll::Ready(Some(Ok(Bytes::copy_from_slice(
+                            &closed_writer.into_inner().into_inner()[0usize..pos as usize],
+                        ))))
+                    },
+                    Err(err) => Poll::Ready(Some(Err(
+                        SeqError::from(err).chain("Failed to obtain final stream position.")
+                    ))),
+                },
+                Err(err) => {
+                    Poll::Ready(Some(Err(SeqError::from(err).chain("Failed to finish archive."))))
+                },
+            }
+        } else {
+            if archive_stream
+                .path_queue
+                .last()
+                .expect("The path stack must have been verified to not be empty here!")
+                .is_dir()
+            {
+                let directory_path_absolute = archive_stream.path_queue.pop().unwrap();
+                let directory_path_relative = archive_stream.relative_path(&directory_path_absolute);
+                if archive_stream.writer.as_mut().unwrap().add_directory_from_path(directory_path_relative, options);
+                // Skip adding directoris for the source directory.
+                // if self.path_queue.last().unwrap() == &self.source {
+                // match ArchiveStream::directory_paths(archive_stream.path_queue.pop().unwrap()) {
+                //     Ok(_) => todo!(),
+                //     Err(err) => Poll::Ready(Some(Err(err.chain(format!(
+                //         "Failed to load directory structure during archive generation of \"{}\".",
+                //         archive_stream.source.display()
+                //     ))))),
+                // }
+                // }
+                //self.get_mut().wirter.add_directory(name, options)
+                todo!()
+            } else {
+                todo!()
+            }
         }
     }
 }

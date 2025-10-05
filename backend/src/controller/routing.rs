@@ -16,7 +16,7 @@ use super::{
         post_experiment_pipeline_global_variable, post_experiment_pipeline_step_variable,
     },
     file_controller::{
-        delete_files_by_path, get_experiment_download_step_results, get_files,
+        delete_files_by_path, get_files,
         get_pipeline_attachment, post_add_file, post_add_folder,
         post_experiment_archive_step_results,
     },
@@ -61,7 +61,6 @@ pub fn routing_config(cfg: &mut ServiceConfig) {
     .route("/api/experiments/{id}/abort", web::post().to(post_experiment_execution_abort))
     .route("/api/experiments/{id}/archive", web::post().to(post_experiment_archive_step_results))
     .route("/api/experiments/{id}/comment", web::patch().to(patch_experiment_comment))
-    .route("/api/experiments/{id}/download/{archive}", web::get().to(get_experiment_download_step_results))
         // This method is only POST to support the JSON message body.
     .route("/api/experiments/{id}/logs", web::post().to(get_experiment_step_logs))
     .route("/api/experiments/{id}/locked", web::get().to(get_experiment_locked))

@@ -395,10 +395,6 @@ function downloadStepResults(pipelineId: string | null, step: PipelineStepBluepr
         JSON.stringify(requestStepInfo),
         config
       )
-      .then((response) => {
-        window.location.href =
-          "/api/experiments/" + props.id + "/download/" + response.data;
-      })
       .catch((error) => {
         downloadError.value = error.response.data;
       })

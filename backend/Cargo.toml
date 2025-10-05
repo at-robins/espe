@@ -7,15 +7,15 @@ edition = "2021"
 actix-files = "0.6.6"
 actix-multipart = "0.7.2"
 actix-web = {version="4.11.0", features=["openssl"]}
-ammonia = "3.3.0"
+ammonia = "4.1.2"
 chrono = { version = "0.4.24", features = ["serde"] }
 diesel = { version = "2.1.3", features = ["chrono", "r2d2", "sqlite", "returning_clauses_for_sqlite_3_35"] }
 diesel_migrations = "2.1.0"
 dotenv = "0.15.0"
 email_address = "0.2.4"
 env_logger = "0.10.0"
-futures = "0.3.28"
-futures-util = "0.3.28"
+futures = "0.3.31"
+futures-util = "0.3.31"
 log = "0.4.27"
 getset = "0.1.5"
 openssl = "0.10.72"
@@ -26,8 +26,7 @@ serde_json = "1.0.140"
 twox-hash = "2.1.0"
 uuid = { version = "1.16.0", features = ["serde", "v1", "v4"] }
 walkdir = "2.5.0"
-zip = "0.6.6"
-zip-extensions = "0.6.2"
+zip = "5.1.1"
 
 [dev-dependencies]
 mime = "0.3.17"

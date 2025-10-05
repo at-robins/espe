@@ -12,10 +12,9 @@ use crate::{
     model::{
         db::{experiment::Experiment, global_data::GlobalData},
         exchange::file_path::{FileDetails, FilePath},
-        internal::archive::ArchiveMetadata,
     },
     service::{
-        download_service::{DownloadTrackerManager, PipelineStepRequestInfo},
+        download_service::{ArchiveStream, DownloadTrackerManager, PipelineStepRequestInfo},
         experiment_service::is_experiment_locked_err,
         global_data_service::is_global_data_locked_err,
         multipart_service::{
@@ -26,11 +25,10 @@ use crate::{
 };
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
-use actix_web::{web, HttpResponse};
+use actix_web::{http::header, web, HttpResponse};
 use diesel::SqliteConnection;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use zip_extensions::zip_create_from_directory_with_options;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -431,7 +429,7 @@ pub async fn post_experiment_archive_step_results(
     download_tracker_manager: web::Data<DownloadTrackerManager>,
     experiment_id: web::Path<i32>,
     step_info: web::Json<PipelineStepRequestInfo>,
-) -> Result<String, SeqError> {
+) -> Result<HttpResponse, SeqError> {
     let experiment_id: i32 = experiment_id.into_inner();
     let _download_tracker = download_tracker_manager.track_experiment_output_download_step(
         experiment_id,
@@ -441,104 +439,37 @@ pub async fn post_experiment_archive_step_results(
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection)?;
 
-    // Sets up the required information.
-    let archive_id = Configuration::generate_uuid();
-    let archive_meta = ArchiveMetadata::new(format!("{}.zip", &step_info.step_id));
-
-    // Defines source and target paths.
+    // // Defines the source path.
     let source = app_config.experiment_step_path(
         experiment_id.to_string(),
         &step_info.pipeline_id,
         &step_info.step_id,
     );
-    let target = app_config.temporary_download_file_path(archive_id);
-    let target_meta = ArchiveMetadata::metadata_path(&target);
 
-    // Creates the parent directory if necessary.
-    if let Some(target_parent) = target.parent() {
-        std::fs::create_dir_all(target_parent)?;
-    }
-    // Creates the archive.
-    let options = zip::write::FileOptions::default()
-        .large_file(true)
-        .compression_method(zip::CompressionMethod::Stored)
-        .compression_level(None);
-    zip_create_from_directory_with_options(&target, &source, options).map_err(|err| {
-        SeqError::new(
-            "Archiving error",
-            SeqErrorType::InternalServerError,
-            format!(
-                "Creation of a downloadable archive for experiment \
-                {} ({}/{}) from {} to {} failed with error: {}",
-                experiment_id,
-                step_info.pipeline_id,
-                step_info.step_id,
-                source.display(),
-                target.display(),
-                err
-            ),
-            "Downloadable archive could not be created.",
-        )
+    let file_name = format!("{}.zip", sanitize_filename::sanitize(&step_info.step_id));
+    let archive_stream = ArchiveStream::new(source).map_err(|err| {
+        err.chain(format!(
+            "Archive stream generation failed for experiment {} step {} - {}.",
+            experiment_id, step_info.pipeline_id, step_info.step_id
+        ))
     })?;
-    // Creates the archive metadata.
-    serde_json::to_writer(std::fs::File::create(target_meta)?, &archive_meta)?;
 
-    //Return the archive ID.
-    Ok(archive_id.to_string())
-}
+    //Return the archive as stream.
+    let content_disposition = header::ContentDisposition {
+        disposition: header::DispositionType::Attachment,
+        parameters: vec![header::DispositionParam::FilenameExt(
+            header::ExtendedValue {
+                charset: header::Charset::Ext(String::from("UTF-8")),
+                language_tag: None,
+                value: file_name.into_bytes(),
+            },
+        )],
+    };
 
-pub async fn get_experiment_download_step_results(
-    database_manager: web::Data<DatabaseManager>,
-    app_config: web::Data<Configuration>,
-    info: web::Path<(i32, String)>,
-) -> Result<NamedFile, SeqError> {
-    let (experiment_id, archive_id) = info.into_inner();
-
-    // If the archive ID contains a path seperator return an error
-    // as it is not a valid ID and allows attacks by using relative
-    // components.
-    if PathBuf::from(&archive_id).iter().count() != 1 {
-        return Err(SeqError::new(
-            "Bad request",
-            SeqErrorType::BadRequestError,
-            format!(
-                "The archive id {} is invalid and is probalbly supposed to compromise the system.",
-                archive_id
-            ),
-            "Invalid archive ID.",
-        ));
-    }
-
-    let mut connection = database_manager.database_connection()?;
-    Experiment::exists_err(experiment_id, &mut connection)?;
-
-    let archive_path = app_config.temporary_download_file_path(archive_id);
-    if !archive_path.exists() {
-        return Err(SeqError::new(
-            "Not found",
-            SeqErrorType::NotFoundError,
-            format!("Archive file at path {} does not exist.", archive_path.display()),
-            "File not found.",
-        ));
-    }
-
-    let archive_meta_path = ArchiveMetadata::metadata_path(&archive_path);
-    if !archive_meta_path.exists() {
-        return Err(SeqError::new(
-            "Not found",
-            SeqErrorType::NotFoundError,
-            format!(
-                "Archive metadata file at path {} does not exist.",
-                archive_meta_path.display()
-            ),
-            "File not found.",
-        ));
-    }
-
-    let archive_meta: ArchiveMetadata =
-        serde_json::from_reader(std::fs::File::open(&archive_meta_path)?)?;
-
-    Ok(NamedFile::from_file(std::fs::File::open(&archive_path)?, archive_meta.file_name())?)
+    Ok(HttpResponse::Ok()
+        .content_type("application/zip")
+        .insert_header((header::CONTENT_DISPOSITION, content_disposition.to_string()))
+        .streaming(archive_stream))
 }
 
 pub async fn get_pipeline_attachment(

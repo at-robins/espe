@@ -129,6 +129,8 @@ impl std::fmt::Display for SeqError {
     }
 }
 
+impl std::error::Error for SeqError {}
+
 #[derive(Debug, Serialize)]
 /// An informative error response for client side display
 /// containing a unique ID to correlate the error with the
@@ -269,6 +271,17 @@ impl From<dotenv::Error> for SeqError {
     fn from(error: dotenv::Error) -> Self {
         Self::new(
             "dotenv::Error",
+            SeqErrorType::InternalServerError,
+            error,
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        )
+    }
+}
+
+impl From<zip::result::ZipError> for SeqError {
+    fn from(error: zip::result::ZipError) -> Self {
+        Self::new(
+            "zip::result::ZipError",
             SeqErrorType::InternalServerError,
             error,
             DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
