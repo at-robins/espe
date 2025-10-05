@@ -1,18 +1,22 @@
 use std::{
+    cell::RefCell,
     collections::HashMap,
-    io::{Cursor, Seek},
+    fs::File,
+    io::{Cursor, Read, Write},
     path::{Path, PathBuf},
+    rc::Rc,
     sync::{Arc, Weak},
     task::Poll,
 };
 
 use actix_web::web::Bytes;
-use log::info;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use zip::{write::StreamWriter, ZipWriter};
 
-use crate::application::error::{SeqError, DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE};
+use crate::application::error::{
+    SeqError, SeqErrorType, DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -180,33 +184,92 @@ impl DownloadTracker {
     }
 }
 
-const ARCHIVE_STREAM_WRITE_BUFFER_SIZE: usize = 12 * 1024 * 1024;
-const ARCHIVE_STREAM_READ_BUFFER_SIZE: usize = 12 * 1024 * 1024;
+const ARCHIVE_STREAM_READ_BUFFER_SIZE: usize = 512 * 1024;
+const ARCHIVE_STREAM_WRITE_BUFFER_SIZE: usize = 4 * ARCHIVE_STREAM_READ_BUFFER_SIZE;
+
+#[derive(Clone)]
+/// A sharable cursor allowing interior mutability of the archive writer.
+struct ArchiveCursor {
+    inner: Rc<RefCell<Cursor<[u8; ARCHIVE_STREAM_WRITE_BUFFER_SIZE]>>>,
+}
+
+impl ArchiveCursor {
+    /// Creates a new sharable [`ArchiveCursor`].
+    fn new() -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(Cursor::new([0; ARCHIVE_STREAM_WRITE_BUFFER_SIZE]))),
+        }
+    }
+
+    /// Returns the content up to the current position.
+    fn get_content(&self) -> Bytes {
+        let pos = self.inner.borrow().position() as usize;
+        if pos == 0 {
+            Bytes::new()
+        } else {
+            Bytes::copy_from_slice(&self.inner.borrow().get_ref()[0..pos])
+        }
+    }
+
+    /// Resets the current position to the start of the cursor.
+    fn reset(&self) {
+        self.inner.borrow_mut().set_position(0);
+    }
+
+    /// Gets the current content and then resets the cursor.
+    fn take_content(&self) -> Bytes {
+        let content = self.get_content();
+        self.reset();
+        content
+    }
+}
+
+impl std::io::Write for ArchiveCursor {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.inner.borrow_mut().write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.borrow_mut().flush()
+    }
+}
+
+/// An archive creation stream.
 pub struct ArchiveStream {
-    // buffer_read: Cursor<[u8; ARCHIVE_STREAM_READ_BUFFER_SIZE]>,
     source: PathBuf,
     path_queue: Vec<PathBuf>,
-    writer: Option<ZipWriter<StreamWriter<Cursor<[u8; ARCHIVE_STREAM_WRITE_BUFFER_SIZE]>>>>,
+    writer: Option<ZipWriter<StreamWriter<ArchiveCursor>>>,
+    cursor: ArchiveCursor,
+    options: zip::write::SimpleFileOptions,
+    processing_file: Option<File>,
+    buffer_read: Box<[u8; ARCHIVE_STREAM_READ_BUFFER_SIZE]>,
 }
 
 impl ArchiveStream {
+    /// Creates a new [`ArchiveStream`] from the specified source path.
+    ///
+    /// # Parameters
+    ///
+    /// * `source` - the path to archive
     pub fn new<T: AsRef<Path>>(source: T) -> Result<Self, SeqError> {
-        // // Creates the archive.
-        // let options = zip::write::FileOptions::default()
-        //     .large_file(true)
-        //     .compression_method(zip::CompressionMethod::Stored)
-        //     .compression_level(None);
         let source = std::fs::canonicalize(&source).map_err(|err| {
             SeqError::from(err)
                 .chain(format!("Failed to resolve path {}.", source.as_ref().display()))
         })?;
+        let cursor = ArchiveCursor::new();
+        let writer = Some(ZipWriter::new_stream(cursor.clone()));
+        let options = zip::write::SimpleFileOptions::default()
+            .large_file(true)
+            .compression_method(zip::CompressionMethod::Stored)
+            .compression_level(None);
+        let buffer_read = Box::new([0; ARCHIVE_STREAM_READ_BUFFER_SIZE]);
         if source.is_file() {
             Ok(Self {
                 source: source
                     .parent()
                     .ok_or(SeqError::new(
                         "Archive stream generation error",
-                        crate::application::error::SeqErrorType::InternalServerError,
+                        SeqErrorType::InternalServerError,
                         format!(
                             "The specified file \"{}\"does not have a parent.",
                             source.display()
@@ -215,9 +278,11 @@ impl ArchiveStream {
                     ))?
                     .to_path_buf(),
                 path_queue: vec![source],
-                writer: Some(ZipWriter::new_stream(Cursor::new(
-                    [0; ARCHIVE_STREAM_WRITE_BUFFER_SIZE],
-                ))),
+                writer,
+                cursor,
+                options,
+                processing_file: None,
+                buffer_read,
             })
         } else {
             let path_queue = Self::directory_paths(&source).map_err(|err| {
@@ -229,9 +294,11 @@ impl ArchiveStream {
             Ok(Self {
                 source,
                 path_queue,
-                writer: Some(ZipWriter::new_stream(Cursor::new(
-                    [0; ARCHIVE_STREAM_WRITE_BUFFER_SIZE],
-                ))),
+                writer,
+                cursor,
+                options,
+                processing_file: None,
+                buffer_read,
             })
         }
     }
@@ -275,6 +342,51 @@ impl ArchiveStream {
                 .chain(format!("Failed to read directory \"{}\".", path.as_ref().display()))),
         }
     }
+
+    /// Reads a chunk of the currently open file into the archive cursor.
+    /// If the end of the file is reached, it closes the open file.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors if the file could not be read or the archive write failed.
+    fn read_file_into_archive_cursor(&mut self) -> Result<(), SeqError> {
+        if let Some(file) = self.processing_file.as_mut() {
+            match file.read(self.buffer_read.as_mut()) {
+                Ok(bytes_read) => {
+                    if bytes_read == 0 {
+                        // The end of the file was reached.
+                        self.processing_file = None;
+                    } else {
+                        self.writer
+                            .as_mut()
+                            .ok_or(SeqError::new(
+                                "Archive writer closed",
+                                SeqErrorType::InternalServerError,
+                                "A file read was called after the archive reader was closed.",
+                                DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+                            ))?
+                            .write_all(&self.buffer_read[0..bytes_read])
+                            .map_err(|err| {
+                                SeqError::from(err)
+                                    .chain("Failed to write file read into the archive stream.")
+                            })?;
+                    }
+                    Ok(())
+                },
+                Err(err) => {
+                    Err(SeqError::from(err)
+                        .chain("Failed to read bytes from file while archiving."))
+                },
+            }
+        } else {
+            Err(SeqError::new(
+                "No file open",
+                SeqErrorType::InternalServerError,
+                "The archive stream file reader was called wihtout an open file.",
+                DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+            ))
+        }
+    }
 }
 
 impl futures::Stream for ArchiveStream {
@@ -284,7 +396,7 @@ impl futures::Stream for ArchiveStream {
         self: std::pin::Pin<&mut Self>,
         _: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        let mut archive_stream = self.get_mut();
+        let archive_stream = self.get_mut();
         if archive_stream.writer.is_none() {
             // All contents have been written.
             Poll::Ready(None)
@@ -294,17 +406,7 @@ impl futures::Stream for ArchiveStream {
             // The unwrap works, as the contents of the writer have been tested above.
             let finished_writer = archive_stream.writer.take().unwrap();
             match finished_writer.finish() {
-                Ok(mut closed_writer) => match closed_writer.stream_position() {
-                    Ok(pos) => {
-                        info!("Finalised archive with {} bytes.", pos);
-                        Poll::Ready(Some(Ok(Bytes::copy_from_slice(
-                            &closed_writer.into_inner().into_inner()[0usize..pos as usize],
-                        ))))
-                    },
-                    Err(err) => Poll::Ready(Some(Err(
-                        SeqError::from(err).chain("Failed to obtain final stream position.")
-                    ))),
-                },
+                Ok(_) => Poll::Ready(Some(Ok(archive_stream.cursor.take_content()))),
                 Err(err) => {
                     Poll::Ready(Some(Err(SeqError::from(err).chain("Failed to finish archive."))))
                 },
@@ -317,23 +419,73 @@ impl futures::Stream for ArchiveStream {
                 .is_dir()
             {
                 let directory_path_absolute = archive_stream.path_queue.pop().unwrap();
-                let directory_path_relative = archive_stream.relative_path(&directory_path_absolute);
-                if archive_stream.writer.as_mut().unwrap().add_directory_from_path(directory_path_relative, options);
-                // Skip adding directoris for the source directory.
-                // if self.path_queue.last().unwrap() == &self.source {
-                // match ArchiveStream::directory_paths(archive_stream.path_queue.pop().unwrap()) {
-                //     Ok(_) => todo!(),
-                //     Err(err) => Poll::Ready(Some(Err(err.chain(format!(
-                //         "Failed to load directory structure during archive generation of \"{}\".",
-                //         archive_stream.source.display()
-                //     ))))),
-                // }
-                // }
-                //self.get_mut().wirter.add_directory(name, options)
-                todo!()
+                let directory_path_relative =
+                    archive_stream.relative_path(&directory_path_absolute);
+                if let Err(err) = archive_stream
+                    .writer
+                    .as_mut()
+                    .unwrap()
+                    .add_directory_from_path(directory_path_relative, archive_stream.options)
+                {
+                    return Poll::Ready(Some(Err(SeqError::from(err).chain(format!(
+                        "Failed to add directory \"{}\" to archive.",
+                        directory_path_absolute.display()
+                    )))));
+                }
+                match ArchiveStream::directory_paths(directory_path_absolute) {
+                    Ok(directories) => archive_stream.path_queue.extend(directories),
+                    Err(err) => {
+                        return Poll::Ready(Some(Err(err.chain(format!(
+                        "Failed to load directory structure during archive generation of \"{}\".",
+                        archive_stream.source.display()
+                    )))))
+                    },
+                }
             } else {
-                todo!()
+                // Should be a file.
+                // If a file is currently read contiunue processing the file.
+                if archive_stream.processing_file.is_some() {
+                    if let Err(err) = archive_stream.read_file_into_archive_cursor() {
+                        return Poll::Ready(Some(Err(err.chain(format!(
+                            "Failed to read file \"{:?}\" during creation of archive \"{}\".",
+                            archive_stream.path_queue.last(),
+                            archive_stream.source.display()
+                        )))));
+                    }
+                    // If the file was finished remove it from the processing list.
+                    if archive_stream.processing_file.is_none() {
+                        archive_stream.path_queue.pop();
+                    }
+                } else {
+                    // A new file will be opened and processed.
+                    let current_file_path_absolute = archive_stream.path_queue.last().unwrap();
+                    let current_file_path_relative =
+                        archive_stream.relative_path(current_file_path_absolute);
+                    if let Err(err) = archive_stream
+                        .writer
+                        .as_mut()
+                        .unwrap()
+                        .start_file_from_path(current_file_path_relative, archive_stream.options)
+                    {
+                        return Poll::Ready(Some(Err(SeqError::from(err).chain(format!(
+                            "Failed to start file \"{:?}\" during creation of archive \"{}\".",
+                            current_file_path_absolute.display(),
+                            archive_stream.source.display()
+                        )))));
+                    }
+                    match std::fs::File::open(current_file_path_absolute) {
+                        Ok(file) => archive_stream.processing_file = Some(file),
+                        Err(err) => {
+                            return Poll::Ready(Some(Err(SeqError::from(err).chain(format!(
+                                "Failed to open file \"{:?}\" during creation of archive \"{}\".",
+                                current_file_path_absolute.display(),
+                                archive_stream.source.display()
+                            )))))
+                        },
+                    }
+                }
             }
+            Poll::Ready(Some(Ok(archive_stream.cursor.take_content())))
         }
     }
 }
