@@ -216,7 +216,7 @@ impl ExperimentPipelineStepVariable {
 #[cfg(test)]
 mod tests {
 
-    use crate::model::internal::step::PipelineStepStatus;
+    use crate::model::db::experiment_execution::ExecutionStatus;
 
     use super::*;
 
@@ -350,7 +350,7 @@ mod tests {
         values.insert("fastqcbool".to_string(), value_bool.clone());
 
         let mut stati = HashMap::new();
-        stati.insert("fastqc".to_string(), PipelineStepStatus::Pending.to_string());
+        stati.insert("fastqc".to_string(), ExecutionStatus::Waiting.to_string());
 
         let experiment_step =
             ExperimentPipelineStepBlueprint::from_internal(&pipeline_step, values, stati);
@@ -360,7 +360,7 @@ mod tests {
         assert_eq!(experiment_step.container(), pipeline_step.container());
         assert_eq!(experiment_step.dependencies(), pipeline_step.dependencies());
         assert_eq!(experiment_step.variables().len(), pipeline_step.variables().len());
-        assert_eq!(experiment_step.status(), &Some(PipelineStepStatus::Pending.to_string()));
+        assert_eq!(experiment_step.status(), &Some(ExecutionStatus::Waiting.to_string()));
 
         let experiment_vars = experiment_step.variables();
         let pipeline_vars = pipeline_step.variables();
@@ -469,7 +469,7 @@ mod tests {
         values_step.insert("fastqc2global".to_string(), "11".to_string());
 
         let mut stati = HashMap::new();
-        stati.insert("fastqc2".to_string(), PipelineStepStatus::Failed.to_string());
+        stati.insert("fastqc2".to_string(), ExecutionStatus::Failed.to_string());
 
         let experiment_pipeline = ExperimentPipelineBlueprint::from_internal(
             &pipeline,
@@ -508,7 +508,7 @@ mod tests {
             if experiment_steps[i].id() == "fastqc2" {
                 assert_eq!(
                     experiment_steps[i].status(),
-                    &Some(PipelineStepStatus::Failed.to_string())
+                    &Some(ExecutionStatus::Failed.to_string())
                 );
             } else {
                 assert_eq!(experiment_steps[i].status(), &None);

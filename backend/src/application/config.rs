@@ -203,17 +203,6 @@ impl Configuration {
         path
     }
 
-    /// The context path where a specific temporary download file is stored.
-    ///
-    /// # Parameters
-    ///
-    /// * `file_id` - the ID of the temporary file
-    pub fn temporary_download_file_path<T: Into<String>>(&self, file_id: T) -> PathBuf {
-        let mut path: PathBuf = self.temporary_download_path();
-        path.push(file_id.into());
-        path
-    }
-
     /// The context path where all global data is stored.
     pub fn globals_path(&self) -> PathBuf {
         let mut path: PathBuf = self.context_folder().clone();
@@ -580,22 +569,6 @@ mod tests {
     }
 
     #[test]
-    fn test_temporary_download_file_path() {
-        let config = Configuration::new(
-            "",
-            "",
-            "",
-            "",
-            "./application/context",
-            "",
-            ApplicationMode::Release,
-        );
-        let id = "01234567-89ab-cdef-0123-456789abcdef";
-        let path: PathBuf = format!("./application/context/tmp/download/{}", id).into();
-        assert_eq!(config.temporary_download_file_path(id), path);
-    }
-
-    #[test]
     fn test_globals_path() {
         let config = Configuration::new(
             "",
@@ -715,6 +688,14 @@ mod tests {
         let path: PathBuf =
             "./application/context/experiments/experiment_id/steps/1647339730009952403404363919453614495606".into();
         assert_eq!(config.experiment_step_path("experiment_id", "pipeline_id", "step_id"), path);
+    }
+
+    #[test]
+    fn test_hash_pipeline_step_id() {
+        assert_eq!(
+            Configuration::hash_pipeline_step_id("pipeline_id", "step_id"),
+            "1647339730009952403404363919453614495606".to_string()
+        );
     }
 
     #[test]

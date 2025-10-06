@@ -9,13 +9,12 @@ use crate::{
             pipeline_step_variable::{NewPipelineStepVariable, PipelineStepVariable},
         },
         exchange::experiment_step_logs::ExperimentStepLogRequest,
-        internal::{archive::ArchiveMetadata, pipeline_blueprint::PipelineStepVariableCategory},
+        internal::pipeline_blueprint::PipelineStepVariableCategory,
     },
-    service::download_service::PipelineStepRequestInfo,
     test_utility::{
-        create_default_experiment, create_default_experiment_execution,
-        create_default_temporary_download_archive, create_test_app, TestContext,
-        DEFAULT_EXPERIMENT_ID, DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID, TEST_RESOURCES_PATH,
+        create_default_experiment, create_default_experiment_execution, create_test_app,
+        TestContext, DEFAULT_EXPERIMENT_ID, DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID,
+        TEST_RESOURCES_PATH,
     },
 };
 
@@ -1677,43 +1676,26 @@ async fn test_experiment_exists_not_found() {
     let mut db_context = TestContext::new();
     db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
     let app = test::init_service(create_test_app(&db_context)).await;
-    let test_config = Configuration::from(&db_context);
 
     let experiment_id = 42;
-    let archive_id = 42;
     let pipeline_id = "testing_pipeline";
     let pipeline_step_id = "fastqc";
-
-    // Creates a dummy archive file.
-    std::fs::create_dir_all(test_config.temporary_download_path()).unwrap();
-    let archive_path = test_config.temporary_download_file_path(archive_id.to_string());
-    std::fs::File::create_new(&archive_path).unwrap();
-    let archive_metadata = ArchiveMetadata::new(format!("{}.zip", archive_id));
-    let archive_metadata_path = ArchiveMetadata::metadata_path(&archive_path);
-    serde_json::to_writer(
-        std::fs::File::create_new(archive_metadata_path).unwrap(),
-        &archive_metadata,
-    )
-    .unwrap();
 
     let base_url = format!("/api/experiments/{}", experiment_id);
     let test_requests = [
         TestRequest::post()
             .uri(&format!("{}/abort", base_url))
             .to_request(),
-        TestRequest::post()
-            .uri(&format!("{}/archive", base_url))
-            .set_json(PipelineStepRequestInfo {
-                pipeline_id: pipeline_id.to_string(),
-                step_id: pipeline_step_id.to_string(),
-            })
+        TestRequest::get()
+            .uri(&format!(
+                "{}/archive/{}",
+                base_url,
+                Configuration::hash_pipeline_step_id(pipeline_id, pipeline_step_id)
+            ))
             .to_request(),
         TestRequest::patch()
             .uri(&format!("{}/comment", base_url))
             .set_json("Comment")
-            .to_request(),
-        TestRequest::get()
-            .uri(&format!("{}/download/{}", base_url, archive_id))
             .to_request(),
         TestRequest::post()
             .uri(&format!("{}/logs", base_url))
@@ -1793,40 +1775,26 @@ async fn test_experiment_exists_found() {
     db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
     let mut connection = db_context.get_connection();
     let app = test::init_service(create_test_app(&db_context)).await;
-    let test_config = Configuration::from(&db_context);
 
     let experiment_id = 42;
-    let archive_id = 42;
     let pipeline_id = "testing_pipeline";
     let pipeline_step_id = "fastqc";
-
-    // Creates a dummy archive file.
-    std::fs::create_dir_all(test_config.temporary_download_path()).unwrap();
-    let archive_path = test_config.temporary_download_file_path(archive_id.to_string());
-    std::fs::File::create_new(&archive_path).unwrap();
-    let archive_metadata = ArchiveMetadata::new(format!("{}.zip", archive_id));
-    let archive_metadata_path = ArchiveMetadata::metadata_path(&archive_path);
-    serde_json::to_writer(
-        std::fs::File::create_new(archive_metadata_path).unwrap(),
-        &archive_metadata,
-    )
-    .unwrap();
 
     let base_url = format!("/api/experiments/{}", experiment_id);
     let test_requests = [
         TestRequest::post()
             .uri(&format!("{}/abort", base_url))
             .to_request(),
-        TestRequest::post()
-            .uri(&format!("{}/archive", base_url))
-            .set_json(pipeline_step_id)
+        TestRequest::get()
+            .uri(&format!(
+                "{}/archive/{}",
+                base_url,
+                Configuration::hash_pipeline_step_id(pipeline_id, pipeline_step_id)
+            ))
             .to_request(),
         TestRequest::patch()
             .uri(&format!("{}/comment", base_url))
             .set_json("Comment")
-            .to_request(),
-        TestRequest::get()
-            .uri(&format!("{}/download/{}", base_url, archive_id))
             .to_request(),
         TestRequest::post()
             .uri(&format!("{}/logs", base_url))
@@ -1922,7 +1890,6 @@ async fn test_experiment_locked() {
 
     create_default_experiment(&mut connection);
     create_default_experiment_execution(&mut connection, ExecutionStatus::Running);
-    create_default_temporary_download_archive(&db_context);
 
     let global_variable_id = "global_number";
     let step_variable_id = "number";
