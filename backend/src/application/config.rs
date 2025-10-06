@@ -320,6 +320,19 @@ impl Configuration {
         path
     }
 
+    /// Returns the hash of a pipeline step ID.
+    ///
+    /// # Parameters
+    ///
+    /// * `pipeline_id` - the ID of the pipeline
+    /// * `step_id` - the ID of the step
+    pub fn hash_pipeline_step_id<P: AsRef<str>, S: AsRef<str>>(
+        pipeline_id: P,
+        step_id: S,
+    ) -> String {
+        format!("{}{}", Self::hash_string(pipeline_id), Self::hash_string(step_id))
+    }
+
     /// The context path where data related to the pipeline logs
     /// of a specified experiment is stored.
     ///

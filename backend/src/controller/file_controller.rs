@@ -10,11 +10,14 @@ use crate::{
         error::{SeqError, SeqErrorType},
     },
     model::{
-        db::{experiment::Experiment, global_data::GlobalData},
+        db::{
+            experiment::Experiment, experiment_execution::ExperimentExecution,
+            global_data::GlobalData,
+        },
         exchange::file_path::{FileDetails, FilePath},
     },
     service::{
-        download_service::{ArchiveStream, DownloadTrackerManager, PipelineStepRequestInfo},
+        download_service::{ArchiveStream, DownloadTrackerManager},
         experiment_service::is_experiment_locked_err,
         global_data_service::is_global_data_locked_err,
         multipart_service::{
@@ -423,34 +426,52 @@ async fn persist_multipart<P: AsRef<Path>>(
     Ok(())
 }
 
-pub async fn post_experiment_archive_step_results(
+pub async fn get_experiment_archive_step_results(
     database_manager: web::Data<DatabaseManager>,
     app_config: web::Data<Configuration>,
     download_tracker_manager: web::Data<DownloadTrackerManager>,
-    experiment_id: web::Path<i32>,
-    step_info: web::Json<PipelineStepRequestInfo>,
+    path_variables: web::Path<(i32, String)>,
 ) -> Result<HttpResponse, SeqError> {
-    let experiment_id: i32 = experiment_id.into_inner();
-    let _download_tracker = download_tracker_manager.track_experiment_output_download_step(
-        experiment_id,
-        &step_info.pipeline_id,
-        &step_info.step_id,
-    );
+    let (experiment_id, step_hash) = path_variables.into_inner();
     let mut connection = database_manager.database_connection()?;
     Experiment::exists_err(experiment_id, &mut connection)?;
 
-    // // Defines the source path.
-    let source = app_config.experiment_step_path(
-        experiment_id.to_string(),
-        &step_info.pipeline_id,
-        &step_info.step_id,
+    // Map hash back to pipeline and step from the executions stored in the database.
+    let (pipeline_id, step_id) =
+        ExperimentExecution::get_by_experiment(experiment_id, &mut connection)?
+            .into_iter()
+            .find(|execution| {
+                step_hash
+                    == Configuration::hash_pipeline_step_id(
+                        &execution.pipeline_id,
+                        &execution.pipeline_step_id,
+                    )
+            })
+            .map(|execution| (execution.pipeline_id, execution.pipeline_step_id))
+            .ok_or(SeqError::new(
+                "Archive directory not found",
+                SeqErrorType::NotFoundError,
+                format!(
+                    "Hash {} could not be mapped back into \
+                    a pipeline step ID in experiment {}, \
+                    indicating a missing output directory.",
+                    step_hash, experiment_id
+                ),
+                "The directory to archive and download is not present.",
+            ))?;
+    let _download_tracker = download_tracker_manager.track_experiment_output_download_step(
+        experiment_id,
+        &pipeline_id,
+        &step_id,
     );
+    // // Defines the source path.
+    let source = app_config.experiment_step_path(experiment_id.to_string(), &pipeline_id, &step_id);
 
-    let file_name = format!("{}.zip", sanitize_filename::sanitize(&step_info.step_id));
+    let file_name = format!("{}.zip", sanitize_filename::sanitize(&step_id));
     let archive_stream = ArchiveStream::new(source).map_err(|err| {
         err.chain(format!(
             "Archive stream generation failed for experiment {} step {} - {}.",
-            experiment_id, step_info.pipeline_id, step_info.step_id
+            experiment_id, pipeline_id, step_id
         ))
     })?;
 

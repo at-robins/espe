@@ -11,20 +11,11 @@ use std::{
 
 use actix_web::web::Bytes;
 use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
 use zip::{write::StreamWriter, ZipWriter};
 
 use crate::application::error::{
     SeqError, SeqErrorType, DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
 };
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-/// Information for requesting a pipeline step from an endpoint.
-pub struct PipelineStepRequestInfo {
-    pub pipeline_id: String,
-    pub step_id: String,
-}
 
 /// Manages the tracking of download events.
 #[derive(Debug)]
