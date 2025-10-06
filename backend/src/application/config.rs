@@ -8,8 +8,6 @@ const UUID_NODE_ID: &[u8; 6] = &[12, 221, 33, 14, 35, 16];
 const PATH_TEMPORARY: &str = "tmp";
 /// The context path where temporary upload files are stored.
 const PATH_TEMPORARY_UPLOAD: &str = "upload";
-/// The context path where temporary download files are stored.
-const PATH_TEMPORARY_DOWNLOAD: &str = "download";
 /// The context path where data related to specific experiments or samples is stored.
 const PATH_FILES_EXPERIMENTS: &str = "experiments";
 /// The file inside each pipeline folder defining the pipeline.
@@ -193,13 +191,6 @@ impl Configuration {
     pub fn temporary_upload_path(&self) -> PathBuf {
         let mut path: PathBuf = self.temporary_path();
         path.push(PATH_TEMPORARY_UPLOAD);
-        path
-    }
-
-    /// The context path where temporary download files are stored.
-    pub fn temporary_download_path(&self) -> PathBuf {
-        let mut path: PathBuf = self.temporary_path();
-        path.push(PATH_TEMPORARY_DOWNLOAD);
         path
     }
 
@@ -551,21 +542,6 @@ mod tests {
         );
         let path: PathBuf = "./application/context/tmp/upload".into();
         assert_eq!(config.temporary_upload_path(), path);
-    }
-
-    #[test]
-    fn test_temporary_download_path() {
-        let config = Configuration::new(
-            "",
-            "",
-            "",
-            "",
-            "./application/context",
-            "",
-            ApplicationMode::Release,
-        );
-        let path: PathBuf = "./application/context/tmp/download".into();
-        assert_eq!(config.temporary_download_path(), path);
     }
 
     #[test]
