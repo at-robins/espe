@@ -116,14 +116,34 @@ pub async fn get_files(
     params: web::Path<(FileRequestCategory, i32)>,
 ) -> Result<HttpResponse, SeqError> {
     let (category, id) = params.into_inner();
-    let mut connection = database_manager.database_connection()?;
-    category.entity_exists(id, &mut connection)?;
+    let mut connection = database_manager.database_connection().map_err(|err| {
+        err.chain(format!(
+            "Getting files for category {:?} ID {} failed \
+            as no database connection could be established.",
+            category, id
+        ))
+    })?;
+
+    category.entity_exists(id, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "No files for category {:?} ID {} can be retrieved as it does not exist.",
+            category, id
+        ))
+    })?;
 
     let mut all_files: Vec<FileDetails> = Vec::new();
     let data_path = category.base_path(app_config, id);
     if data_path.exists() {
         for entry in walkdir::WalkDir::new(&data_path) {
-            let entry = entry?;
+            let entry = entry.map_err(|err| {
+                SeqError::from(err).chain(format!(
+                    "Directory entry in {} could not be retrieved \
+                    while getting files for category {:?} ID {}.",
+                    data_path.display(),
+                    category,
+                    id
+                ))
+            })?;
             let relative_path = entry
                 .path()
                 .strip_prefix(&data_path)
@@ -171,8 +191,20 @@ pub async fn delete_files_by_path(
     let (category, id) = params.into_inner();
     let delete_info = path.into_inner();
     let delete_path = delete_info.file_path();
-    let mut connection = database_manager.database_connection()?;
-    category.entity_exists(id, &mut connection)?;
+    let mut connection = database_manager.database_connection().map_err(|err| {
+        err.chain(format!(
+            "Deleting files for category {:?} ID {} failed \
+            as no database connection could be established.",
+            category, id
+        ))
+    })?;
+
+    category.entity_exists(id, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "No files for category {:?} ID {} can be deleted as it does not exist.",
+            category, id
+        ))
+    })?;
     category
         .is_locked_err(id, pipelines, download_tracker, &mut connection)
         .map_err(|err| {
@@ -205,9 +237,23 @@ pub async fn delete_files_by_path(
             "The resource does not exist.",
         ));
     } else if full_path.is_dir() {
-        std::fs::remove_dir_all(full_path)?;
+        std::fs::remove_dir_all(&full_path).map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Deleting directory {} for category {:?} ID {} failed.",
+                full_path.display(),
+                category,
+                id
+            ))
+        })?;
     } else {
-        std::fs::remove_file(full_path)?;
+        std::fs::remove_file(&full_path).map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Deleting file {} for category {:?} ID {} failed.",
+                full_path.display(),
+                category,
+                id
+            ))
+        })?;
     }
     Ok(HttpResponse::Ok().finish())
 }
@@ -342,10 +388,20 @@ pub async fn post_add_folder(
         ));
     }
 
-    let mut connection = database_manager.database_connection()?;
+    let mut connection = database_manager.database_connection().map_err(|err| {
+        err.chain(format!(
+            "Adding folder for category {:?} ID {} failed \
+            as no database connection could be established.",
+            category, id
+        ))
+    })?;
 
-    // Validate the existance of the entity.
-    category.entity_exists(id, &mut connection)?;
+    category.entity_exists(id, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "No folder for category {:?} ID {} can be added as it does not exist.",
+            category, id
+        ))
+    })?;
 
     // Validate the according entity is not locked.
     category
@@ -373,7 +429,14 @@ pub async fn post_add_folder(
             "The resource does already exist.",
         ));
     } else {
-        std::fs::create_dir_all(full_path)?;
+        std::fs::create_dir_all(&full_path).map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Creation of directory {} for category {:?} ID {} failed.",
+                full_path.display(),
+                category,
+                id
+            ))
+        })?;
     }
 
     Ok(HttpResponse::Created().finish())
@@ -401,7 +464,12 @@ async fn persist_multipart<P: AsRef<Path>>(
     }
 
     // Validate the existance of the entity.
-    category.entity_exists(id, connection)?;
+    category.entity_exists(id, connection).map_err(|err| {
+        err.chain(format!(
+            "Category {:?} ID {} does not exist. Persisting multipart data failed.",
+            category, id
+        ))
+    })?;
 
     // Validate that the file path is not already existent.
     let full_path = category
@@ -421,7 +489,16 @@ async fn persist_multipart<P: AsRef<Path>>(
     }
 
     // Create folder and copy file to destination.
-    temp_file_to_data_file(full_path, temp_file_path)?;
+    temp_file_to_data_file(&full_path, &temp_file_path).map_err(|err| {
+        err.chain(format!(
+            "Moving temporary multipart file {} to \n
+            final location {} failed for entitiy {:?}/{}.",
+            temp_file_path.display(),
+            full_path.display(),
+            category,
+            id
+        ))
+    })?;
 
     Ok(())
 }
@@ -433,12 +510,31 @@ pub async fn get_experiment_archive_step_results(
     path_variables: web::Path<(i32, String)>,
 ) -> Result<HttpResponse, SeqError> {
     let (experiment_id, step_hash) = path_variables.into_inner();
-    let mut connection = database_manager.database_connection()?;
-    Experiment::exists_err(experiment_id, &mut connection)?;
+    let mut connection = database_manager.database_connection().map_err(|err| {
+        err.chain(format!(
+            "Archiving step results for experiment {} step {} failed \
+            as no database connection could be established.",
+            experiment_id, step_hash
+        ))
+    })?;
+    Experiment::exists_err(experiment_id, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "Archiving step results for experiment {} step {} failed \
+            as the experiment does not exist.",
+            experiment_id, step_hash
+        ))
+    })?;
 
     // Map hash back to pipeline and step from the executions stored in the database.
     let (pipeline_id, step_id) =
-        ExperimentExecution::get_by_experiment(experiment_id, &mut connection)?
+        ExperimentExecution::get_by_experiment(experiment_id, &mut connection)
+            .map_err(|err| {
+                SeqError::from(err).chain(format!(
+                    "Archiving step results for experiment {} step {} failed \
+                    as the experiment execution could not be retrieved.",
+                    experiment_id, step_hash
+                ))
+            })?
             .into_iter()
             .find(|execution| {
                 step_hash
@@ -524,7 +620,7 @@ pub async fn get_pipeline_attachment(
         ));
     }
 
-    let path = app_config.pipeline_attachment_path(pipeline_directory, attachment_name);
+    let path = app_config.pipeline_attachment_path(&pipeline_directory, &attachment_name);
 
     if !path.exists() {
         return Err(SeqError::new(
@@ -535,7 +631,13 @@ pub async fn get_pipeline_attachment(
         ));
     }
 
-    Ok(NamedFile::open(&path)?)
+    Ok(NamedFile::open(&path).map_err(|err| {
+        SeqError::from(err).chain(format!(
+            "Getting pipeline attachement {} from directory {}\
+            failed as it could not be opened.",
+            attachment_name, pipeline_directory
+        ))
+    })?)
 }
 
 fn temp_file_to_data_file<P: AsRef<Path>, Q: AsRef<Path>>(
@@ -555,8 +657,23 @@ fn temp_file_to_data_file<P: AsRef<Path>, Q: AsRef<Path>>(
             format!("The file path {} is not a valid path.", file_path.display()),
             "The file path is invalid.",
         )
-    })?)?;
-    std::fs::rename(temp_file_path, file_path)?;
+    })?)
+    .map_err(|err| {
+        SeqError::from(err).chain(format!(
+            "Moving temporary file {} to {} failed \
+            as the directory structure could not be created.",
+            temp_file_path.as_ref().display(),
+            file_path.display()
+        ))
+    })?;
+    std::fs::rename(&temp_file_path, &file_path).map_err(|err| {
+        SeqError::from(err).chain(format!(
+            "Moving temporary file {} to {} failed \
+            as the file could not be moved.",
+            temp_file_path.as_ref().display(),
+            file_path.display()
+        ))
+    })?;
     Ok(())
 }
 
