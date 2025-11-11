@@ -1776,11 +1776,10 @@ async fn test_experiment_exists_found() {
     let mut connection = db_context.get_connection();
     let app = test::init_service(create_test_app(&db_context)).await;
 
-    let experiment_id = 42;
-    let pipeline_id = "testing_pipeline";
-    let pipeline_step_id = "fastqc";
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Finished);
 
-    let base_url = format!("/api/experiments/{}", experiment_id);
+    let base_url = format!("/api/experiments/{}", DEFAULT_EXPERIMENT_ID);
     let test_requests = [
         TestRequest::post()
             .uri(&format!("{}/abort", base_url))
@@ -1789,7 +1788,7 @@ async fn test_experiment_exists_found() {
             .uri(&format!(
                 "{}/archive/{}",
                 base_url,
-                Configuration::hash_pipeline_step_id(pipeline_id, pipeline_step_id)
+                Configuration::hash_pipeline_step_id(DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID)
             ))
             .to_request(),
         TestRequest::patch()
@@ -1799,8 +1798,8 @@ async fn test_experiment_exists_found() {
         TestRequest::post()
             .uri(&format!("{}/logs", base_url))
             .set_json(ExperimentStepLogRequest {
-                pipeline_id: pipeline_id.to_string(),
-                step_id: pipeline_step_id.to_string(),
+                pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+                step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
             })
             .to_request(),
         TestRequest::get()
@@ -1816,14 +1815,14 @@ async fn test_experiment_exists_found() {
             .to_request(),
         TestRequest::patch()
             .uri(&format!("{}/pipeline", base_url))
-            .set_json(Some(pipeline_id))
+            .set_json(Some(DEFAULT_PIPELINE_ID))
             .to_request(),
         TestRequest::get()
             .uri(&format!("{}/pipelines", base_url))
             .to_request(),
         TestRequest::post()
             .uri(&format!("{}/rerun", base_url))
-            .set_json(pipeline_step_id)
+            .set_json(DEFAULT_PIPELINE_STEP_ID)
             .to_request(),
         TestRequest::post()
             .uri(&format!("{}/reset", base_url))
@@ -1837,7 +1836,7 @@ async fn test_experiment_exists_found() {
         TestRequest::post()
             .uri(&format!("{}/variable/global", base_url))
             .set_json(PipelineGlobalVariableUpload {
-                pipeline_id: pipeline_id.to_string(),
+                pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
                 variable_id: "global_number".to_string(),
                 variable_value: None,
             })
@@ -1845,27 +1844,13 @@ async fn test_experiment_exists_found() {
         TestRequest::post()
             .uri(&format!("{}/variable/step", base_url))
             .set_json(PipelineStepVariableUpload {
-                pipeline_id: pipeline_id.to_string(),
-                pipeline_step_id: pipeline_step_id.to_string(),
+                pipeline_id: DEFAULT_PIPELINE_ID.to_string(),
+                pipeline_step_id: DEFAULT_PIPELINE_STEP_ID.to_string(),
                 variable_id: "number".to_string(),
                 variable_value: None,
             })
             .to_request(),
     ];
-
-    // Creates a dummy experiment.
-    let new_record = Experiment {
-        id: experiment_id,
-        experiment_name: "Dummy record".to_string(),
-        comment: Some("A comment".to_string()),
-        mail: Some("a.b@c.de".to_string()),
-        pipeline_id: Some(pipeline_id.to_string()),
-        creation_time: chrono::Utc::now().naive_local(),
-    };
-    diesel::insert_into(crate::schema::experiment::table)
-        .values(&new_record)
-        .execute(&mut connection)
-        .unwrap();
 
     for test_request in test_requests {
         let test_url = test_request.uri().to_string();
