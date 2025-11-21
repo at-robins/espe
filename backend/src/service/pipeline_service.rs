@@ -243,7 +243,7 @@ impl LoadedPipelines {
         HashMap<String, Arc<ContextualisedPipelineBlueprint>>,
         (Vec<SeqError>, HashMap<String, Arc<ContextualisedPipelineBlueprint>>),
     > {
-        let (pipelines, errors) = match load_pipelines(Arc::clone(&app_config)) {
+        let (pipelines, mut errors) = match load_pipelines(Arc::clone(&app_config)) {
             Ok(pipelines) => (pipelines, Vec::new()),
             Err((errors, pipelines)) => (
                 pipelines,
@@ -257,14 +257,20 @@ impl LoadedPipelines {
         };
         let mut pipeline_map = HashMap::new();
         for pipeline in pipelines {
-            let duplicate =
-                pipeline_map.insert(pipeline.pipeline().id().clone(), Arc::new(pipeline));
-            if let Some(duplicate_pipeline) = duplicate {
-                log::warn!(
-                    "The pipeline {:?} was overwritten due to pipeline ID {} not being unique.",
-                    duplicate_pipeline,
-                    duplicate_pipeline.pipeline().id()
-                );
+            if let Some(duplicate_pipeline) =
+                pipeline_map.insert(pipeline.pipeline().id().clone(), Arc::new(pipeline))
+            {
+                errors.push(SeqError::new(
+                    "Duplicate pipeline ID",
+                    SeqErrorType::Conflict,
+                    format!(
+                        "Multiple pipelines have an \
+                        identical ID {}, but unique IDs are \
+                        required for pipeline map generation.",
+                        duplicate_pipeline.pipeline().id(),
+                    ),
+                    "A pipeline contains invalid steps with duplicate IDs.",
+                ));
             }
         }
         if errors.is_empty() {
@@ -284,15 +290,43 @@ pub fn load_pipeline_definition<P: AsRef<Path>>(
     pipeline_definition_path: P,
 ) -> Result<ContextualisedPipelineBlueprint, SeqError> {
     let pipeline_def: PipelineBlueprint =
-        serde_json::from_reader(std::fs::File::open(&pipeline_definition_path)?)?;
+        serde_json::from_reader(std::fs::File::open(&pipeline_definition_path).map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Opening file {} failed during pipeline loading.",
+                pipeline_definition_path.as_ref().display()
+            ))
+        })?)
+        .map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Deserialising file {} failed during pipeline loading.",
+                pipeline_definition_path.as_ref().display()
+            ))
+        })?;
+    pipeline_def.validate_step_ids().map_err(|err| {
+        err.chain(format!("Pipeline step id validation failed for pipeline {}.", pipeline_def.id()))
+    })?;
     let mut contextualised_pipeline = ContextualisedPipelineBlueprint::new(
         pipeline_def,
-        pipeline_definition_path.as_ref().parent().expect(
-            "This unwrap of the parent path must work since we just deserialised the definition file.",
-        ),
+        pipeline_definition_path
+            .as_ref()
+            .parent()
+            .ok_or(SeqError::new(
+                "Unachievable error",
+                SeqErrorType::InternalServerError,
+                format!(
+                    "Pipeline definition file {} does not have a parent directory.",
+                    pipeline_definition_path.as_ref().display()
+                ),
+                DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+            ))?,
     );
     // Loads potential data that is not directly present in the pipeline definition.
-    contextualised_pipeline.resolve_imports()?;
+    contextualised_pipeline.resolve_imports().map_err(|err| {
+        err.chain(format!(
+            "Resolving imports failed for pipeline {}.",
+            contextualised_pipeline.pipeline().id()
+        ))
+    })?;
 
     Ok(contextualised_pipeline)
 }
@@ -365,23 +399,41 @@ pub fn load_pipelines(
             acc
         });
     // Only loads folders that actually contain a pipeline definition file.
-    let pipeline_definition_files: Vec<PathBuf> = dirs
+    let pipeline_dirs: Vec<PathBuf> = dirs
         .into_iter()
         .map(|dir| dir.path())
         .filter(|dir| dir.is_dir())
-        .map(|mut dir| {
-            dir.push(PIPELINE_DEFINITION_FILE);
-            dir
-        })
-        .filter(|file| file.is_file())
+        .filter(|dir| dir.join(PIPELINE_DEFINITION_FILE).is_file())
         .collect();
-    let mut pipelines = Vec::with_capacity(pipeline_definition_files.len());
-    for pipeline_def_file in pipeline_definition_files {
-        match load_pipeline_definition(&pipeline_def_file) {
-            Ok(pipeline) => pipelines.push(pipeline),
+    let mut pipelines = Vec::with_capacity(pipeline_dirs.len());
+    let mut duplicate_id_map = HashMap::new();
+    for pipeline_dir in pipeline_dirs {
+        match load_pipeline(&pipeline_dir) {
+            Ok(pipeline) => {
+                if let Some(duplicate_id) = duplicate_id_map.insert(
+                    pipeline.pipeline().sanitised_id().clone(),
+                    pipeline.pipeline().id().clone(),
+                ) {
+                    errors.push(SeqError::new(
+                        "Duplicate pipeline ID",
+                        SeqErrorType::Conflict,
+                        format!(
+                            "The pipeline {} and pipeline {} have
+                            the same sanitised ID {}.",
+                            duplicate_id,
+                            pipeline.pipeline().id(),
+                            pipeline.pipeline().sanitised_id()
+                        ),
+                        "A pipeline contains invalid steps with duplicate IDs.",
+                    ));
+                } else {
+                    pipelines.push(pipeline)
+                };
+            },
+
             Err(err) => errors.push(err.chain(format!(
-                "Pipeline definition file {} could not be loaded.",
-                pipeline_def_file.display()
+                "Pipeline directory {} could not be loaded.",
+                pipeline_dir.display()
             ))),
         }
     }
@@ -396,10 +448,8 @@ pub fn load_pipelines(
 mod tests {
     use std::sync::Arc;
 
-    use serial_test::serial;
-
     use crate::{
-        application::config::{ApplicationMode, Configuration},
+        application::config::Configuration,
         model::internal::pipeline_blueprint::PipelineStepVariableCategory,
         test_utility::{TestContext, TEST_RESOURCES_PATH},
     };
@@ -410,7 +460,6 @@ mod tests {
     // to different tests at the same time.
 
     #[test]
-    #[serial]
     fn test_load_pipelines_folder_not_exist() {
         let context = TestContext::new();
         // Use a reference to the context, so the context is not dropped early
@@ -426,7 +475,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_load_pipelines_empty() {
         let context = TestContext::new();
         // Use a reference to the context, so the context is not dropped early
@@ -442,20 +490,12 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_load_pipelines() {
-        let context = TestContext::new();
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
         // Use a reference to the context, so the context is not dropped early
         // and messes up test context folder deletion.
-        let app_config: Arc<Configuration> = Arc::new(Configuration::new(
-            context.database_url(),
-            "info",
-            "127.0.0.1",
-            "8080",
-            context.context_folder(),
-            format!("{}/pipelines", TEST_RESOURCES_PATH),
-            ApplicationMode::Release,
-        ));
+        let app_config: Arc<Configuration> = Arc::new(Configuration::from(&context));
         let pipelines = load_pipelines(app_config).unwrap();
         assert_eq!(pipelines.len(), 1);
         let test_pipeline = &pipelines[0];
@@ -510,20 +550,34 @@ mod tests {
     }
 
     #[test]
-    #[serial]
-    fn test_loaded_pipelines_has_step_varaible() {
-        let context = TestContext::new();
+    fn test_load_pipelines_duplicate_pipeline_id() {
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines_duplicate_id", TEST_RESOURCES_PATH));
         // Use a reference to the context, so the context is not dropped early
         // and messes up test context folder deletion.
-        let app_config: web::Data<Configuration> = web::Data::new(Configuration::new(
-            context.database_url(),
-            "info",
-            "127.0.0.1",
-            "8080",
-            context.context_folder(),
-            format!("{}/pipelines", TEST_RESOURCES_PATH),
-            ApplicationMode::Release,
-        ));
+        let app_config: Arc<Configuration> = Arc::new(Configuration::from(&context));
+        let load_result = load_pipelines(app_config);
+        assert!(load_result.is_err());
+    }
+
+    #[test]
+    fn test_load_pipelines_duplicate_pipeline_step_id() {
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines_duplicate__step_id", TEST_RESOURCES_PATH));
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let app_config: Arc<Configuration> = Arc::new(Configuration::from(&context));
+        let load_result = load_pipelines(app_config);
+        assert!(load_result.is_err());
+    }
+
+    #[test]
+    fn test_loaded_pipelines_has_step_varaible() {
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let app_config: web::Data<Configuration> = web::Data::new(Configuration::from(&context));
         let pipelines = LoadedPipelines::new(app_config).unwrap();
         assert!(pipelines.has_step_variable("testing_pipeline", "fastqc", "bool"));
         assert!(pipelines.has_step_variable("testing_pipeline", "fastqc", "global"));
@@ -536,20 +590,12 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_loaded_pipelines_has_global_varaible() {
-        let context = TestContext::new();
+        let mut context = TestContext::new();
+        context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
         // Use a reference to the context, so the context is not dropped early
         // and messes up test context folder deletion.
-        let app_config: web::Data<Configuration> = web::Data::new(Configuration::new(
-            context.database_url(),
-            "info",
-            "127.0.0.1",
-            "8080",
-            context.context_folder(),
-            format!("{}/pipelines", TEST_RESOURCES_PATH),
-            ApplicationMode::Release,
-        ));
+        let app_config: web::Data<Configuration> = web::Data::new(Configuration::from(&context));
         let pipelines = LoadedPipelines::new(app_config).unwrap();
         assert!(pipelines.has_global_variable("testing_pipeline", "global_number"));
         assert!(!pipelines.has_global_variable("invalid_pipeline", "string"));

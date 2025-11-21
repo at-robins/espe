@@ -1,0 +1,88 @@
+{
+    "id": "testing_pipeline",
+    "name": "Testing pipeline",
+    "version": "1.0.0",
+    "description": "This pipeline is for testing purposes.",
+    "global_variables": [
+        {
+            "id": "global_number",
+            "name": "Global number",
+            "description": "<espe-import>\tglobal_number.html</espe-import>",
+            "category": {
+                "tag": "Number"
+            },
+            "required": true
+        }
+    ],
+    "steps": [
+        {
+            "id": "fastqc",
+            "name": "FastQC",
+            "description": "Performs a quality control.",
+            "container": "fastqc",
+            "dependencies": ["123", "456"],
+            "variables": [
+                {
+                    "id": "bool",
+                    "name": "Boolean",
+                    "description": "A boolean checkbox.",
+                    "category": {
+                        "tag": "Boolean"
+                    },
+                    "required": true
+                },
+                {
+                    "id": "global",
+                    "name": "Global",
+                    "description": "    <espe-import>\tglobal.html  </espe-import>\n",
+                    "category": {
+                        "tag": "Global"
+                    },
+                    "required": false
+                },
+                {
+                    "id": "number",
+                    "name": "Number",
+                    "description": "<espe-import>number.html</espe-import>",
+                    "category": {
+                        "tag": "Number"
+                    }
+                },
+                {
+                    "id": "option",
+                    "name": "Option",
+                    "description": "An option dropdown.",
+                    "category": {
+                        "tag": "Option",
+                        "content": [
+                            {
+                                "name": "Option 1",
+                                "value": "option1"
+                            },
+                            {
+                                "name": "Option 2",
+                                "value": "option2"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "id": "string",
+                    "name": "String",
+                    "description": "A string text field.",
+                    "category": {
+                        "tag": "String"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "fastqc",
+            "name": "Duplicate FastQC",
+            "description": "Duplicate",
+            "container": "fastqc",
+            "dependencies": [],
+            "variables": []
+        } 
+    ]
+} 

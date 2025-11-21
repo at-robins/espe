@@ -1,9 +1,12 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 
-use crate::application::{config::Configuration, error::SeqError};
+use crate::application::{
+    config::Configuration,
+    error::{SeqError, SeqErrorType},
+};
 
 /// The pipeline sub-directory that imports are stored in.
 const IMPORT_DIRECOTRY: &str = "imports";
@@ -160,6 +163,31 @@ impl PipelineBlueprint {
             .flat_map(|step| step.variables())
             .filter(|global_var| global_var.category() == &category)
             .collect()
+    }
+
+    /// Validates that all pipeline steps have unique IDs.
+    pub fn validate_step_ids(&self) -> Result<(), SeqError> {
+        let mut unique_step_id_map = HashMap::new();
+        for step in self.steps() {
+            if let Some(step_with_duplicate_id) =
+                unique_step_id_map.insert(step.sanitised_id(), step)
+            {
+                return Err(SeqError::new(
+                    "Duplicate pipeline step ID",
+                    SeqErrorType::Conflict,
+                    format!(
+                        "The pipeline {} contains steps with a duplicate \
+                        sanitised ID {}: Step {} and step {}",
+                        self.id(),
+                        step.sanitised_id(),
+                        step.id(),
+                        step_with_duplicate_id.id()
+                    ),
+                    "A pipeline contains invalid steps with duplicate IDs.",
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -443,5 +471,91 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert!(results.contains(&&test_var_1));
         assert!(results.contains(&&test_var_3));
+    }
+
+    #[test]
+    fn test_pipeline_blueprint_validate_step_ids_valid() {
+        let steps: Vec<PipelineStepBlueprint> = vec![
+            PipelineStepBlueprintSerde {
+                id: "Step 1".to_string(),
+                name: "Step 1".to_string(),
+                description: "Step 1".to_string(),
+                container: "Step 1".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+            PipelineStepBlueprintSerde {
+                id: "Step 2".to_string(),
+                name: "Step 2".to_string(),
+                description: "Step 2".to_string(),
+                container: "Step 2".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+            PipelineStepBlueprintSerde {
+                id: "Step 3".to_string(),
+                name: "Step 3".to_string(),
+                description: "Step 3".to_string(),
+                container: "Step 3".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+        ];
+        let blueprint: PipelineBlueprint = PipelineBlueprintSerde {
+            id: "Test ID".to_string(),
+            name: "Test name".to_string(),
+            version: "Test version".to_string(),
+            description: "Test description".to_string(),
+            steps,
+            global_variables: Vec::new(),
+        }
+        .into();
+        assert!(blueprint.validate_step_ids().is_ok());
+    }
+
+    #[test]
+    fn test_pipeline_blueprint_validate_step_ids_duplicate() {
+        let steps: Vec<PipelineStepBlueprint> = vec![
+            PipelineStepBlueprintSerde {
+                id: "Step 1".to_string(),
+                name: "Step 1".to_string(),
+                description: "Step 1".to_string(),
+                container: "Step 1".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+            PipelineStepBlueprintSerde {
+                id: "Step 2".to_string(),
+                name: "Step 2".to_string(),
+                description: "Step 2".to_string(),
+                container: "Step 2".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+            PipelineStepBlueprintSerde {
+                id: "Step 1".to_string(),
+                name: "Step 3".to_string(),
+                description: "Step 3".to_string(),
+                container: "Step 3".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+        ];
+        let blueprint: PipelineBlueprint = PipelineBlueprintSerde {
+            id: "Test ID".to_string(),
+            name: "Test name".to_string(),
+            version: "Test version".to_string(),
+            description: "Test description".to_string(),
+            steps,
+            global_variables: Vec::new(),
+        }
+        .into();
+        assert!(blueprint.validate_step_ids().is_err());
     }
 }
