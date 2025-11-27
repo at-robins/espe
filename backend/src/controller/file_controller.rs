@@ -555,7 +555,7 @@ pub async fn get_experiment_archive_step_results(
                 ),
                 "The directory to archive and download is not present.",
             ))?;
-    let _download_tracker = download_tracker_manager.track_experiment_output_download_step(
+    let download_tracker = download_tracker_manager.track_experiment_output_download_step(
         experiment_id,
         &pipeline_id,
         &step_id,
@@ -564,12 +564,13 @@ pub async fn get_experiment_archive_step_results(
     let source = app_config.experiment_step_path(experiment_id.to_string(), &pipeline_id, &step_id);
 
     let file_name = format!("{}.zip", sanitize_filename::sanitize(&step_id));
-    let archive_stream = ArchiveStream::new(source).map_err(|err| {
+    let mut archive_stream = ArchiveStream::new(source).map_err(|err| {
         err.chain(format!(
             "Archive stream generation failed for experiment {} step {} - {}.",
             experiment_id, pipeline_id, step_id
         ))
     })?;
+    archive_stream.set_tracker(download_tracker);
 
     //Return the archive as stream.
     let content_disposition = header::ContentDisposition {

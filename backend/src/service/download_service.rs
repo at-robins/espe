@@ -234,6 +234,7 @@ pub struct ArchiveStream {
     options: zip::write::SimpleFileOptions,
     processing_file: Option<File>,
     buffer_read: Box<[u8; ARCHIVE_STREAM_READ_BUFFER_SIZE]>,
+    tracker: Option<DownloadTracker>,
 }
 
 impl ArchiveStream {
@@ -274,6 +275,7 @@ impl ArchiveStream {
                 options,
                 processing_file: None,
                 buffer_read,
+                tracker: None,
             })
         } else {
             let path_queue = Self::directory_paths(&source).map_err(|err| {
@@ -290,6 +292,7 @@ impl ArchiveStream {
                 options,
                 processing_file: None,
                 buffer_read,
+                tracker: None,
             })
         }
     }
@@ -378,6 +381,61 @@ impl ArchiveStream {
             ))
         }
     }
+
+    /// Specifies a [`DownloadTracker`] to track the progress of the stream.
+    /// The tracker will be automatically dropped when the archive streaming fails
+    /// or is finished.
+    /// # Parameters
+    /// 
+    /// * `tracker` - the donwload tracker to set
+    pub fn set_tracker(&mut self, tracker: DownloadTracker) {
+        self.tracker = Some(tracker);
+    }
+
+    /// Removes any [`DownloadTracker`] information currently set for this stream.
+    /// This will automatically drop the tracker and thus remove the tracking.
+    pub fn unset_tracker(&mut self) {
+        self.tracker = None;
+    }
+
+    /// Set the next file to be processed.
+    /// Returns an error if opening the file fails
+    /// or if the file opening queue is empty.
+    fn process_next_file(&mut self) -> Result<(), SeqError> {
+        // A new file will be opened and processed.
+        let current_file_path_absolute = self.path_queue.last().ok_or(SeqError::new(
+            "Empty archive path queue",
+            SeqErrorType::InternalServerError,
+            format!(
+                "No new file can be processed during creation \
+                of archive {} as the path queue is empty.",
+                self.source.display()
+            ),
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        ))?;
+        let current_file_path_relative = self.relative_path(current_file_path_absolute);
+        self.writer
+            .as_mut()
+            .unwrap()
+            .start_file_from_path(current_file_path_relative, self.options)
+            .map_err(|err| {
+                SeqError::from(err).chain(format!(
+                    "Failed to start file \"{:?}\" during creation of archive \"{}\".",
+                    current_file_path_absolute.display(),
+                    self.source.display()
+                ))
+            })?;
+
+        let file = std::fs::File::open(current_file_path_absolute).map_err(|err| {
+            SeqError::from(err).chain(format!(
+                "Failed to open file \"{:?}\" during creation of archive \"{}\".",
+                current_file_path_absolute.display(),
+                self.source.display()
+            ))
+        })?;
+        self.processing_file = Some(file);
+        Ok(())
+    }
 }
 
 impl futures::Stream for ArchiveStream {
@@ -390,6 +448,7 @@ impl futures::Stream for ArchiveStream {
         let archive_stream = self.get_mut();
         if archive_stream.writer.is_none() {
             // All contents have been written.
+            archive_stream.unset_tracker();
             Poll::Ready(None)
         } else if archive_stream.path_queue.is_empty() {
             // All files and directories have been processed.
@@ -399,6 +458,7 @@ impl futures::Stream for ArchiveStream {
             match finished_writer.finish() {
                 Ok(_) => Poll::Ready(Some(Ok(archive_stream.cursor.take_content()))),
                 Err(err) => {
+                    archive_stream.unset_tracker();
                     Poll::Ready(Some(Err(SeqError::from(err).chain("Failed to finish archive."))))
                 },
             }
@@ -418,6 +478,7 @@ impl futures::Stream for ArchiveStream {
                     .unwrap()
                     .add_directory_from_path(directory_path_relative, archive_stream.options)
                 {
+                    archive_stream.unset_tracker();
                     return Poll::Ready(Some(Err(SeqError::from(err).chain(format!(
                         "Failed to add directory \"{}\" to archive.",
                         directory_path_absolute.display()
@@ -426,17 +487,19 @@ impl futures::Stream for ArchiveStream {
                 match ArchiveStream::directory_paths(directory_path_absolute) {
                     Ok(directories) => archive_stream.path_queue.extend(directories),
                     Err(err) => {
+                        archive_stream.unset_tracker();
                         return Poll::Ready(Some(Err(err.chain(format!(
                         "Failed to load directory structure during archive generation of \"{}\".",
                         archive_stream.source.display()
-                    )))))
+                    )))));
                     },
                 }
             } else {
                 // Should be a file.
-                // If a file is currently read contiunue processing the file.
+                // If a file is currently read continue processing the file.
                 if archive_stream.processing_file.is_some() {
                     if let Err(err) = archive_stream.read_file_into_archive_cursor() {
+                        archive_stream.unset_tracker();
                         return Poll::Ready(Some(Err(err.chain(format!(
                             "Failed to read file \"{:?}\" during creation of archive \"{}\".",
                             archive_stream.path_queue.last(),
@@ -449,30 +512,11 @@ impl futures::Stream for ArchiveStream {
                     }
                 } else {
                     // A new file will be opened and processed.
-                    let current_file_path_absolute = archive_stream.path_queue.last().unwrap();
-                    let current_file_path_relative =
-                        archive_stream.relative_path(current_file_path_absolute);
-                    if let Err(err) = archive_stream
-                        .writer
-                        .as_mut()
-                        .unwrap()
-                        .start_file_from_path(current_file_path_relative, archive_stream.options)
-                    {
-                        return Poll::Ready(Some(Err(SeqError::from(err).chain(format!(
-                            "Failed to start file \"{:?}\" during creation of archive \"{}\".",
-                            current_file_path_absolute.display(),
-                            archive_stream.source.display()
-                        )))));
-                    }
-                    match std::fs::File::open(current_file_path_absolute) {
-                        Ok(file) => archive_stream.processing_file = Some(file),
-                        Err(err) => {
-                            return Poll::Ready(Some(Err(SeqError::from(err).chain(format!(
-                                "Failed to open file \"{:?}\" during creation of archive \"{}\".",
-                                current_file_path_absolute.display(),
-                                archive_stream.source.display()
-                            )))))
-                        },
+                    if let Err(err) = archive_stream.process_next_file() {
+                        archive_stream.unset_tracker();
+                        return Poll::Ready(Some(Err(SeqError::from(err).chain(
+                            "Failed to process the next file during archive generation.",
+                        ))));
                     }
                 }
             }
