@@ -123,9 +123,8 @@
             outline
             :icon="matDownload"
             :color="downloadError ? 'negative' : 'primary'"
-            :loading="isArchiving"
             :disable="selectedStep.status !== PipelineStepStatus.Finished"
-            @click="downloadStepResults(pipeline.id, selectedStep)"
+            :href="'/api/experiments/' + id + '/archive/' + pipeline.sanitised_id + selectedStep.sanitised_id"
           >
             <template v-slot:loading>
               <span class="block">
@@ -148,7 +147,6 @@
             class="q-ml-md"
             :color="restartingError ? 'negative' : 'positive'"
             :loading="isRestarting"
-            :disable="isArchiving"
             @click="restartStep(selectedStep)"
           >
             <q-tooltip>
@@ -200,7 +198,6 @@ const isRestarting = ref(false);
 const loadingError: Ref<ErrorResponse | null> = ref(null);
 const restartingError: Ref<ErrorResponse | null> = ref(null);
 const selectedStep: Ref<PipelineStepBlueprint | null> = ref(null);
-const isArchiving = ref(false);
 const downloadError: Ref<ErrorResponse | null> = ref(null);
 
 const props = defineProps({
@@ -370,36 +367,6 @@ function restartStep(step: PipelineStepBlueprint | null) {
       })
       .finally(() => {
         isRestarting.value = false;
-      });
-  }
-}
-
-/**
- * Tries to download the specified step.
- *
- * @param step the step to download
- */
-function downloadStepResults(pipelineId: string | null, step: PipelineStepBlueprint | null) {
-  if (pipelineId && step && step.status == PipelineStepStatus.Finished) {
-    isArchiving.value = true;
-    downloadError.value = null;
-    const requestStepInfo = {pipelineId: pipelineId, stepId: step.id}
-    const config = {
-      headers: {
-        "content-type": "application/json",
-      },
-    };
-    axios
-      .post(
-        "/api/experiments/" + props.id + "/archive",
-        JSON.stringify(requestStepInfo),
-        config
-      )
-      .catch((error) => {
-        downloadError.value = error.response.data;
-      })
-      .finally(() => {
-        isArchiving.value = false;
       });
   }
 }

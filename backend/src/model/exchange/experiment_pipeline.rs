@@ -10,9 +10,12 @@ use crate::model::internal::pipeline_blueprint::{
 /// The definition of a pipeline.
 #[derive(Debug, Clone, Getters, PartialEq, Serialize, Deserialize)]
 pub struct ExperimentPipelineBlueprint {
-    /// The unique ID of the pipeline.
+    /// The unique raw ID of the pipeline.
     #[getset(get = "pub")]
     id: String,
+    /// The unique sanitised ID of the pipeline step which can safely be used as file name.
+    #[getset(get = "pub")]
+    sanitised_id: String,
     /// The name for display.
     #[getset(get = "pub")]
     name: String,
@@ -77,6 +80,7 @@ impl ExperimentPipelineBlueprint {
             .collect();
         Self {
             id: pipeline.borrow().id().clone(),
+            sanitised_id: pipeline.borrow().sanitised_id().clone(),
             name: pipeline.borrow().name().clone(),
             version: pipeline.borrow().version().clone(),
             description: pipeline.borrow().description().clone(),
@@ -89,9 +93,12 @@ impl ExperimentPipelineBlueprint {
 /// The definition of a pipeline step.
 #[derive(Debug, Clone, Getters, PartialEq, Serialize, Deserialize)]
 pub struct ExperimentPipelineStepBlueprint {
-    /// The unique ID of the pipeline step.
+    /// The unique raw ID of the pipeline step.
     #[getset(get = "pub")]
     id: String,
+    /// The unique sanitised ID of the pipeline step which can safely be used as file name.
+    #[getset(get = "pub")]
+    sanitised_id: String,
     /// The name for display.
     #[getset(get = "pub")]
     name: String,
@@ -151,6 +158,7 @@ impl ExperimentPipelineStepBlueprint {
             .map(|s| s.clone());
         Self {
             id: pipeline_step.borrow().id().clone(),
+            sanitised_id: pipeline_step.borrow().sanitised_id().clone(),
             name: pipeline_step.borrow().name().clone(),
             description: pipeline_step.borrow().description().clone(),
             container: pipeline_step.borrow().container().clone(),
@@ -355,6 +363,7 @@ mod tests {
         let experiment_step =
             ExperimentPipelineStepBlueprint::from_internal(&pipeline_step, values, stati);
         assert_eq!(experiment_step.id(), pipeline_step.id());
+        assert_eq!(experiment_step.sanitised_id(), pipeline_step.sanitised_id());
         assert_eq!(experiment_step.name(), pipeline_step.name());
         assert_eq!(experiment_step.description(), pipeline_step.description());
         assert_eq!(experiment_step.container(), pipeline_step.container());
@@ -478,6 +487,7 @@ mod tests {
             stati,
         );
         assert_eq!(experiment_pipeline.id(), pipeline.id());
+        assert_eq!(experiment_pipeline.sanitised_id(), pipeline.sanitised_id());
         assert_eq!(experiment_pipeline.name(), pipeline.name());
         assert_eq!(experiment_pipeline.version(), pipeline.version());
         assert_eq!(experiment_pipeline.description(), pipeline.description());
@@ -499,6 +509,7 @@ mod tests {
         let pipeline_steps = pipeline.steps();
         for i in 0..experiment_steps.len() {
             assert_eq!(experiment_steps[i].id(), pipeline_steps[i].id());
+            assert_eq!(experiment_steps[i].sanitised_id(), pipeline_steps[i].sanitised_id());
             assert_eq!(experiment_steps[i].name(), pipeline_steps[i].name());
             assert_eq!(experiment_steps[i].description(), pipeline_steps[i].description());
             assert_eq!(experiment_steps[i].container(), pipeline_steps[i].container());

@@ -1,5 +1,6 @@
 export type PipelineBlueprint = {
   id: string;
+  sanitised_id: string;
   name: string;
   version: string;
   description: string;
@@ -10,6 +11,7 @@ export type PipelineBlueprint = {
 export type PipelineStepBlueprint = {
   id: string;
   name: string;
+  sanitised_id: string;
   description: string;
   container: string;
   dependencies: string[];
