@@ -78,7 +78,7 @@ for root, dirs, files in os.walk(MOUNT_PATHS["output"]):
                     "--beforeRegionStartLength 1000 "
                     "--skipZeros "
                     "--exonID exon "
-                    "--transcriptID transcript "  # TODO: fix: transcript
+                    "--transcriptID transcript "
                     f"--numberOfProcessors {threads} "
                     f'--regionsFileName "{GENE_ANNOTATION_PATH}" '
                     f'--scoreFileName "{bw_file}" '

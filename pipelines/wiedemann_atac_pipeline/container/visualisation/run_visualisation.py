@@ -35,8 +35,8 @@ ANNOTATION_RENAMING_MAP = OrderedDict(
     [
         ("exon", "exon"),
         ("intron", "intron"),
-        ("Intergenic", "intergenic"),
-        ("non-coding", "non-coding"),
+        ("Intergenic", "inter-\ngenic"),
+        ("non-coding", "non-\ncoding"),
         ("promoter-TSS", "promoter"),
         ("5' UTR", "5' UTR"),
         ("3' UTR", "3' UTR"),
@@ -400,10 +400,12 @@ def plot_genomic_region_barplots():
                 )
                 print("\tCreating genomic location plot...", flush=True)
                 stacked_barplot_ax = location_summaries.plot.bar(
-                    color=LOCATION_PLOT_COLOURS, rot=0, stacked=True, figsize=(11, 5)
+                    color=LOCATION_PLOT_COLOURS, rot=0, stacked=True, figsize=(8, 5)
                 )
                 # Hides the axis labels.
                 stacked_barplot_ax.xaxis.label.set_visible(False)
+                # Hides the axis labels.
+                stacked_barplot_ax.set_ylabel("Differentially accessible regions [  ]")
                 # Reorders legend labels.
                 stacked_barplot_handles, stacked_barplot_labels = (
                     stacked_barplot_ax.get_legend_handles_labels()
