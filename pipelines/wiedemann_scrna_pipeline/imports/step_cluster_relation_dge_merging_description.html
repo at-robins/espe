@@ -1,0 +1,58 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: 0.05rem;
+    border-radius: 0.2rem;
+  }
+</style>
+<p>Merges the differential gene expression information by traversing the cluster resolution tree. Enrichment of a
+  differentially expressed gene for a specific cluster is analysed by checking during how many splits it is relevant and
+  how early these splits happen.
+</p>
+<p>
+  <b>Output</b><br />
+  A raw (<code>{cluster_id}_merged_dge_raw.csv</code>) and filtered DEG enrichment list
+  (<code>{cluster_id}_merged_dge_filtered.csv</code>) per cluster and cluster split event is generated. The filtered
+  version does not contain genes that were never differentially expressed for the specific cluster. The following
+  columns are present in each file per gene:
+</p>
+<ol>
+  <li>
+    <code>raw enrichment</code>: the sum of log2 fold change of the gene over all splitting events relevant for this
+    cluster
+  </li>
+  <li>
+    <code>signigicance</code>: the latest split event when this gene was differentially expressed (-1 if never
+    differentially expressed)
+  </li>
+  <li>
+    <code>weighted enrichment</code>: the sum of cluster size and split event weighted log2 fold changes of a gene over
+    all splitting events relevant for this cluster
+  </li>
+</ol>
+<br />
+<p><b>References</b></p>
+<ol>
+  <li>
+    McKinney, W. (2010). Data Structures for Statistical Computing in Python. In
+    S. van der Walt & J. Millman (Hrsg.), Proceedings of the 9th Python in
+    Science Conference (S. 56–61).
+    <a href="https://doi.org/10.25080/Majora-92bf1922-00a">https://doi.org/10.25080/Majora-92bf1922-00a</a>
+  </li>
+  <li>
+    The pandas development team. (2020). pandas-dev/pandas: Pandas (latest)
+    [Software]. Zenodo.
+    <a href="https://doi.org/10.5281/zenodo.3509134">https://doi.org/10.5281/zenodo.3509134</a>
+  </li>
+  <li>
+    Virtanen, P., Gommers, R., Oliphant, T. E., Haberland, M., Reddy, T.,
+    Cournapeau, D., Burovski, E., Peterson, P., Weckesser, W., Bright, J., van
+    der Walt, S. J., Brett, M., Wilson, J., Millman, K. J., Mayorov, N., Nelson,
+    A. R. J., Jones, E., Kern, R., Larson, E., … SciPy 1.0 Contributors. (2020).
+    SciPy 1.0: Fundamental Algorithms for Scientific Computing in Python. Nature
+    Methods, 17, 261–272.
+    <a href="https://doi.org/10.1038/s41592-019-0686-2">https://doi.org/10.1038/s41592-019-0686-2</a>
+  </li>
+</ol>
