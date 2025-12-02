@@ -85,6 +85,50 @@
       "container": "marker_expression",
       "dependencies": ["clustering_base"],
       "variables": []
+    },
+    {
+      "id": "cluster_resolution_data",
+      "name": "Sample clusters",
+      "description": "<espe-import>step_cluster_resolution_data_description.html</espe-import>",
+      "container": "cluster_resolution_data",
+      "dependencies": ["clustering_base"],
+      "variables": []
+    },
+    {
+      "id": "cluster_relation_tree",
+      "name": "Compute cluster relation tree",
+      "description": "<espe-import>step_cluster_relation_tree_description.html</espe-import>",
+      "container": "cluster_relation_tree",
+      "dependencies": ["cluster_resolution_data"],
+      "variables": []
+    },
+    {
+      "id": "cluster_relation_dge",
+      "name": "Cluster relation tree DGE",
+      "description": "<espe-import>step_cluster_relation_dge_description.html</espe-import>",
+      "container": "cluster_relation_dge",
+      "dependencies": [
+        "clustering_base",
+        "cluster_resolution_data",
+        "cluster_relation_tree"
+      ],
+      "variables": []
+    },
+    {
+      "id": "cluster_relation_dge_merge",
+      "name": "Cluster relation tree DGE merging",
+      "description": "<espe-import>step_cluster_relation_dge_merging_description.html</espe-import>",
+      "container": "cluster_relation_dge_merging",
+      "dependencies": ["cluster_relation_dge", "cluster_relation_tree"],
+      "variables": []
+    },
+    {
+      "id": "cluster_trajectory",
+      "name": "Trajectory analysis",
+      "description": "<espe-import>step_trajectory_description.html</espe-import>",
+      "container": "trajectory",
+      "dependencies": ["cluster_relation_dge"],
+      "variables": []
     }
   ]
 }
