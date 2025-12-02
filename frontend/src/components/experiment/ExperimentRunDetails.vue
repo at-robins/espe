@@ -84,81 +84,7 @@
         <error-popup :error-response="loadingError" />
       </div>
     </q-card>
-    <q-card>
-      <q-card-section>
-        <div v-if="selectedStep === null" class="text-h6">
-          Select a step to display further information.
-        </div>
-        <div v-else class="text-h6">{{ selectedStep.name }}</div>
-      </q-card-section>
-      <q-card-section>
-        <div v-if="selectedStep" class="q-pl-md">
-          <div v-html="selectedStep.description" />
-        </div>
-      </q-card-section>
-      <q-card-section v-if="selectedStep && pipeline">
-        <q-expansion-item
-          expand-separator
-          :icon="symOutlinedTerminal"
-          label="Display pipeline step logs"
-          class="shadow-1 overflow-hidden"
-          header-class="bg-secondary text-white"
-          style="border-radius: 3px"
-        >
-          <q-card>
-            <q-card-section>
-              <experiment-step-logs
-                :experiment-id="id"
-                :pipeline-id="pipeline.id"
-                :step-id="selectedStep.id"
-              />
-            </q-card-section>
-          </q-card>
-        </q-expansion-item>
-      </q-card-section>
-      <div v-if="selectedStep && pipeline" class="q-gutter-md q-pa-md col">
-        <div class="row">
-          <q-btn
-            label="Download output"
-            outline
-            :icon="matDownload"
-            :color="downloadError ? 'negative' : 'primary'"
-            :disable="selectedStep.status !== PipelineStepStatus.Finished"
-            :href="'/api/experiments/' + id + '/archive/' + pipeline.sanitised_id + selectedStep.sanitised_id"
-          >
-            <template v-slot:loading>
-              <span class="block">
-                <q-spinner class="on-left" />
-                Generating archive
-              </span>
-            </template>
-            <q-tooltip>
-              <div v-if="downloadError" class="text-black">
-                <error-popup :error-response="downloadError" />
-              </div>
-              <div v-else>Downloads the output of the execution step.</div>
-            </q-tooltip>
-          </q-btn>
-
-          <q-btn
-            v-if="canBeStarted(selectedStep)"
-            :icon="matRestartAlt"
-            label="Restart step"
-            class="q-ml-md"
-            :color="restartingError ? 'negative' : 'positive'"
-            :loading="isRestarting"
-            @click="restartStep(selectedStep)"
-          >
-            <q-tooltip>
-              <div v-if="restartingError" class="text-black">
-                <error-popup :error-response="restartingError" />
-              </div>
-              <div v-else>Restarts the experiment execution step.</div>
-            </q-tooltip>
-          </q-btn>
-        </div>
-      </div>
-    </q-card>
+    <experiment-run-step-details :id=id :pipeline="pipeline" :selected-step="selectedStep"/>
     <poller
       v-if="enableRunDetailsPoller"
       :url="run_details_url"
@@ -183,10 +109,8 @@ import {
   symOutlinedNotStarted,
   symOutlinedSchedule,
   symOutlinedStopCircle,
-  symOutlinedTerminal,
 } from "@quasar/extras/material-symbols-outlined";
-import { matDownload, matRestartAlt } from "@quasar/extras/material-icons";
-import ExperimentStepLogs from "./ExperimentStepLogs.vue";
+import ExperimentRunStepDetails from "./ExperimentRunStepDetails.vue";
 import Poller from "../shared/Poller.vue";
 
 const experiment: Ref<ExperimentDetails | null> = ref(null);
@@ -194,11 +118,8 @@ const pipeline: Ref<PipelineBlueprint | null> = ref(null);
 const sortedSteps: Ref<PipelineStepBlueprint[][]> = ref([]);
 const isLoadingPipelineDetails = ref(false);
 const enableRunDetailsPoller = ref(false);
-const isRestarting = ref(false);
 const loadingError: Ref<ErrorResponse | null> = ref(null);
-const restartingError: Ref<ErrorResponse | null> = ref(null);
 const selectedStep: Ref<PipelineStepBlueprint | null> = ref(null);
-const downloadError: Ref<ErrorResponse | null> = ref(null);
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -308,66 +229,6 @@ function selectStep(step: PipelineStepBlueprint) {
     selectedStep.value = null;
   } else {
     selectedStep.value = step;
-  }
-}
-
-/**
- * Returns ```true``` if the specified step can be (re-)started.
- *
- * @param step the step to check
- */
-function canBeStarted(step: PipelineStepBlueprint | null): boolean {
-  if (!pipeline.value) {
-    return false;
-  }
-  if (!step) {
-    return false;
-  }
-  const satisfied_dependencies = pipeline.value.steps
-    .filter(
-      (s) =>
-        s.status === PipelineStepStatus.Finished ||
-        s.status === PipelineStepStatus.Running ||
-        s.status === PipelineStepStatus.Waiting
-    )
-    .map((s) => s.id);
-  const isDependecySatisfied = step.dependencies.every((dependency) =>
-    satisfied_dependencies.includes(dependency)
-  );
-  return (
-    step.status !== PipelineStepStatus.Running &&
-    step.status !== PipelineStepStatus.Waiting &&
-    isDependecySatisfied
-  );
-}
-
-/**
- * Tries to restart the specified step.
- *
- * @param step the step to restart
- */
-function restartStep(step: PipelineStepBlueprint | null) {
-  if (step && !isRestarting.value) {
-    isRestarting.value = true;
-    restartingError.value = null;
-    const config = {
-      headers: {
-        "content-type": "application/json",
-      },
-    };
-    axios
-      .post(
-        "/api/experiments/" + props.id + "/rerun",
-        JSON.stringify(step.id),
-        config
-      )
-      .then(() => (step.status = PipelineStepStatus.Waiting))
-      .catch((error) => {
-        restartingError.value = error.response.data;
-      })
-      .finally(() => {
-        isRestarting.value = false;
-      });
   }
 }
 </script>
