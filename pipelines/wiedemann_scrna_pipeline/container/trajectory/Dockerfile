@@ -7,6 +7,8 @@ RUN yes | pip install numpy==2.3.5 --exists-action i
 RUN yes | pip install scanpy[leiden]==1.11.5 --exists-action i
 RUN yes | pip install seaborn==0.13.2 --exists-action i
 RUN yes | pip install pathvalidate==3.3.1 --exists-action i
+RUN yes | pip install squidpy==1.6.6 --exists-action i
+RUN yes | pip install git+https://github.com/bioturing-org/py-monocle.git@a0d77b63309af6939cb0a8799471e543fa328ac8
 
 COPY run_trajectory.py /run.py
 ENTRYPOINT ["python", "run.py"]
