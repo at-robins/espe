@@ -296,7 +296,7 @@ impl Configuration {
     ) -> PathBuf {
         let mut path: PathBuf = self.experiment_steps_path(experiment_id);
         // Hashing the ID prevents invalid characters in file paths.
-        path.push(format!("{}{}", Self::hash_string(pipeline_id), Self::hash_string(step_id)));
+        path.push(Self::hash_pipeline_step_id(pipeline_id, step_id));
         path
     }
 

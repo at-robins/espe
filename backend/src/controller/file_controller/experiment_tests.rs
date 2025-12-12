@@ -1,6 +1,9 @@
 use crate::{
     model::db::experiment_execution::{ExecutionStatus, ExperimentExecution},
-    test_utility::{create_test_app, TestContext},
+    test_utility::{
+        create_default_experiment, create_default_experiment_execution, create_test_app,
+        TestContext, DEFAULT_EXPERIMENT_ID, DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID,
+    },
 };
 
 use super::*;
@@ -962,4 +965,44 @@ async fn test_post_experiment_add_folder_empty_path() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_archive_step_results() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Finished);
+    let step_folder = app_config.experiment_step_path(
+        DEFAULT_EXPERIMENT_ID.to_string(),
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+    );
+    std::fs::create_dir_all(&step_folder).unwrap();
+    let test_file_name = "test_file.txt";
+    let test_file_path = step_folder.join(test_file_name);
+    std::fs::write(&test_file_path, "test_content").unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/experiments/{}/archive/{}",
+            DEFAULT_EXPERIMENT_ID,
+            step_folder.file_name().unwrap().to_string_lossy()
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let fetched_data = std::io::Cursor::new(test::read_body(resp).await);
+    let extraction_path = app_config.temporary_path();
+    zip::ZipArchive::new(fetched_data)
+        .unwrap()
+        .extract(&extraction_path)
+        .unwrap();
+    let extracted_test_file_path = extraction_path.join(test_file_name);
+    assert_eq!(
+        std::fs::read(extracted_test_file_path).unwrap(),
+        std::fs::read(test_file_path).unwrap()
+    )
 }

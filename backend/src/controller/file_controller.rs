@@ -560,9 +560,8 @@ pub async fn get_experiment_archive_step_results(
         &pipeline_id,
         &step_id,
     );
-    // // Defines the source path.
+    // Defines the source path.
     let source = app_config.experiment_step_path(experiment_id.to_string(), &pipeline_id, &step_id);
-
     let file_name = format!("{}.zip", sanitize_filename::sanitize(&step_id));
     let mut archive_stream = ArchiveStream::new(source).map_err(|err| {
         err.chain(format!(

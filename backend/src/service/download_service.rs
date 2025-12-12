@@ -181,14 +181,17 @@ const ARCHIVE_STREAM_WRITE_BUFFER_SIZE: usize = 4 * ARCHIVE_STREAM_READ_BUFFER_S
 #[derive(Clone)]
 /// A sharable cursor allowing interior mutability of the archive writer.
 struct ArchiveCursor {
-    inner: Rc<RefCell<Cursor<[u8; ARCHIVE_STREAM_WRITE_BUFFER_SIZE]>>>,
+    inner: Rc<RefCell<Cursor<Box<[u8]>>>>,
 }
 
 impl ArchiveCursor {
     /// Creates a new sharable [`ArchiveCursor`].
     fn new() -> Self {
         Self {
-            inner: Rc::new(RefCell::new(Cursor::new([0; ARCHIVE_STREAM_WRITE_BUFFER_SIZE]))),
+            inner: Rc::new(RefCell::new(Cursor::new(
+                // Prevents allocation of the buffer to the stack before moving it ot the heap and thus potential stack overflows.
+                vec![0u8; ARCHIVE_STREAM_WRITE_BUFFER_SIZE].into_boxed_slice(),
+            ))),
         }
     }
 
@@ -233,7 +236,7 @@ pub struct ArchiveStream {
     cursor: ArchiveCursor,
     options: zip::write::SimpleFileOptions,
     processing_file: Option<File>,
-    buffer_read: Box<[u8; ARCHIVE_STREAM_READ_BUFFER_SIZE]>,
+    buffer_read: Box<[u8]>,
     tracker: Option<DownloadTracker>,
 }
 
@@ -254,7 +257,8 @@ impl ArchiveStream {
             .large_file(true)
             .compression_method(zip::CompressionMethod::Stored)
             .compression_level(None);
-        let buffer_read = Box::new([0; ARCHIVE_STREAM_READ_BUFFER_SIZE]);
+        // Prevents allocation of the buffer to the stack before moving it ot the heap and thus potential stack overflows.
+        let buffer_read = vec![0u8; ARCHIVE_STREAM_READ_BUFFER_SIZE].into_boxed_slice();
         if source.is_file() {
             Ok(Self {
                 source: source
@@ -386,7 +390,7 @@ impl ArchiveStream {
     /// The tracker will be automatically dropped when the archive streaming fails
     /// or is finished.
     /// # Parameters
-    /// 
+    ///
     /// * `tracker` - the donwload tracker to set
     pub fn set_tracker(&mut self, tracker: DownloadTracker) {
         self.tracker = Some(tracker);
