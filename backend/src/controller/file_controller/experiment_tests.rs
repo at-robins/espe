@@ -970,6 +970,7 @@ async fn test_post_experiment_add_folder_empty_path() {
 #[actix_web::test]
 async fn test_get_experiment_archive_step_results() {
     let context = TestContext::new();
+    let download_tracker = context.download_tracker();
     let mut connection = context.get_connection();
     let app = test::init_service(create_test_app(&context)).await;
     let app_config: Configuration = (&context).into();
@@ -981,9 +982,18 @@ async fn test_get_experiment_archive_step_results() {
         DEFAULT_PIPELINE_STEP_ID,
     );
     std::fs::create_dir_all(&step_folder).unwrap();
-    let test_file_name = "test_file.txt";
-    let test_file_path = step_folder.join(test_file_name);
-    std::fs::write(&test_file_path, "test_content").unwrap();
+    let test_file_name_01 = "test_file_1.txt";
+    let test_file_path_01 = step_folder.join(test_file_name_01);
+    std::fs::write(&test_file_path_01, "test_content 01").unwrap();
+    let test_file_name_02 = "test_file_2.txt";
+    let test_file_path_02 = step_folder.join(test_file_name_02);
+    std::fs::write(&test_file_path_02, "test_content 02").unwrap();
+
+    assert!(!download_tracker.is_experiment_output_download_step_tracked(
+        DEFAULT_EXPERIMENT_ID,
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID
+    ));
 
     let req = test::TestRequest::get()
         .uri(&format!(
@@ -994,15 +1004,140 @@ async fn test_get_experiment_archive_step_results() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
+    // The future is resolved to quickly to test the download tracker in between, 
+    // so only correct dropping of the tracker is tested.
+    assert!(!download_tracker.is_experiment_output_download_step_tracked(
+        DEFAULT_EXPERIMENT_ID,
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID
+    ));
     let fetched_data = std::io::Cursor::new(test::read_body(resp).await);
     let extraction_path = app_config.temporary_path();
     zip::ZipArchive::new(fetched_data)
         .unwrap()
         .extract(&extraction_path)
         .unwrap();
-    let extracted_test_file_path = extraction_path.join(test_file_name);
+    let extracted_test_file_path_01 = extraction_path.join(test_file_name_01);
+    let extracted_test_file_path_02 = extraction_path.join(test_file_name_02);
     assert_eq!(
-        std::fs::read(extracted_test_file_path).unwrap(),
-        std::fs::read(test_file_path).unwrap()
-    )
+        std::fs::read(extracted_test_file_path_01).unwrap(),
+        std::fs::read(test_file_path_01).unwrap()
+    );
+    assert_eq!(
+        std::fs::read(extracted_test_file_path_02).unwrap(),
+        std::fs::read(test_file_path_02).unwrap()
+    );
+}
+
+#[actix_web::test]
+async fn test_get_experiment_archive_step_results_no_experiment_step() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    create_default_experiment(&mut connection);
+    let step_folder = app_config.experiment_step_path(
+        DEFAULT_EXPERIMENT_ID.to_string(),
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+    );
+    std::fs::create_dir_all(&step_folder).unwrap();
+    let test_file_name_01 = "test_file_1.txt";
+    let test_file_path_01 = step_folder.join(test_file_name_01);
+    std::fs::write(&test_file_path_01, "test_content 01").unwrap();
+    let test_file_name_02 = "test_file_2.txt";
+    let test_file_path_02 = step_folder.join(test_file_name_02);
+    std::fs::write(&test_file_path_02, "test_content 02").unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/experiments/{}/archive/{}",
+            DEFAULT_EXPERIMENT_ID,
+            step_folder.file_name().unwrap().to_string_lossy()
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_archive_step_results_no_experiment() {
+    let context = TestContext::new();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let step_folder = app_config.experiment_step_path(
+        DEFAULT_EXPERIMENT_ID.to_string(),
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+    );
+    std::fs::create_dir_all(&step_folder).unwrap();
+    let test_file_name_01 = "test_file_1.txt";
+    let test_file_path_01 = step_folder.join(test_file_name_01);
+    std::fs::write(&test_file_path_01, "test_content 01").unwrap();
+    let test_file_name_02 = "test_file_2.txt";
+    let test_file_path_02 = step_folder.join(test_file_name_02);
+    std::fs::write(&test_file_path_02, "test_content 02").unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/experiments/{}/archive/{}",
+            DEFAULT_EXPERIMENT_ID,
+            step_folder.file_name().unwrap().to_string_lossy()
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_archive_step_results_invalid_hash() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Finished);
+    let step_folder = app_config.experiment_step_path(
+        DEFAULT_EXPERIMENT_ID.to_string(),
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+    );
+    std::fs::create_dir_all(&step_folder).unwrap();
+    let test_file_name_01 = "test_file_1.txt";
+    let test_file_path_01 = step_folder.join(test_file_name_01);
+    std::fs::write(&test_file_path_01, "test_content 01").unwrap();
+    let test_file_name_02 = "test_file_2.txt";
+    let test_file_path_02 = step_folder.join(test_file_name_02);
+    std::fs::write(&test_file_path_02, "test_content 02").unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/experiments/{}/archive/invalid_hash", DEFAULT_EXPERIMENT_ID,))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_archive_step_results_invalid_archive_path() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Finished);
+    let step_folder = app_config.experiment_step_path(
+        DEFAULT_EXPERIMENT_ID.to_string(),
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+    );
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/experiments/{}/archive/{}",
+            DEFAULT_EXPERIMENT_ID,
+            step_folder.file_name().unwrap().to_string_lossy()
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
