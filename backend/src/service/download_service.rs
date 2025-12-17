@@ -246,6 +246,10 @@ impl ArchiveStream {
     /// # Parameters
     ///
     /// * `source` - the path to archive
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if the specified source path is invalid.
     pub fn new<T: AsRef<Path>>(source: T) -> Result<Self, SeqError> {
         let source = std::fs::canonicalize(&source).map_err(|err| {
             SeqError::from(err)
@@ -628,5 +632,60 @@ mod tests {
             DEFAULT_PIPELINE_ID,
             DEFAULT_PIPELINE_STEP_ID
         ));
+    }
+
+    #[test]
+    fn test_archive_cursor_new() {
+        let mut cursor = ArchiveCursor::new();
+        let max_content = vec![1u8; ARCHIVE_STREAM_WRITE_BUFFER_SIZE];
+        assert!(cursor.write_all(&max_content).is_ok());
+        // Maximum writable content is exceeded.
+        assert!(cursor.write_all(&[1u8]).is_err());
+    }
+
+    #[test]
+    fn test_archive_cursor_get_content() {
+        let mut cursor = ArchiveCursor::new();
+        assert_eq!(cursor.get_content(), Bytes::new());
+        let content_01 = vec![1u8; 100];
+        cursor.write_all(&content_01).unwrap();
+        assert_eq!(cursor.get_content(), Bytes::copy_from_slice(&content_01));
+        // Checks that the cursor is not reset and the same content can be obrained
+        // multiple times.
+        assert_eq!(cursor.get_content(), Bytes::copy_from_slice(&content_01));
+        // Checks appending data.
+        let content_02 = vec![42u8; 100];
+        let mut combined_content = content_01.clone();
+        combined_content.extend(&content_02);
+        cursor.write_all(&content_02).unwrap();
+        assert_eq!(cursor.get_content(), Bytes::copy_from_slice(&combined_content));
+    }
+
+    #[test]
+    fn test_archive_cursor_reset() {
+        let mut cursor = ArchiveCursor::new();
+        assert_eq!(cursor.get_content(), Bytes::new());
+        let content_01 = vec![1u8; 100];
+        cursor.write_all(&content_01).unwrap();
+        assert_eq!(cursor.get_content(), Bytes::copy_from_slice(&content_01));
+        cursor.reset();
+        assert_eq!(cursor.get_content(), Bytes::new());
+        let content_02 = vec![42u8; 100];
+        cursor.write_all(&content_02).unwrap();
+        assert_eq!(cursor.get_content(), Bytes::copy_from_slice(&content_02));
+    }
+
+    #[test]
+    fn test_archive_cursor_take_content() {
+        let mut cursor = ArchiveCursor::new();
+        assert_eq!(cursor.take_content(), Bytes::new());
+        let content_01 = vec![1u8; 100];
+        cursor.write_all(&content_01).unwrap();
+        assert_eq!(cursor.take_content(), Bytes::copy_from_slice(&content_01));
+        assert_eq!(cursor.take_content(), Bytes::new());
+        let content_02 = vec![42u8; 100];
+        cursor.write_all(&content_02).unwrap();
+        assert_eq!(cursor.take_content(), Bytes::copy_from_slice(&content_02));
+        assert_eq!(cursor.take_content(), Bytes::new());
     }
 }
