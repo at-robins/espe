@@ -246,9 +246,9 @@ impl ArchiveStream {
     /// # Parameters
     ///
     /// * `source` - the path to archive
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if the specified source path is invalid.
     pub fn new<T: AsRef<Path>>(source: T) -> Result<Self, SeqError> {
         let source = std::fs::canonicalize(&source).map_err(|err| {
@@ -323,6 +323,10 @@ impl ArchiveStream {
     /// # Parameters
     ///
     /// * `path` - the directory to get the entry paths from
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the directory or one of its entries cannot be read.
     fn directory_paths<T: AsRef<Path>>(path: T) -> Result<Vec<PathBuf>, SeqError> {
         match std::fs::read_dir(&path) {
             Ok(dir) => {
@@ -687,5 +691,93 @@ mod tests {
         cursor.write_all(&content_02).unwrap();
         assert_eq!(cursor.take_content(), Bytes::copy_from_slice(&content_02));
         assert_eq!(cursor.take_content(), Bytes::new());
+    }
+
+    #[test]
+    fn test_archive_stream_new_path_does_not_exist() {
+        assert!(ArchiveStream::new(
+            "../testing_resources/archive/stream_new_test/this_path_does_not_exist.42"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_archive_stream_new_file() {
+        let stream =
+            ArchiveStream::new("../testing_resources/archive/stream_new_test/test_file.txt")
+                .unwrap();
+        assert_eq!(stream.path_queue.len(), 1);
+        assert!(stream.path_queue[0]
+            .ends_with("testing_resources/archive/stream_new_test/test_file.txt"));
+        assert!(stream
+            .source
+            .ends_with("testing_resources/archive/stream_new_test")); // Ensures the source directory has been set correctly.
+        assert!(stream.writer.is_some()); // Ensures the writer is not closed.
+        assert!(stream.tracker.is_none()); // Ensures no initial tracker has been set.
+        assert!(stream.processing_file.is_none()); // Ensures no file is processed without prompting.
+    }
+
+    #[test]
+    fn test_archive_stream_new_directory() {
+        let stream = ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
+        assert_eq!(stream.path_queue.len(), 2);
+        assert!(stream
+            .path_queue
+            .iter()
+            .any(|p| p.ends_with("testing_resources/archive/stream_new_test/test_file.txt")));
+        assert!(stream
+            .path_queue
+            .iter()
+            .any(|p| p.ends_with("testing_resources/archive/stream_new_test/sub_folder")));
+        assert!(stream
+            .source
+            .ends_with("testing_resources/archive/stream_new_test")); // Ensures the source directory has been set correctly.
+        assert!(stream.writer.is_some()); // Ensures the writer is not closed.
+        assert!(stream.tracker.is_none()); // Ensures no initial tracker has been set.
+        assert!(stream.processing_file.is_none()); // Ensures no file is processed without prompting.
+    }
+
+    #[test]
+    fn test_archive_stream_relative_path() {
+        let stream = ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
+        let absolute_path_dir =
+            std::fs::canonicalize("../testing_resources/archive/stream_new_test/sub_folder")
+                .unwrap();
+        assert_eq!(stream.relative_path(&absolute_path_dir), "sub_folder");
+        let absolute_path_file = std::fs::canonicalize(
+            "../testing_resources/archive/stream_new_test/sub_folder/test_file_sub.txt",
+        )
+        .unwrap();
+        assert_eq!(stream.relative_path(&absolute_path_file), "sub_folder/test_file_sub.txt");
+    }
+
+    #[test]
+    fn test_archive_stream_directory_paths() {
+        let directories =
+            ArchiveStream::directory_paths("../testing_resources/archive/stream_new_test").unwrap();
+        assert!(directories.contains(&PathBuf::from(
+            "../testing_resources/archive/stream_new_test/test_file.txt"
+        )));
+        assert!(directories
+            .contains(&PathBuf::from("../testing_resources/archive/stream_new_test/sub_folder")));
+        assert_eq!(directories.len(), 2);
+    }
+
+    #[test]
+    fn test_archive_stream_directory_paths_not_exist() {
+        assert!(ArchiveStream::directory_paths("../testing_resources/archive/directory_does_not_exist").is_err());
+    }
+
+    #[test]
+    fn test_archive_stream_tracker() {
+        let mut stream = ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
+        let tracker = DownloadTrackerManager::new();
+        assert!(stream.tracker.is_none());
+        stream.set_tracker(tracker.track_experiment_output_download_experiment(DEFAULT_EXPERIMENT_ID));
+        assert!(stream.tracker.is_some());
+        assert!(tracker.is_experiment_output_download_experiment_tracked(DEFAULT_EXPERIMENT_ID));
+        stream.unset_tracker();
+        assert!(stream.tracker.is_none());
+        assert!(!tracker.is_experiment_output_download_experiment_tracked(DEFAULT_EXPERIMENT_ID));
     }
 }
