@@ -15,7 +15,7 @@ MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
 INPUT_FOLDER_BAM = MOUNT_PATHS["dependencies"]["splitting"]
 INPUT_FOLDER_PEAK = MOUNT_PATHS["dependencies"]["peak_annotation"]
 BAM_SUFFIX = ".bam"
-PEAK_SUFFIX = ".mergedPeak"
+PEAK_SUFFIX = ".narrowPeak"
 MATRIX_NON_SAMPLE_COLUMNS = 6
 
 SAMPLE_INFO_DIRECTORY = "sample directory"
