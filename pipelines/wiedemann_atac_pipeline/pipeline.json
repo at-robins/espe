@@ -289,7 +289,7 @@
       "name": "Feature counting",
       "description": "<espe-import>step_feature_counts_description.html</espe-import>",
       "container": "feature_counts",
-      "dependencies": ["splitting", "peak_annotation"],
+      "dependencies": ["splitting", "peak_annotation", "blacklist_removal"],
       "variables": []
     },
     {
@@ -313,7 +313,7 @@
       "name": "Motif discovery",
       "description": "<espe-import>step_motif_discovery_description.html</espe-import>",
       "container": "motif_discovery",
-      "dependencies": ["differential_accessibility"],
+      "dependencies": ["differential_accessibility", "peak_merging"],
       "variables": []
     },
     {
@@ -337,6 +337,14 @@
       "name": "Pathway analysis",
       "description": "<espe-import>step_pathway_analysis_description.html</espe-import>",
       "container": "pathway_analysis",
+      "dependencies": ["differential_accessibility"],
+      "variables": []
+    },
+    {
+      "id": "transcription_factor_activity",
+      "name": "Transcription factor activity",
+      "description": "<espe-import>step_tf_activity_description.html</espe-import>",
+      "container": "tf_activity",
       "dependencies": ["differential_accessibility"],
       "variables": []
     },

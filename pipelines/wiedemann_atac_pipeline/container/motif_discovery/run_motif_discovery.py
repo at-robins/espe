@@ -9,10 +9,15 @@ import os
 import subprocess
 
 MOUNT_PATHS = json.loads(os.environ.get("MOUNT_PATHS"))
-INPUT_FOLDER = next(iter(MOUNT_PATHS["dependencies"].values()))
+INPUT_FOLDER = MOUNT_PATHS["dependencies"]["differential_accessibility"]
+INPUT_FOLDER_ALL_PEAKS = MOUNT_PATHS["dependencies"]["peak_merging"]
 MERGED_MOTIF_FILE_NAME = "merged.motif"
 MOTIF_ANNOTATED_PEAK_FILE_NAME = "motif_annotated_peaks.tsv"
 PEAK_REGION_FILE_NAME = "differentially_accessible_peaks.tsv"
+PEAK_REGION_FILE_NAME_ALL = "all_peaks.tsv"
+PEAK_REGION_FILE_PATH_ALL = os.path.join(
+    MOUNT_PATHS["output"], PEAK_REGION_FILE_NAME_ALL
+)
 
 threads = math.floor(multiprocessing.cpu_count() * 0.8)
 if threads < 1:
@@ -115,6 +120,48 @@ def create_region_file(input_file_path, output_directory_path, filter=None):
                     )
 
 
+def create_region_file_from_all(input_file_path):
+    # Creates the input file with all peaks.
+    with open(
+        input_file_path, newline="", mode="rt", encoding="utf-8"
+    ) as all_peaks_file:
+        with open(
+            PEAK_REGION_FILE_PATH_ALL, newline="", mode="wt", encoding="utf-8"
+        ) as peak_file:
+            all_peaks_reader = csv.reader(
+                all_peaks_file, dialect="unix", delimiter="\t"
+            )
+            peak_writer = csv.writer(
+                peak_file,
+                dialect="unix",
+                delimiter="\t",
+                quotechar='"',
+                quoting=csv.QUOTE_MINIMAL,
+            )
+            # Writes the header.
+            peak_writer.writerow(
+                [
+                    "PeakID",
+                    "Chr",
+                    "Start",
+                    "End",
+                    "Strand",
+                ]
+            )
+
+            for row in all_peaks_reader:
+                # Copies relevant values of each row.
+                peak_writer.writerow(
+                    [
+                        row[3],
+                        row[0],
+                        row[1],
+                        row[2],
+                        "+",
+                    ]
+                )
+
+
 print("Loading genome database...")
 organism_env = os.environ.get("GLOBAL_ORGANISM")
 if organism_env is not None and organism_env == "human":
@@ -123,6 +170,11 @@ if organism_env is not None and organism_env == "human":
 else:
     print("\tUsing mouse data...", flush=True)
     genome_id = "mm10"
+
+print("Creating peak region file...", flush=True)
+create_region_file_from_all(
+    input_file_path=os.path.join(INPUT_FOLDER_ALL_PEAKS, "merged.narrowPeak"),
+)
 
 print("Searching differentially accessibility analysis output...", flush=True)
 for root, dirs, files in os.walk(INPUT_FOLDER):
@@ -189,7 +241,7 @@ for directory_path_output, dirs, files in os.walk(MOUNT_PATHS["output"]):
                 print("\tAnnotating peaks with discovered known motifs...", flush=True)
                 subprocess.run(
                     (
-                        f'findMotifsGenome.pl "{file_path_peaks}" {genome_id} '
+                        f'findMotifsGenome.pl "{PEAK_REGION_FILE_PATH_ALL}" {genome_id} '
                         f'"{directory_path_output}" -size given -mask -p {threads} '
                         f'-find "{file_known_motifs}" > "{file_known_motifs_annotated}"'
                     ),
@@ -209,7 +261,7 @@ for directory_path_output, dirs, files in os.walk(MOUNT_PATHS["output"]):
                 )
                 subprocess.run(
                     (
-                        f'findMotifsGenome.pl "{file_path_peaks}" {genome_id} '
+                        f'findMotifsGenome.pl "{PEAK_REGION_FILE_PATH_ALL}" {genome_id} '
                         f'"{directory_path_output}" -size given -mask -p {threads} '
                         f'-find "{file_denovo_motifs}" > "{file_denovo_motifs_annotated}"'
                     ),
