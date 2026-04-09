@@ -349,12 +349,13 @@ impl ArchiveStream {
         }
     }
 
-    /// Reads a chunk of the currently open file into the archive cursor.
+    /// Reads a chunk of the currently opened file into the archive cursor.
     /// If the end of the file is reached, it closes the open file.
     ///
     /// # Errors
     ///
     /// Returns errors if the file could not be read or the archive write failed.
+    /// Also returns an error if no file has been opened before.
     fn read_file_into_archive_cursor(&mut self) -> Result<(), SeqError> {
         if let Some(file) = self.processing_file.as_mut() {
             match file.read(self.buffer_read.as_mut()) {
@@ -410,10 +411,28 @@ impl ArchiveStream {
         self.tracker = None;
     }
 
-    /// Set the next file to be processed.
-    /// Returns an error if opening the file fails
-    /// or if the file opening queue is empty.
+    /// Set the next file to be processed if none is currently processed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if opening the file fails,
+    /// if the file opening queue is empty or if a file
+    /// is already opened.
     fn process_next_file(&mut self) -> Result<(), SeqError> {
+        if self.processing_file.is_some() {
+            return Err(SeqError::new(
+                "Another archive file open",
+                SeqErrorType::InternalServerError,
+                format!(
+                    "No new file can be processed during creation \
+                    of archive {} as another file has already been opened \
+                    (last queue element: {:?}).",
+                    self.source.display(),
+                    self.path_queue.last()
+                ),
+                DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+            ));
+        }
         // A new file will be opened and processed.
         let current_file_path_absolute = self.path_queue.last().ok_or(SeqError::new(
             "Empty archive path queue",
@@ -471,7 +490,7 @@ impl futures::Stream for ArchiveStream {
                 Ok(_) => Poll::Ready(Some(Ok(archive_stream.cursor.take_content()))),
                 Err(err) => {
                     archive_stream.unset_tracker();
-                    Poll::Ready(Some(Err(SeqError::from(err).chain("Failed to finish archive."))))
+                    Poll::Ready(Some(Err(SeqError::from(err).chain("Failed to finalise the archive."))))
                 },
             }
         } else {
@@ -539,6 +558,8 @@ impl futures::Stream for ArchiveStream {
 
 #[cfg(test)]
 mod tests {
+
+    use futures::Stream;
 
     use crate::test_utility::{
         DEFAULT_EXPERIMENT_ID, DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID,
@@ -752,6 +773,14 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn test_archive_stream_relative_path_panic() {
+        let stream = ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
+        let super_path = PathBuf::from("/");
+        stream.relative_path(&super_path);
+    }
+
+    #[test]
     fn test_archive_stream_directory_paths() {
         let directories =
             ArchiveStream::directory_paths("../testing_resources/archive/stream_new_test").unwrap();
@@ -765,19 +794,109 @@ mod tests {
 
     #[test]
     fn test_archive_stream_directory_paths_not_exist() {
-        assert!(ArchiveStream::directory_paths("../testing_resources/archive/directory_does_not_exist").is_err());
+        assert!(ArchiveStream::directory_paths(
+            "../testing_resources/archive/directory_does_not_exist"
+        )
+        .is_err());
     }
 
     #[test]
     fn test_archive_stream_tracker() {
-        let mut stream = ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
+        let mut stream =
+            ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
         let tracker = DownloadTrackerManager::new();
         assert!(stream.tracker.is_none());
-        stream.set_tracker(tracker.track_experiment_output_download_experiment(DEFAULT_EXPERIMENT_ID));
+        stream.set_tracker(
+            tracker.track_experiment_output_download_experiment(DEFAULT_EXPERIMENT_ID),
+        );
         assert!(stream.tracker.is_some());
         assert!(tracker.is_experiment_output_download_experiment_tracked(DEFAULT_EXPERIMENT_ID));
         stream.unset_tracker();
         assert!(stream.tracker.is_none());
+        assert!(!tracker.is_experiment_output_download_experiment_tracked(DEFAULT_EXPERIMENT_ID));
+    }
+
+    #[test]
+    fn test_archive_stream_process_next_file() {
+        let mut stream =
+            ArchiveStream::new("../testing_resources/archive/stream_new_test/test_file.txt")
+                .unwrap();
+        assert!(stream.processing_file.is_none());
+        assert!(stream.cursor.get_content().is_empty());
+        stream.process_next_file().unwrap();
+        assert!(stream.processing_file.is_some());
+        // The start of the file should be written to the cursor.
+        assert!(stream.cursor.get_content().len() > 0);
+        // Attemptting to open the file twice should lead to an error.
+        assert!(stream.process_next_file().is_err());
+    }
+
+    #[test]
+    fn test_archive_stream_read_file_into_archive_cursor() {
+        let mut stream =
+            ArchiveStream::new("../testing_resources/archive/stream_new_test/test_file.txt")
+                .unwrap();
+        stream.process_next_file().unwrap();
+        let file_start_length = stream.cursor.get_content().len();
+        assert!(stream.read_file_into_archive_cursor().is_ok());
+        assert!(stream.cursor.get_content().len() > file_start_length);
+    }
+
+    #[test]
+    fn test_archive_stream_read_file_into_archive_cursor_closed_writer() {
+        let mut stream =
+            ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
+        stream.process_next_file().unwrap();
+        // Close the writer.
+        stream.writer = None;
+        assert!(stream.read_file_into_archive_cursor().is_err());
+    }
+
+    #[test]
+    fn test_archive_stream_read_file_into_archive_cursor_no_file() {
+        let mut stream =
+            ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
+        assert!(stream.read_file_into_archive_cursor().is_err());
+    }
+
+    #[test]
+    fn test_archive_stream_poll_next() {
+        let mut stream =
+            ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
+        let tracker = DownloadTrackerManager::new();
+        stream.set_tracker(
+            tracker.track_experiment_output_download_experiment(DEFAULT_EXPERIMENT_ID),
+        );
+        assert!(stream.tracker.is_some());
+        assert!(tracker.is_experiment_output_download_experiment_tracked(DEFAULT_EXPERIMENT_ID));
+
+        let mut pinned_stream = std::pin::pin!(stream);
+
+        let mut async_context = std::task::Context::from_waker(std::task::Waker::noop());
+        let max_polls = 10000; // Should be sufficient for the small amount of test data. Mean poll count was 8 during testing.
+        let mut num_polls = 0;
+        let mut did_poll_data = false;
+        while num_polls < max_polls {
+            match pinned_stream.as_mut().poll_next(&mut async_context) {
+                Poll::Ready(Some(Ok(polled_bytes))) => {
+                    if !polled_bytes.is_empty() {
+                        did_poll_data = true;
+                    }
+                    // During polling the download tracker should persist.
+                    assert!(tracker
+                        .is_experiment_output_download_experiment_tracked(DEFAULT_EXPERIMENT_ID));
+                },
+                Poll::Ready(Some(Err(err))) => panic!("Recieved error while polling: {}", err),
+                Poll::Ready(None) => break,
+                Poll::Pending => {},
+            }
+            num_polls += 1;
+        }
+        assert!(did_poll_data); // Some data should be polled.
+        assert_ne!(num_polls, max_polls); // Should finish in time.
+
+        // The download tracker should be removed after stream polling finished successfully.
+        assert!(pinned_stream.tracker.is_none());
         assert!(!tracker.is_experiment_output_download_experiment_tracked(DEFAULT_EXPERIMENT_ID));
     }
 }

@@ -10,7 +10,7 @@ pub const DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE: &str =
     "An unforseen error occurred. Please check the logs for further information.";
 
 /// An application wide error.
-#[derive(Debug, Clone, Getters, CopyGetters, Serialize, Deserialize)]
+#[derive(Debug, Clone, Getters, CopyGetters, PartialEq, Serialize, Deserialize)]
 pub struct SeqError {
     /// The error ID.
     #[getset(get_copy = "pub")]
@@ -32,7 +32,7 @@ pub struct SeqError {
 }
 
 /// An application wide error type.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SeqErrorType {
     /// An generic error implying an internal problem.
     InternalServerError,
