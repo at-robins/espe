@@ -1,7 +1,7 @@
 //! The `config` module provides configuration setting for application parameters.
 
 /// The context for UUID generation.
-const UUID_CONTEXT: Context = Context::new(0);
+const UUID_CONTEXT: ContextV1 = ContextV1::new(0);
 /// The node ID for UUID generation.
 const UUID_NODE_ID: &[u8; 6] = &[12, 221, 33, 14, 35, 16];
 /// The context path where temporary data are stored.
@@ -34,10 +34,7 @@ use std::{
 use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use twox_hash::XxHash64;
-use uuid::{
-    v1::{Context, Timestamp},
-    Uuid,
-};
+use uuid::{v1::Timestamp, ContextV1, Uuid};
 
 use super::{
     environment::{

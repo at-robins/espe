@@ -409,7 +409,7 @@ impl ContainerHandler {
         step: &Option<ExperimentExecution>,
         process: &mut Option<Child>,
     ) -> Result<(), SeqError> {
-        if let Some(ref mut current_process) = process {
+        if let Some(current_process) = process {
             if let Err(error) = current_process.kill() {
                 return Err(SeqError::new(
                     "Unkillable process",
