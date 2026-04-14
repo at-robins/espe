@@ -21,15 +21,12 @@ use futures::FutureExt;
 use parking_lot::Mutex;
 use service::{
     execution_service::ExecutionScheduler, pipeline_service::LoadedPipelines,
-    temp_file_service::TemporaryFileManager,
 };
 
 use crate::service::download_service::DownloadTrackerManager;
 
 /// The intervall in seconds in which the pipeline execution process is updated.
 const PIPELINE_EXECUTION_UPDATE_INTERVALL: u64 = 5;
-/// The intervall in seconds in which temporary data is inspected.
-const TEMPORARY_DATA_MANAGEMENT_UPDATE_INTERVALL: u64 = 300;
 /// The compiled database migrations.
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
@@ -156,27 +153,6 @@ fn setup_execution_scheduler(
     scheduler
 }
 
-/// Starts the temporary file management.
-///
-/// # Parameters
-///
-/// * `app_config` - the application's [`Configuration`]
-fn setup_temporary_file_manager_scheduler(app_config: &Data<Configuration>) {
-    let temp_file_manager_config = Data::clone(&app_config);
-    std::thread::spawn(move || {
-        let temp_file_manager = TemporaryFileManager::new(temp_file_manager_config);
-        loop {
-            if let Err(err) = temp_file_manager.update() {
-                err.chain("Managing temporary data failed.").log_default();
-            }
-            std::thread::sleep(std::time::Duration::new(
-                TEMPORARY_DATA_MANAGEMENT_UPDATE_INTERVALL,
-                0,
-            ));
-        }
-    });
-}
-
 /// Initialises and returns a [`DownloadTrackerManager`].
 fn setup_download_tracker() -> Data<DownloadTrackerManager> {
     Data::new(DownloadTrackerManager::new())
@@ -190,7 +166,6 @@ async fn start_application() -> Result<(), SeqError> {
     let loaded_pipelines = setup_pipelines(&app_config)?;
     let scheduler = setup_execution_scheduler(&app_config, &database_manager, &loaded_pipelines);
     let download_tracker = setup_download_tracker();
-    setup_temporary_file_manager_scheduler(&app_config);
 
     // Setup the application.
     Ok(HttpServer::new(move || {

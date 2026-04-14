@@ -5,7 +5,7 @@ import vue from "@vitejs/plugin-vue";
 import { quasar, transformAssetUrls } from "@quasar/vite-plugin";
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     vue({
       template: { transformAssetUrls },
@@ -28,4 +28,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
   },
-});
+  define: {
+    __VUE_PROD_DEVTOOLS__: mode === "development",
+  },
+}));

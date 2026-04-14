@@ -10,7 +10,7 @@ pub const DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE: &str =
     "An unforseen error occurred. Please check the logs for further information.";
 
 /// An application wide error.
-#[derive(Debug, Clone, Getters, CopyGetters, Serialize, Deserialize)]
+#[derive(Debug, Clone, Getters, CopyGetters, PartialEq, Serialize, Deserialize)]
 pub struct SeqError {
     /// The error ID.
     #[getset(get_copy = "pub")]
@@ -32,7 +32,7 @@ pub struct SeqError {
 }
 
 /// An application wide error type.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SeqErrorType {
     /// An generic error implying an internal problem.
     InternalServerError,
@@ -128,6 +128,8 @@ impl std::fmt::Display for SeqError {
         )
     }
 }
+
+impl std::error::Error for SeqError {}
 
 #[derive(Debug, Serialize)]
 /// An informative error response for client side display
@@ -269,6 +271,17 @@ impl From<dotenv::Error> for SeqError {
     fn from(error: dotenv::Error) -> Self {
         Self::new(
             "dotenv::Error",
+            SeqErrorType::InternalServerError,
+            error,
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        )
+    }
+}
+
+impl From<zip::result::ZipError> for SeqError {
+    fn from(error: zip::result::ZipError) -> Self {
+        Self::new(
+            "zip::result::ZipError",
             SeqErrorType::InternalServerError,
             error,
             DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,

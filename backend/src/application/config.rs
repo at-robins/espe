@@ -1,15 +1,13 @@
 //! The `config` module provides configuration setting for application parameters.
 
 /// The context for UUID generation.
-const UUID_CONTEXT: Context = Context::new(0);
+const UUID_CONTEXT: ContextV1 = ContextV1::new(0);
 /// The node ID for UUID generation.
 const UUID_NODE_ID: &[u8; 6] = &[12, 221, 33, 14, 35, 16];
 /// The context path where temporary data are stored.
 const PATH_TEMPORARY: &str = "tmp";
 /// The context path where temporary upload files are stored.
 const PATH_TEMPORARY_UPLOAD: &str = "upload";
-/// The context path where temporary download files are stored.
-const PATH_TEMPORARY_DOWNLOAD: &str = "download";
 /// The context path where data related to specific experiments or samples is stored.
 const PATH_FILES_EXPERIMENTS: &str = "experiments";
 /// The file inside each pipeline folder defining the pipeline.
@@ -36,10 +34,7 @@ use std::{
 use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use twox_hash::XxHash64;
-use uuid::{
-    v1::{Context, Timestamp},
-    Uuid,
-};
+use uuid::{v1::Timestamp, ContextV1, Uuid};
 
 use super::{
     environment::{
@@ -196,24 +191,6 @@ impl Configuration {
         path
     }
 
-    /// The context path where temporary download files are stored.
-    pub fn temporary_download_path(&self) -> PathBuf {
-        let mut path: PathBuf = self.temporary_path();
-        path.push(PATH_TEMPORARY_DOWNLOAD);
-        path
-    }
-
-    /// The context path where a specific temporary download file is stored.
-    ///
-    /// # Parameters
-    ///
-    /// * `file_id` - the ID of the temporary file
-    pub fn temporary_download_file_path<T: Into<String>>(&self, file_id: T) -> PathBuf {
-        let mut path: PathBuf = self.temporary_download_path();
-        path.push(file_id.into());
-        path
-    }
-
     /// The context path where all global data is stored.
     pub fn globals_path(&self) -> PathBuf {
         let mut path: PathBuf = self.context_folder().clone();
@@ -316,8 +293,21 @@ impl Configuration {
     ) -> PathBuf {
         let mut path: PathBuf = self.experiment_steps_path(experiment_id);
         // Hashing the ID prevents invalid characters in file paths.
-        path.push(format!("{}{}", Self::hash_string(pipeline_id), Self::hash_string(step_id)));
+        path.push(Self::hash_pipeline_step_id(pipeline_id, step_id));
         path
+    }
+
+    /// Returns the hash of a pipeline step ID.
+    ///
+    /// # Parameters
+    ///
+    /// * `pipeline_id` - the ID of the pipeline
+    /// * `step_id` - the ID of the step
+    pub fn hash_pipeline_step_id<P: AsRef<str>, S: AsRef<str>>(
+        pipeline_id: P,
+        step_id: S,
+    ) -> String {
+        format!("{}{}", Self::hash_string(pipeline_id), Self::hash_string(step_id))
     }
 
     /// The context path where data related to the pipeline logs
@@ -552,37 +542,6 @@ mod tests {
     }
 
     #[test]
-    fn test_temporary_download_path() {
-        let config = Configuration::new(
-            "",
-            "",
-            "",
-            "",
-            "./application/context",
-            "",
-            ApplicationMode::Release,
-        );
-        let path: PathBuf = "./application/context/tmp/download".into();
-        assert_eq!(config.temporary_download_path(), path);
-    }
-
-    #[test]
-    fn test_temporary_download_file_path() {
-        let config = Configuration::new(
-            "",
-            "",
-            "",
-            "",
-            "./application/context",
-            "",
-            ApplicationMode::Release,
-        );
-        let id = "01234567-89ab-cdef-0123-456789abcdef";
-        let path: PathBuf = format!("./application/context/tmp/download/{}", id).into();
-        assert_eq!(config.temporary_download_file_path(id), path);
-    }
-
-    #[test]
     fn test_globals_path() {
         let config = Configuration::new(
             "",
@@ -702,6 +661,14 @@ mod tests {
         let path: PathBuf =
             "./application/context/experiments/experiment_id/steps/1647339730009952403404363919453614495606".into();
         assert_eq!(config.experiment_step_path("experiment_id", "pipeline_id", "step_id"), path);
+    }
+
+    #[test]
+    fn test_hash_pipeline_step_id() {
+        assert_eq!(
+            Configuration::hash_pipeline_step_id("pipeline_id", "step_id"),
+            "1647339730009952403404363919453614495606".to_string()
+        );
     }
 
     #[test]
