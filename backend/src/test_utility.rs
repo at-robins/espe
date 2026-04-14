@@ -16,11 +16,12 @@ use crate::{
     },
 };
 use actix_web::{
+    App, Error,
     body::MessageBody,
     dev::{ServiceFactory, ServiceRequest, ServiceResponse},
-    middleware, web, App, Error,
+    middleware, web,
 };
-use diesel::{connection::SimpleConnection, Connection, RunQueryDsl, SqliteConnection};
+use diesel::{Connection, RunQueryDsl, SqliteConnection, connection::SimpleConnection};
 use diesel_migrations::MigrationHarness;
 use dotenv::dotenv;
 use parking_lot::Mutex;
@@ -41,16 +42,16 @@ pub fn create_test_app(
 ) -> App<
     impl ServiceFactory<
         ServiceRequest,
-        Response = ServiceResponse<impl MessageBody>,
+        Response = ServiceResponse<impl MessageBody + use<>>,
         Config = (),
         InitError = (),
         Error = Error,
-    >,
+    > + use<>,
 > {
     dotenv().unwrap();
     env_logger::try_init_from_env(env_logger::Env::new().filter(LOG_LEVEL)).ok();
     let download_tracker = context.download_tracker();
-    let app_config = &web::Data::<Configuration>::new(context.into());
+    let app_config = web::Data::<Configuration>::new(context.into());
     let database_manager =
         web::Data::new(DatabaseManager::new(web::Data::clone(&app_config)).unwrap());
     let loaded_pipelines =
@@ -61,7 +62,7 @@ pub fn create_test_app(
         .app_data(web::Data::clone(&loaded_pipelines))
         .app_data(web::Data::clone(&database_manager))
         .app_data(web::Data::new(Mutex::new(ExecutionScheduler::new(
-            web::Data::clone(&app_config),
+            app_config,
             web::Data::clone(&database_manager),
             web::Data::clone(&loaded_pipelines),
         ))))

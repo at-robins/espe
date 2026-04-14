@@ -11,10 +11,10 @@ use std::{
 
 use actix_web::web::Bytes;
 use parking_lot::Mutex;
-use zip::{write::StreamWriter, ZipWriter};
+use zip::{ZipWriter, write::StreamWriter};
 
 use crate::application::error::{
-    SeqError, SeqErrorType, DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+    DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE, SeqError, SeqErrorType,
 };
 
 /// Manages the tracking of download events.
@@ -338,7 +338,7 @@ impl ArchiveStream {
                             return Err(SeqError::from(err).chain(format!(
                                 "Failed to retrieve directory entry in \"{}\".",
                                 path.as_ref().display()
-                            )))
+                            )));
                         },
                     }
                 }
@@ -467,6 +467,80 @@ impl ArchiveStream {
         self.processing_file = Some(file);
         Ok(())
     }
+
+    /// Polls the download stream.
+    /// Internal function for the [`Stream`](futures::Stream) implementation.
+    fn poll_next_internal(&mut self) -> Poll<Option<Result<Bytes, SeqError>>> {
+        if self.writer.is_none() {
+            // All contents have been written.
+            Poll::Ready(None)
+        } else if self.path_queue.is_empty() {
+            // All files and directories have been processed.
+            // Finialises the archive.
+            // The unwrap works, as the contents of the writer have been tested above.
+            let finished_writer = self.writer.take().unwrap();
+            match finished_writer.finish() {
+                Ok(_) => Poll::Ready(Some(Ok(self.cursor.take_content()))),
+                Err(err) => Poll::Ready(Some(Err(
+                    SeqError::from(err).chain("Failed to finalise the archive.")
+                ))),
+            }
+        } else {
+            if self
+                .path_queue
+                .last()
+                .expect("The path stack must have been verified to not be empty here!")
+                .is_dir()
+            {
+                let directory_path_absolute = self.path_queue.pop().unwrap();
+                let directory_path_relative = self.relative_path(&directory_path_absolute);
+                if let Err(err) = self
+                    .writer
+                    .as_mut()
+                    .unwrap()
+                    .add_directory_from_path(directory_path_relative, self.options)
+                {
+                    return Poll::Ready(Some(Err(SeqError::from(err).chain(format!(
+                        "Failed to add directory \"{}\" to archive.",
+                        directory_path_absolute.display()
+                    )))));
+                }
+                match ArchiveStream::directory_paths(directory_path_absolute) {
+                    Ok(directories) => self.path_queue.extend(directories),
+                    Err(err) => {
+                        return Poll::Ready(Some(Err(err.chain(format!(
+                        "Failed to load directory structure during archive generation of \"{}\".",
+                        self.source.display()
+                    )))));
+                    },
+                }
+            } else {
+                // Should be a file.
+                // If a file is currently read continue processing the file.
+                if self.processing_file.is_some() {
+                    if let Err(err) = self.read_file_into_archive_cursor() {
+                        return Poll::Ready(Some(Err(err.chain(format!(
+                            "Failed to read file \"{:?}\" during creation of archive \"{}\".",
+                            self.path_queue.last(),
+                            self.source.display()
+                        )))));
+                    }
+                    // If the file was finished remove it from the processing list.
+                    if self.processing_file.is_none() {
+                        self.path_queue.pop();
+                    }
+                } else {
+                    // A new file will be opened and processed.
+                    if let Err(err) = self.process_next_file() {
+                        return Poll::Ready(Some(Err(SeqError::from(err).chain(
+                            "Failed to process the next file during archive generation.",
+                        ))));
+                    }
+                }
+            }
+            Poll::Ready(Some(Ok(self.cursor.take_content())))
+        }
+    }
 }
 
 impl futures::Stream for ArchiveStream {
@@ -477,82 +551,15 @@ impl futures::Stream for ArchiveStream {
         _: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         let archive_stream = self.get_mut();
-        if archive_stream.writer.is_none() {
-            // All contents have been written.
-            archive_stream.unset_tracker();
-            Poll::Ready(None)
-        } else if archive_stream.path_queue.is_empty() {
-            // All files and directories have been processed.
-            // Finialises the archive.
-            // The unwrap works, as the contents of the writer have been tested above.
-            let finished_writer = archive_stream.writer.take().unwrap();
-            match finished_writer.finish() {
-                Ok(_) => Poll::Ready(Some(Ok(archive_stream.cursor.take_content()))),
-                Err(err) => {
-                    archive_stream.unset_tracker();
-                    Poll::Ready(Some(Err(SeqError::from(err).chain("Failed to finalise the archive."))))
-                },
-            }
-        } else {
-            if archive_stream
-                .path_queue
-                .last()
-                .expect("The path stack must have been verified to not be empty here!")
-                .is_dir()
-            {
-                let directory_path_absolute = archive_stream.path_queue.pop().unwrap();
-                let directory_path_relative =
-                    archive_stream.relative_path(&directory_path_absolute);
-                if let Err(err) = archive_stream
-                    .writer
-                    .as_mut()
-                    .unwrap()
-                    .add_directory_from_path(directory_path_relative, archive_stream.options)
-                {
-                    archive_stream.unset_tracker();
-                    return Poll::Ready(Some(Err(SeqError::from(err).chain(format!(
-                        "Failed to add directory \"{}\" to archive.",
-                        directory_path_absolute.display()
-                    )))));
-                }
-                match ArchiveStream::directory_paths(directory_path_absolute) {
-                    Ok(directories) => archive_stream.path_queue.extend(directories),
-                    Err(err) => {
-                        archive_stream.unset_tracker();
-                        return Poll::Ready(Some(Err(err.chain(format!(
-                        "Failed to load directory structure during archive generation of \"{}\".",
-                        archive_stream.source.display()
-                    )))));
-                    },
-                }
-            } else {
-                // Should be a file.
-                // If a file is currently read continue processing the file.
-                if archive_stream.processing_file.is_some() {
-                    if let Err(err) = archive_stream.read_file_into_archive_cursor() {
-                        archive_stream.unset_tracker();
-                        return Poll::Ready(Some(Err(err.chain(format!(
-                            "Failed to read file \"{:?}\" during creation of archive \"{}\".",
-                            archive_stream.path_queue.last(),
-                            archive_stream.source.display()
-                        )))));
-                    }
-                    // If the file was finished remove it from the processing list.
-                    if archive_stream.processing_file.is_none() {
-                        archive_stream.path_queue.pop();
-                    }
-                } else {
-                    // A new file will be opened and processed.
-                    if let Err(err) = archive_stream.process_next_file() {
-                        archive_stream.unset_tracker();
-                        return Poll::Ready(Some(Err(SeqError::from(err).chain(
-                            "Failed to process the next file during archive generation.",
-                        ))));
-                    }
-                }
-            }
-            Poll::Ready(Some(Ok(archive_stream.cursor.take_content())))
+        let poll_result = archive_stream.poll_next_internal();
+        // Removes the download tracker if the stream is finished or an error was returned.
+        match poll_result {
+            Poll::Ready(Some(Ok(_))) => {},
+            Poll::Pending => {},
+            Poll::Ready(None) => archive_stream.unset_tracker(),
+            Poll::Ready(Some(Err(_))) => archive_stream.unset_tracker(),
         }
+        poll_result
     }
 }
 
@@ -716,10 +723,12 @@ mod tests {
 
     #[test]
     fn test_archive_stream_new_path_does_not_exist() {
-        assert!(ArchiveStream::new(
-            "../testing_resources/archive/stream_new_test/this_path_does_not_exist.42"
-        )
-        .is_err());
+        assert!(
+            ArchiveStream::new(
+                "../testing_resources/archive/stream_new_test/this_path_does_not_exist.42"
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -728,11 +737,15 @@ mod tests {
             ArchiveStream::new("../testing_resources/archive/stream_new_test/test_file.txt")
                 .unwrap();
         assert_eq!(stream.path_queue.len(), 1);
-        assert!(stream.path_queue[0]
-            .ends_with("testing_resources/archive/stream_new_test/test_file.txt"));
-        assert!(stream
-            .source
-            .ends_with("testing_resources/archive/stream_new_test")); // Ensures the source directory has been set correctly.
+        assert!(
+            stream.path_queue[0]
+                .ends_with("testing_resources/archive/stream_new_test/test_file.txt")
+        );
+        assert!(
+            stream
+                .source
+                .ends_with("testing_resources/archive/stream_new_test")
+        ); // Ensures the source directory has been set correctly.
         assert!(stream.writer.is_some()); // Ensures the writer is not closed.
         assert!(stream.tracker.is_none()); // Ensures no initial tracker has been set.
         assert!(stream.processing_file.is_none()); // Ensures no file is processed without prompting.
@@ -742,17 +755,23 @@ mod tests {
     fn test_archive_stream_new_directory() {
         let stream = ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
         assert_eq!(stream.path_queue.len(), 2);
-        assert!(stream
-            .path_queue
-            .iter()
-            .any(|p| p.ends_with("testing_resources/archive/stream_new_test/test_file.txt")));
-        assert!(stream
-            .path_queue
-            .iter()
-            .any(|p| p.ends_with("testing_resources/archive/stream_new_test/sub_folder")));
-        assert!(stream
-            .source
-            .ends_with("testing_resources/archive/stream_new_test")); // Ensures the source directory has been set correctly.
+        assert!(
+            stream
+                .path_queue
+                .iter()
+                .any(|p| p.ends_with("testing_resources/archive/stream_new_test/test_file.txt"))
+        );
+        assert!(
+            stream
+                .path_queue
+                .iter()
+                .any(|p| p.ends_with("testing_resources/archive/stream_new_test/sub_folder"))
+        );
+        assert!(
+            stream
+                .source
+                .ends_with("testing_resources/archive/stream_new_test")
+        ); // Ensures the source directory has been set correctly.
         assert!(stream.writer.is_some()); // Ensures the writer is not closed.
         assert!(stream.tracker.is_none()); // Ensures no initial tracker has been set.
         assert!(stream.processing_file.is_none()); // Ensures no file is processed without prompting.
@@ -787,17 +806,20 @@ mod tests {
         assert!(directories.contains(&PathBuf::from(
             "../testing_resources/archive/stream_new_test/test_file.txt"
         )));
-        assert!(directories
-            .contains(&PathBuf::from("../testing_resources/archive/stream_new_test/sub_folder")));
+        assert!(
+            directories.contains(&PathBuf::from(
+                "../testing_resources/archive/stream_new_test/sub_folder"
+            ))
+        );
         assert_eq!(directories.len(), 2);
     }
 
     #[test]
     fn test_archive_stream_directory_paths_not_exist() {
-        assert!(ArchiveStream::directory_paths(
-            "../testing_resources/archive/directory_does_not_exist"
-        )
-        .is_err());
+        assert!(
+            ArchiveStream::directory_paths("../testing_resources/archive/directory_does_not_exist")
+                .is_err()
+        );
     }
 
     #[test]
@@ -860,6 +882,47 @@ mod tests {
     }
 
     #[test]
+    fn test_archive_stream_poll_next_internal() {
+        let mut stream =
+            ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
+        let tracker = DownloadTrackerManager::new();
+        stream.set_tracker(
+            tracker.track_experiment_output_download_experiment(DEFAULT_EXPERIMENT_ID),
+        );
+        assert!(stream.tracker.is_some());
+        assert!(tracker.is_experiment_output_download_experiment_tracked(DEFAULT_EXPERIMENT_ID));
+
+        let max_polls = 10000; // Should be sufficient for the small amount of test data. Mean poll count was 8 during testing.
+        let mut num_polls = 0;
+        let mut did_poll_data = false;
+        while num_polls < max_polls {
+            match stream.poll_next_internal() {
+                Poll::Ready(Some(Ok(polled_bytes))) => {
+                    if !polled_bytes.is_empty() {
+                        did_poll_data = true;
+                    }
+                    // During polling the download tracker should persist.
+                    assert!(
+                        tracker.is_experiment_output_download_experiment_tracked(
+                            DEFAULT_EXPERIMENT_ID
+                        )
+                    );
+                },
+                Poll::Ready(Some(Err(err))) => panic!("Recieved error while polling: {}", err),
+                Poll::Ready(None) => break,
+                Poll::Pending => {},
+            }
+            num_polls += 1;
+        }
+        assert!(did_poll_data); // Some data should be polled.
+        assert_ne!(num_polls, max_polls); // Should finish in time.
+
+        // The download tracker removal is handeled by the real function.
+        assert!(stream.tracker.is_some());
+        assert!(tracker.is_experiment_output_download_experiment_tracked(DEFAULT_EXPERIMENT_ID));
+    }
+
+    #[test]
     fn test_archive_stream_poll_next() {
         let mut stream =
             ArchiveStream::new("../testing_resources/archive/stream_new_test").unwrap();
@@ -883,8 +946,11 @@ mod tests {
                         did_poll_data = true;
                     }
                     // During polling the download tracker should persist.
-                    assert!(tracker
-                        .is_experiment_output_download_experiment_tracked(DEFAULT_EXPERIMENT_ID));
+                    assert!(
+                        tracker.is_experiment_output_download_experiment_tracked(
+                            DEFAULT_EXPERIMENT_ID
+                        )
+                    );
                 },
                 Poll::Ready(Some(Err(err))) => panic!("Recieved error while polling: {}", err),
                 Poll::Ready(None) => break,
