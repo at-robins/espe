@@ -1,4 +1,5 @@
-# Encapsulated Sequencing Pipeline Engine
+<img src="/documentation/images/name_and_logo.webp" alt="ESPE logog" width=35% />
+<br />
 
 ## Design philosophy
 
