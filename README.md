@@ -1,4 +1,4 @@
-<img src="/documentation/images/name_and_logo.webp" alt="ESPE logog" width=35% />
+<img src="/documentation/images/name_and_logo.webp" alt="ESPE logog" width=50% />
 <br />
 
 ## Design philosophy
