@@ -30,7 +30,8 @@ export function error_to_string(error: ErrorResponse): string {
  */
 export function is_error_response(data: any): boolean {
   return (
-    data &&
+    // Transforms the data into a boolean.
+    !!data &&
     typeof data === "object" &&
     typeof data["code"] === "number" &&
     typeof data["uuid"] === "string" &&
