@@ -129,6 +129,23 @@
       "container": "trajectory",
       "dependencies": ["cluster_relation_dge"],
       "variables": []
+    },
+    {
+      "id": "cluster_pathways",
+      "name": "Pathway analysis",
+      "description": "<espe-import>step_cluster_pathways_description.html</espe-import>",
+      "container": "cluster_pathways",
+      "dependencies": ["cluster_relation_dge"],
+      "variables": []
+    },
+    {
+      "id": "cluster_comparison",
+      "name": "Cluster comparison",
+      "description": "<espe-import>step_cluster_comparison_description.html</espe-import>",
+      "container": "cluster_comparison",
+      "dependencies": ["cluster_relation_dge"],
+      "variables": []
+    },
     }
   ]
 }
