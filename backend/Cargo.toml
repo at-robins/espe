@@ -2,6 +2,16 @@
 name = "backend"
 version = "0.1.0"
 edition = "2024"
+authors = ["at-robins"]
+description = "An encapsulated sequencing pipeline engine to run isolated, reproducible biological workflows."
+repository = "https://github.com/at-robins/espe"
+homepage = "https://github.com/at-robins/espe"
+
+[package.metadata.wix]
+upgrade-guid = "4638B50E-7ED7-4B5C-90C1-E9086FF00BC4"
+path-guid = "DE95CAB0-D9AC-4807-8B2B-7C5F14F29ECC"
+license = false
+eula = false
 
 [dependencies]
 actix-files = "0.6.10"
@@ -31,3 +41,8 @@ zip = "8.5.1"
 [dev-dependencies]
 mime = "0.3.17"
 serial_test = "3.4.0"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
