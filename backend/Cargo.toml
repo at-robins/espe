@@ -26,15 +26,16 @@ email_address = "0.2.9"
 env_logger = "0.11.10"
 futures = "0.3.32"
 futures-util = "0.3.32"
+libsqlite3-sys = { version = "0.36", features = ["bundled"] }
 log = "0.4.29"
 getset = "0.1.6"
-openssl = "0.10.76"
+openssl = { version = "0.10.78", features = ["vendored"] }
 parking_lot = "0.12.5"
 sanitize-filename = "0.6.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 twox-hash = "2.1.2"
-uuid = { version = "1.23.0", features = ["serde", "v1", "v4"] }
+uuid = { version = "1.23.1", features = ["serde", "v1", "v4"] }
 walkdir = "2.5.0"
 zip = "8.5.1"
 
