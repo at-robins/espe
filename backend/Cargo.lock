@@ -412,38 +412,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
-name = "backend"
-version = "0.1.0"
-dependencies = [
- "actix-files",
- "actix-multipart",
- "actix-web",
- "ammonia",
- "chrono",
- "diesel",
- "diesel_migrations",
- "dotenv",
- "email_address",
- "env_logger",
- "futures",
- "futures-util",
- "getset",
- "libsqlite3-sys",
- "log",
- "mime",
- "openssl",
- "parking_lot 0.12.5",
- "sanitize-filename",
- "serde",
- "serde_json",
- "serial_test",
- "twox-hash",
- "uuid",
- "walkdir",
- "zip",
-]
-
-[[package]]
 name = "backtrace"
 version = "0.3.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1026,6 +994,38 @@ checksum = "aa68f1b12764fab894d2755d2518754e71b4fd80ecfb822714a1206c2aab39bf"
 dependencies = [
  "cc",
  "libc",
+]
+
+[[package]]
+name = "espe"
+version = "0.1.0"
+dependencies = [
+ "actix-files",
+ "actix-multipart",
+ "actix-web",
+ "ammonia",
+ "chrono",
+ "diesel",
+ "diesel_migrations",
+ "dotenv",
+ "email_address",
+ "env_logger",
+ "futures",
+ "futures-util",
+ "getset",
+ "libsqlite3-sys",
+ "log",
+ "mime",
+ "openssl",
+ "parking_lot 0.12.5",
+ "sanitize-filename",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "twox-hash",
+ "uuid",
+ "walkdir",
+ "zip",
 ]
 
 [[package]]
