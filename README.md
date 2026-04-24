@@ -1,4 +1,4 @@
-<img src="/documentation/images/name_and_logo.webp" alt="ESPE logog" width=75% />
+<img src="/documentation/images/name_and_logo_sideways.svg" alt="ESPE logog" width=100% />
 <br />
 
 ## Design philosophy
@@ -98,7 +98,7 @@ curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo bash -
 sudo apt update
 sudo apt install nodejs
 # Install the requirements for the openssl crate.
-sudo apt install libssl-dev
+sudo apt install build-essential perl
 ```
 
 Conventional release build:
@@ -123,9 +123,6 @@ npm run build
 Prerequisites:
 
 ```bash
-# Install SQLite and the Diesel dependency.
-# The version requirement for SQLite is >= 3.35.
-sudo apt install sqlite3 libsqlite3-dev
 # Install docker for containerisation of the pipeline.
 sudo apt install docker.io
 ```
