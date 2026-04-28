@@ -41,6 +41,7 @@
                 <entity-pipeline-variable
                   :pipeline-variable="pipelineVariable"
                   :global-options="loadedGlobalRepos"
+                  :locked="locked"
                   @update:model-value="
                     uploadVariableGlobal(
                       pipeline.id,
@@ -100,6 +101,7 @@
                 <entity-pipeline-variable
                   :pipeline-variable="pipelineVariable"
                   :global-options="loadedGlobalRepos"
+                  :locked="locked"
                   @update:model-value="
                     uploadVariableStep(
                       pipeline.id,
@@ -147,6 +149,7 @@ const props = defineProps({
   },
   entityId: { type: Number, required: true },
   endpointType: { type: String, required: true },
+  locked: { type: Boolean, required: false, default: false },
 });
 
 const loadedGlobalRepos: Ref<Array<GlobalDataDetails>> = ref([]);

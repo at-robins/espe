@@ -10,7 +10,7 @@ pub const DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE: &str =
     "An unforseen error occurred. Please check the logs for further information.";
 
 /// An application wide error.
-#[derive(Debug, Clone, Getters, CopyGetters, Serialize, Deserialize)]
+#[derive(Debug, Clone, Getters, CopyGetters, PartialEq, Serialize, Deserialize)]
 pub struct SeqError {
     /// The error ID.
     #[getset(get_copy = "pub")]
@@ -32,16 +32,18 @@ pub struct SeqError {
 }
 
 /// An application wide error type.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SeqErrorType {
-    /// A generic error implying an internal problem.
+    /// An generic error implying an internal problem.
     InternalServerError,
-    /// A error representing a missing resource.
+    /// An error representing a missing resource.
     NotFoundError,
-    /// A error representing an erroneous request.
+    /// An error representing an erroneous request.
     BadRequestError,
-    /// A error representing a request conflicting with internal server state.
+    /// An error representing a request conflicting with internal server state.
     Conflict,
+    /// An error representing a request that was performed despite an available check has failed.
+    PreconditionFailed,
 }
 
 impl SeqError {
@@ -127,6 +129,8 @@ impl std::fmt::Display for SeqError {
     }
 }
 
+impl std::error::Error for SeqError {}
+
 #[derive(Debug, Serialize)]
 /// An informative error response for client side display
 /// containing a unique ID to correlate the error with the
@@ -153,6 +157,7 @@ impl ResponseError for SeqError {
             SeqErrorType::NotFoundError => StatusCode::NOT_FOUND,
             SeqErrorType::BadRequestError => StatusCode::BAD_REQUEST,
             SeqErrorType::Conflict => StatusCode::CONFLICT,
+            SeqErrorType::PreconditionFailed => StatusCode::PRECONDITION_FAILED,
         }
     }
 }
@@ -273,6 +278,17 @@ impl From<dotenv::Error> for SeqError {
     }
 }
 
+impl From<zip::result::ZipError> for SeqError {
+    fn from(error: zip::result::ZipError) -> Self {
+        Self::new(
+            "zip::result::ZipError",
+            SeqErrorType::InternalServerError,
+            error,
+            DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+        )
+    }
+}
+
 /// A logger for a specific [`SeqError`].
 pub struct SeqErrorLogger {
     message: String,
@@ -299,6 +315,7 @@ impl SeqErrorLogger {
             SeqErrorType::NotFoundError => warn!("{}", self.message),
             SeqErrorType::BadRequestError => error!("{}", self.message),
             SeqErrorType::Conflict => error!("{}", self.message),
+            SeqErrorType::PreconditionFailed => error!("{}", self.message),
         }
     }
 }

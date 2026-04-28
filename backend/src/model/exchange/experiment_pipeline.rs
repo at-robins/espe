@@ -10,9 +10,12 @@ use crate::model::internal::pipeline_blueprint::{
 /// The definition of a pipeline.
 #[derive(Debug, Clone, Getters, PartialEq, Serialize, Deserialize)]
 pub struct ExperimentPipelineBlueprint {
-    /// The unique ID of the pipeline.
+    /// The unique raw ID of the pipeline.
     #[getset(get = "pub")]
     id: String,
+    /// The unique sanitised ID of the pipeline step which can safely be used as file name.
+    #[getset(get = "pub")]
+    sanitised_id: String,
     /// The name for display.
     #[getset(get = "pub")]
     name: String,
@@ -77,6 +80,7 @@ impl ExperimentPipelineBlueprint {
             .collect();
         Self {
             id: pipeline.borrow().id().clone(),
+            sanitised_id: pipeline.borrow().sanitised_id().clone(),
             name: pipeline.borrow().name().clone(),
             version: pipeline.borrow().version().clone(),
             description: pipeline.borrow().description().clone(),
@@ -89,9 +93,12 @@ impl ExperimentPipelineBlueprint {
 /// The definition of a pipeline step.
 #[derive(Debug, Clone, Getters, PartialEq, Serialize, Deserialize)]
 pub struct ExperimentPipelineStepBlueprint {
-    /// The unique ID of the pipeline step.
+    /// The unique raw ID of the pipeline step.
     #[getset(get = "pub")]
     id: String,
+    /// The unique sanitised ID of the pipeline step which can safely be used as file name.
+    #[getset(get = "pub")]
+    sanitised_id: String,
     /// The name for display.
     #[getset(get = "pub")]
     name: String,
@@ -151,6 +158,7 @@ impl ExperimentPipelineStepBlueprint {
             .map(|s| s.clone());
         Self {
             id: pipeline_step.borrow().id().clone(),
+            sanitised_id: pipeline_step.borrow().sanitised_id().clone(),
             name: pipeline_step.borrow().name().clone(),
             description: pipeline_step.borrow().description().clone(),
             container: pipeline_step.borrow().container().clone(),
@@ -216,7 +224,7 @@ impl ExperimentPipelineStepVariable {
 #[cfg(test)]
 mod tests {
 
-    use crate::model::internal::step::PipelineStepStatus;
+    use crate::model::db::experiment_execution::ExecutionStatus;
 
     use super::*;
 
@@ -350,17 +358,18 @@ mod tests {
         values.insert("fastqcbool".to_string(), value_bool.clone());
 
         let mut stati = HashMap::new();
-        stati.insert("fastqc".to_string(), PipelineStepStatus::Pending.to_string());
+        stati.insert("fastqc".to_string(), ExecutionStatus::Waiting.to_string());
 
         let experiment_step =
             ExperimentPipelineStepBlueprint::from_internal(&pipeline_step, values, stati);
         assert_eq!(experiment_step.id(), pipeline_step.id());
+        assert_eq!(experiment_step.sanitised_id(), pipeline_step.sanitised_id());
         assert_eq!(experiment_step.name(), pipeline_step.name());
         assert_eq!(experiment_step.description(), pipeline_step.description());
         assert_eq!(experiment_step.container(), pipeline_step.container());
         assert_eq!(experiment_step.dependencies(), pipeline_step.dependencies());
         assert_eq!(experiment_step.variables().len(), pipeline_step.variables().len());
-        assert_eq!(experiment_step.status(), &Some(PipelineStepStatus::Pending.to_string()));
+        assert_eq!(experiment_step.status(), &Some(ExecutionStatus::Waiting.to_string()));
 
         let experiment_vars = experiment_step.variables();
         let pipeline_vars = pipeline_step.variables();
@@ -469,7 +478,7 @@ mod tests {
         values_step.insert("fastqc2global".to_string(), "11".to_string());
 
         let mut stati = HashMap::new();
-        stati.insert("fastqc2".to_string(), PipelineStepStatus::Failed.to_string());
+        stati.insert("fastqc2".to_string(), ExecutionStatus::Failed.to_string());
 
         let experiment_pipeline = ExperimentPipelineBlueprint::from_internal(
             &pipeline,
@@ -478,6 +487,7 @@ mod tests {
             stati,
         );
         assert_eq!(experiment_pipeline.id(), pipeline.id());
+        assert_eq!(experiment_pipeline.sanitised_id(), pipeline.sanitised_id());
         assert_eq!(experiment_pipeline.name(), pipeline.name());
         assert_eq!(experiment_pipeline.version(), pipeline.version());
         assert_eq!(experiment_pipeline.description(), pipeline.description());
@@ -499,6 +509,7 @@ mod tests {
         let pipeline_steps = pipeline.steps();
         for i in 0..experiment_steps.len() {
             assert_eq!(experiment_steps[i].id(), pipeline_steps[i].id());
+            assert_eq!(experiment_steps[i].sanitised_id(), pipeline_steps[i].sanitised_id());
             assert_eq!(experiment_steps[i].name(), pipeline_steps[i].name());
             assert_eq!(experiment_steps[i].description(), pipeline_steps[i].description());
             assert_eq!(experiment_steps[i].container(), pipeline_steps[i].container());
@@ -508,7 +519,7 @@ mod tests {
             if experiment_steps[i].id() == "fastqc2" {
                 assert_eq!(
                     experiment_steps[i].status(),
-                    &Some(PipelineStepStatus::Failed.to_string())
+                    &Some(ExecutionStatus::Failed.to_string())
                 );
             } else {
                 assert_eq!(experiment_steps[i].status(), &None);

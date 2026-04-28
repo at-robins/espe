@@ -8,8 +8,13 @@
             :label="pipelineVariable.name"
             toggle-indeterminate
             :color="booleanModel === null ? 'grey-4' : 'primary'"
+            :disable="locked"
             @update:model-value="updateModelValueBooleanNumberString"
-          />
+          >
+            <q-tooltip v-if="locked">
+              {{ lockMessage }}
+            </q-tooltip>
+          </q-checkbox>
         </div>
         <div v-else-if="isGlobal(pipelineVariable)">
           <q-select
@@ -20,8 +25,13 @@
             v-model="globalModel"
             :options="globalOptions"
             :label="pipelineVariable.name"
+            :readonly="locked"
             @update:model-value="updateModelValueGlobal"
-          />
+          >
+            <q-tooltip v-if="locked">
+              {{ lockMessage }}
+            </q-tooltip>
+          </q-select>
         </div>
         <div v-else-if="isNumber(pipelineVariable)">
           <q-input
@@ -29,6 +39,7 @@
             v-model="numberModel"
             :label="pipelineVariable.name"
             type="number"
+            :readonly="locked"
             @update:model-value="updateModelValueBooleanNumberString"
           >
             <template v-slot:append>
@@ -38,6 +49,9 @@
                 class="cursor-pointer"
               />
             </template>
+            <q-tooltip v-if="locked">
+              {{ lockMessage }}
+            </q-tooltip>
           </q-input>
         </div>
         <div v-else-if="isOption(pipelineVariable)">
@@ -49,14 +63,20 @@
             v-model="optionModel"
             :options="contentAsOptions(pipelineVariable.category)"
             :label="pipelineVariable.name"
+            :readonly="locked"
             @update:model-value="updateModelValueOption"
-          />
+          >
+            <q-tooltip v-if="locked">
+              {{ lockMessage }}
+            </q-tooltip>
+          </q-select>
         </div>
         <div v-else-if="isString(pipelineVariable)">
           <q-input
             outlined
             v-model="stringModel"
             :label="pipelineVariable.name"
+            :readonly="locked"
             @update:model-value="updateModelValueBooleanNumberString"
           >
             <template v-slot:append>
@@ -65,6 +85,9 @@
                 @click="stringModel = null"
                 class="cursor-pointer"
               />
+              <q-tooltip v-if="locked">
+                {{ lockMessage }}
+              </q-tooltip>
             </template>
           </q-input>
         </div>
@@ -82,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, type PropType, type Ref, watch } from "vue";
+import { ref, type PropType, type Ref, watch, readonly } from "vue";
 import {
   type PipelineStepBlueprintVariable,
   contentAsOptions,
@@ -106,6 +129,7 @@ const props = defineProps({
     default: () => [],
     required: false,
   },
+  locked: { type: Boolean, required: false, default: false },
 });
 
 const booleanModel: Ref<boolean | null> = ref(null);
@@ -113,6 +137,9 @@ const globalModel: Ref<GlobalDataDetails | null> = ref(null);
 const numberModel: Ref<number | null> = ref(null);
 const optionModel: Ref<PipelineStepBlueprintVariableOption | null> = ref(null);
 const stringModel: Ref<string | null> = ref(null);
+const lockMessage = ref(
+  "Altering pipeline variables is not possible while the experiment is executed or output information is downloaded."
+);
 
 watch(
   () => props.pipelineVariable,

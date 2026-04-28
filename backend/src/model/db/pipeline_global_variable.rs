@@ -12,7 +12,7 @@ use diesel::{
 };
 use getset::Getters;
 
-#[derive(Identifiable, Queryable, Insertable, Selectable, PartialEq, Debug)]
+#[derive(Identifiable, Queryable, Insertable, Selectable, PartialEq, Debug, Clone)]
 #[diesel(belongs_to(Experiment, foreign_key = experiment_id))]
 #[diesel(table_name = pipeline_global_variable)]
 /// A queryable global pipeline variable database entry.
@@ -71,6 +71,30 @@ impl PipelineGlobalVariable {
             .filter(
                 crate::schema::pipeline_global_variable::experiment_id
                     .eq(experiment_id)
+                    .and(
+                        crate::schema::pipeline_global_variable::pipeline_id.eq(pipeline_id.into()),
+                    ),
+            )
+            .select(PipelineGlobalVariable::as_select())
+            .load(connection)
+    }
+
+    /// Returns all variable entries with the specified variable ID from the specified pipeline.
+    ///
+    /// # Parameters
+    ///
+    /// * `pipeline_id` - the ID of the pipeline the variable belongs to
+    /// * `variable_id` - the ID of the variable
+    /// * `connection` - the database connection
+    pub fn get_by_pipeline_and_variable_id<T: Into<String>, R: Into<String>>(
+        pipeline_id: T,
+        variable_id: R,
+        connection: &mut SqliteConnection,
+    ) -> Result<Vec<PipelineGlobalVariable>, diesel::result::Error> {
+        crate::schema::pipeline_global_variable::table
+            .filter(
+                crate::schema::pipeline_global_variable::variable_id
+                    .eq(variable_id.into())
                     .and(
                         crate::schema::pipeline_global_variable::pipeline_id.eq(pipeline_id.into()),
                     ),
@@ -367,6 +391,77 @@ mod tests {
                 .unwrap()
                 .unwrap(),
             &pipeline_variable
+        );
+    }
+
+    #[test]
+    fn test_get_by_pipeline_and_variable_id() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let mut connection = context.get_connection();
+        // Create dummy experiments.
+        let experiment_0 = NewExperiment::new("0".to_string());
+        let experiment_1 = NewExperiment::new("1".to_string());
+        let experiment_id_0: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_0)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_1: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_1)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        // Dummy variable setup.
+        let pipeline_id = "Dummy pipeline";
+        assert!(PipelineGlobalVariable::get_by_experiment_and_pipeline(
+            experiment_id_1,
+            pipeline_id,
+            &mut connection
+        )
+        .unwrap()
+        .is_empty());
+        let number_of_records = 42;
+        let new_records_exp_0: Vec<PipelineGlobalVariable> = (0..number_of_records)
+            .map(|id| PipelineGlobalVariable {
+                id,
+                experiment_id: experiment_id_0,
+                pipeline_id: pipeline_id.to_string(),
+                variable_id: id.to_string(),
+                variable_value: Some(id.to_string()),
+                creation_time: chrono::Utc::now().naive_local(),
+            })
+            .collect();
+        let new_records_exp_1: Vec<PipelineGlobalVariable> = new_records_exp_0
+            .iter()
+            .map(|glob_var_0| {
+                let mut glob_var_1 = glob_var_0.clone();
+                glob_var_1.experiment_id = experiment_id_1;
+                glob_var_1.id = glob_var_1.id + number_of_records;
+                glob_var_1
+            })
+            .collect();
+        diesel::insert_into(crate::schema::pipeline_global_variable::table)
+            .values(&new_records_exp_0)
+            .execute(&mut connection)
+            .unwrap();
+        diesel::insert_into(crate::schema::pipeline_global_variable::table)
+            .values(&new_records_exp_1)
+            .execute(&mut connection)
+            .unwrap();
+        let query_variable_id = 3;
+        assert_eq!(
+            vec![
+                new_records_exp_0[query_variable_id].clone(),
+                new_records_exp_1[query_variable_id].clone()
+            ],
+            PipelineGlobalVariable::get_by_pipeline_and_variable_id(
+                pipeline_id,
+                query_variable_id.to_string(),
+                &mut connection
+            )
+            .unwrap()
         );
     }
 }

@@ -1,4 +1,10 @@
-use crate::test_utility::{create_test_app, TestContext};
+use crate::{
+    model::db::experiment_execution::{ExecutionStatus, ExperimentExecution},
+    test_utility::{
+        create_default_experiment, create_default_experiment_execution, create_test_app,
+        TestContext, DEFAULT_EXPERIMENT_ID, DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID,
+    },
+};
 
 use super::*;
 use actix_web::{
@@ -316,6 +322,97 @@ async fn test_delete_experiment_files_by_path_all() {
 }
 
 #[actix_web::test]
+async fn test_delete_experiment_files_by_path_locked() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let experiment_id = 42;
+    let pipeline_id = "Dummy ID";
+    let new_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: None,
+        mail: None,
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    // Flags the experiment as running to lock it.
+    let new_execution = [
+        ExperimentExecution {
+            id: 42,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "1".to_string(),
+            execution_status: ExecutionStatus::Finished.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+        ExperimentExecution {
+            id: 43,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "2".to_string(),
+            execution_status: ExecutionStatus::Running.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+    ];
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
+        .execute(&mut connection)
+        .unwrap();
+
+    let experiment_path = app_config.experiment_input_path(experiment_id.to_string());
+    let folders = vec![
+        experiment_path.join("1/11/111"),
+        experiment_path.join("1/11/112"),
+        experiment_path.join("1/11/113"),
+        experiment_path.join("2/21"),
+        experiment_path.join("2/22"),
+        experiment_path.join("3"),
+    ];
+    for folder in folders {
+        std::fs::create_dir_all(folder).unwrap();
+    }
+    std::fs::write(experiment_path.join("1/11/112/test_file_1.txt"), "test_content").unwrap();
+    std::fs::write(experiment_path.join("3/test_file_2.txt"), "test_content").unwrap();
+    // Assert that all files and folder exist.
+    assert!(experiment_path.join("1/11/111").exists());
+    assert!(experiment_path.join("1/11/112").exists());
+    assert!(experiment_path.join("1/11/112/test_file_1.txt").exists());
+    assert!(experiment_path.join("1/11/113").exists());
+    assert!(experiment_path.join("2/21").exists());
+    assert!(experiment_path.join("2/22").exists());
+    assert!(experiment_path.join("3").exists());
+    assert!(experiment_path.join("3/test_file_2.txt").exists());
+    let root_path = FilePath {
+        path_components: vec![],
+    };
+    let req = test::TestRequest::delete()
+        .uri(&format!("/api/files/experiments/{}", experiment_id))
+        .set_json(root_path)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::PRECONDITION_FAILED);
+    // Assert that all files and folders still exist.
+    assert!(experiment_path.join("1/11/111").exists());
+    assert!(experiment_path.join("1/11/112").exists());
+    assert!(experiment_path.join("1/11/112/test_file_1.txt").exists());
+    assert!(experiment_path.join("1/11/113").exists());
+    assert!(experiment_path.join("2/21").exists());
+    assert!(experiment_path.join("2/22").exists());
+    assert!(experiment_path.join("3").exists());
+    assert!(experiment_path.join("3/test_file_2.txt").exists());
+}
+
+#[actix_web::test]
 async fn test_delete_experiment_files_non_existent() {
     let context = TestContext::new();
     let app = test::init_service(create_test_app(&context)).await;
@@ -449,6 +546,72 @@ async fn test_post_experiment_add_file_super() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert!(!experiment_path.join("test_file.txt").exists());
+}
+
+#[actix_web::test]
+async fn test_post_experiment_add_file_locked() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let experiment_id = 42;
+    let pipeline_id = "Dummy ID";
+    let new_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: None,
+        mail: None,
+        pipeline_id: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    // Flags the experiment as running to lock it.
+    let new_execution = [
+        ExperimentExecution {
+            id: 42,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "1".to_string(),
+            execution_status: ExecutionStatus::Finished.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+        ExperimentExecution {
+            id: 43,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "2".to_string(),
+            execution_status: ExecutionStatus::Running.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+    ];
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
+        .execute(&mut connection)
+        .unwrap();
+
+    let experiment_path = app_config.experiment_input_path(experiment_id.to_string());
+    let payload_file = "../testing_resources/requests/file_upload/multipart_file_root";
+    let payload = std::fs::read(payload_file).unwrap();
+    let content_type: mime::Mime =
+        "multipart/form-data; boundary=---------------------------5851692324164894962235391524"
+            .parse()
+            .unwrap();
+    assert!(!experiment_path.join("test_file.txt").exists());
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/files/experiments/{}", experiment_id))
+        .insert_header(ContentType(content_type))
+        .set_payload(payload)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::PRECONDITION_FAILED);
     assert!(!experiment_path.join("test_file.txt").exists());
 }
 
@@ -657,6 +820,68 @@ async fn test_post_experiment_add_folder_super() {
 }
 
 #[actix_web::test]
+async fn test_post_experiment_add_folder_locked() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let experiment_id = 42;
+    let pipeline_id = "Dummy ID";
+    let new_record = Experiment {
+        id: experiment_id,
+        experiment_name: "Dummy record".to_string(),
+        comment: None,
+        mail: None,
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_record)
+        .execute(&mut connection)
+        .unwrap();
+    // Flags the experiment as running to lock it.
+    let new_execution = [
+        ExperimentExecution {
+            id: 42,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "1".to_string(),
+            execution_status: ExecutionStatus::Finished.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+        ExperimentExecution {
+            id: 43,
+            experiment_id,
+            pipeline_id: pipeline_id.to_string(),
+            pipeline_step_id: "2".to_string(),
+            execution_status: ExecutionStatus::Running.to_string(),
+            start_time: None,
+            end_time: None,
+            creation_time: chrono::Utc::now().naive_local(),
+        },
+    ];
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
+        .execute(&mut connection)
+        .unwrap();
+
+    let experiment_path = app_config.experiment_input_path(experiment_id.to_string());
+    let folder_path = FilePath {
+        path_components: vec!["1".to_string()],
+    };
+    assert!(!experiment_path.join("1").exists());
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/folders/experiments/{}", experiment_id))
+        .set_json(folder_path)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::PRECONDITION_FAILED);
+    assert!(!experiment_path.join("1").exists());
+}
+
+#[actix_web::test]
 async fn test_post_experiment_add_folder_non_existent() {
     let context = TestContext::new();
     let app = test::init_service(create_test_app(&context)).await;
@@ -740,4 +965,179 @@ async fn test_post_experiment_add_folder_empty_path() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_archive_step_results() {
+    let context = TestContext::new();
+    let download_tracker = context.download_tracker();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Finished);
+    let step_folder = app_config.experiment_step_path(
+        DEFAULT_EXPERIMENT_ID.to_string(),
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+    );
+    std::fs::create_dir_all(&step_folder).unwrap();
+    let test_file_name_01 = "test_file_1.txt";
+    let test_file_path_01 = step_folder.join(test_file_name_01);
+    std::fs::write(&test_file_path_01, "test_content 01").unwrap();
+    let test_file_name_02 = "test_file_2.txt";
+    let test_file_path_02 = step_folder.join(test_file_name_02);
+    std::fs::write(&test_file_path_02, "test_content 02").unwrap();
+
+    assert!(!download_tracker.is_experiment_output_download_step_tracked(
+        DEFAULT_EXPERIMENT_ID,
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID
+    ));
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/experiments/{}/archive/{}",
+            DEFAULT_EXPERIMENT_ID,
+            step_folder.file_name().unwrap().to_string_lossy()
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    // The future is resolved to quickly to test the download tracker in between, 
+    // so only correct dropping of the tracker is tested.
+    assert!(!download_tracker.is_experiment_output_download_step_tracked(
+        DEFAULT_EXPERIMENT_ID,
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID
+    ));
+    let fetched_data = std::io::Cursor::new(test::read_body(resp).await);
+    let extraction_path = app_config.temporary_path();
+    zip::ZipArchive::new(fetched_data)
+        .unwrap()
+        .extract(&extraction_path)
+        .unwrap();
+    let extracted_test_file_path_01 = extraction_path.join(test_file_name_01);
+    let extracted_test_file_path_02 = extraction_path.join(test_file_name_02);
+    assert_eq!(
+        std::fs::read(extracted_test_file_path_01).unwrap(),
+        std::fs::read(test_file_path_01).unwrap()
+    );
+    assert_eq!(
+        std::fs::read(extracted_test_file_path_02).unwrap(),
+        std::fs::read(test_file_path_02).unwrap()
+    );
+}
+
+#[actix_web::test]
+async fn test_get_experiment_archive_step_results_no_experiment_step() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    create_default_experiment(&mut connection);
+    let step_folder = app_config.experiment_step_path(
+        DEFAULT_EXPERIMENT_ID.to_string(),
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+    );
+    std::fs::create_dir_all(&step_folder).unwrap();
+    let test_file_name_01 = "test_file_1.txt";
+    let test_file_path_01 = step_folder.join(test_file_name_01);
+    std::fs::write(&test_file_path_01, "test_content 01").unwrap();
+    let test_file_name_02 = "test_file_2.txt";
+    let test_file_path_02 = step_folder.join(test_file_name_02);
+    std::fs::write(&test_file_path_02, "test_content 02").unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/experiments/{}/archive/{}",
+            DEFAULT_EXPERIMENT_ID,
+            step_folder.file_name().unwrap().to_string_lossy()
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_archive_step_results_no_experiment() {
+    let context = TestContext::new();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    let step_folder = app_config.experiment_step_path(
+        DEFAULT_EXPERIMENT_ID.to_string(),
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+    );
+    std::fs::create_dir_all(&step_folder).unwrap();
+    let test_file_name_01 = "test_file_1.txt";
+    let test_file_path_01 = step_folder.join(test_file_name_01);
+    std::fs::write(&test_file_path_01, "test_content 01").unwrap();
+    let test_file_name_02 = "test_file_2.txt";
+    let test_file_path_02 = step_folder.join(test_file_name_02);
+    std::fs::write(&test_file_path_02, "test_content 02").unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/experiments/{}/archive/{}",
+            DEFAULT_EXPERIMENT_ID,
+            step_folder.file_name().unwrap().to_string_lossy()
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_archive_step_results_invalid_hash() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Finished);
+    let step_folder = app_config.experiment_step_path(
+        DEFAULT_EXPERIMENT_ID.to_string(),
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+    );
+    std::fs::create_dir_all(&step_folder).unwrap();
+    let test_file_name_01 = "test_file_1.txt";
+    let test_file_path_01 = step_folder.join(test_file_name_01);
+    std::fs::write(&test_file_path_01, "test_content 01").unwrap();
+    let test_file_name_02 = "test_file_2.txt";
+    let test_file_path_02 = step_folder.join(test_file_name_02);
+    std::fs::write(&test_file_path_02, "test_content 02").unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/experiments/{}/archive/invalid_hash", DEFAULT_EXPERIMENT_ID,))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_get_experiment_archive_step_results_invalid_archive_path() {
+    let context = TestContext::new();
+    let mut connection = context.get_connection();
+    let app = test::init_service(create_test_app(&context)).await;
+    let app_config: Configuration = (&context).into();
+    create_default_experiment(&mut connection);
+    create_default_experiment_execution(&mut connection, ExecutionStatus::Finished);
+    let step_folder = app_config.experiment_step_path(
+        DEFAULT_EXPERIMENT_ID.to_string(),
+        DEFAULT_PIPELINE_ID,
+        DEFAULT_PIPELINE_STEP_ID,
+    );
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/experiments/{}/archive/{}",
+            DEFAULT_EXPERIMENT_ID,
+            step_folder.file_name().unwrap().to_string_lossy()
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }

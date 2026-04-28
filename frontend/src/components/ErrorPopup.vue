@@ -3,7 +3,9 @@
     <q-card-section class="row items-center q-pb-none">
       <div class="text-h6">
         <q-icon name="error" size="md" color="negative" class="q-pr-sm" />{{
-          errorResponse.name
+          is_error_response(errorResponse)
+            ? errorResponse.name
+            : "Unknown error"
         }}
       </div>
       <q-space />
@@ -11,14 +13,20 @@
     </q-card-section>
 
     <q-card-section>
-      <p>{{ errorResponse.message }}</p>
-      <p>Error-ID: {{ errorResponse.uuid }}</p>
+      <div v-if="is_error_response(errorResponse)">
+        <p>{{ errorResponse.message }}</p>
+        <p>Error-ID: {{ errorResponse.uuid }}</p>
+      </div>
+      <div v-else>
+        <p>{{ String(errorResponse) }}</p>
+      </div>
     </q-card-section>
   </q-card>
 </template>
 
 <script setup lang="ts">
 import type { ErrorResponse } from "@/scripts/types";
+import { is_error_response } from "@/scripts/utilities";
 import type { PropType } from "vue";
 
 defineProps({

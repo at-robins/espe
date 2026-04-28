@@ -21,13 +21,12 @@ use futures::FutureExt;
 use parking_lot::Mutex;
 use service::{
     execution_service::ExecutionScheduler, pipeline_service::LoadedPipelines,
-    temp_file_service::TemporaryFileManager,
 };
+
+use crate::service::download_service::DownloadTrackerManager;
 
 /// The intervall in seconds in which the pipeline execution process is updated.
 const PIPELINE_EXECUTION_UPDATE_INTERVALL: u64 = 5;
-/// The intervall in seconds in which temporary data is inspected.
-const TEMPORARY_DATA_MANAGEMENT_UPDATE_INTERVALL: u64 = 300;
 /// The compiled database migrations.
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
@@ -154,25 +153,9 @@ fn setup_execution_scheduler(
     scheduler
 }
 
-/// Starts the temporary file management.
-///
-/// # Parameters
-///
-/// * `app_config` - the application's [`Configuration`]
-fn setup_temporary_file_manager_scheduler(app_config: &Data<Configuration>) {
-    let temp_file_manager_config = Data::clone(&app_config);
-    std::thread::spawn(move || {
-        let temp_file_manager = TemporaryFileManager::new(temp_file_manager_config);
-        loop {
-            if let Err(err) = temp_file_manager.update() {
-                err.chain("Managing temporary data failed.").log_default();
-            }
-            std::thread::sleep(std::time::Duration::new(
-                TEMPORARY_DATA_MANAGEMENT_UPDATE_INTERVALL,
-                0,
-            ));
-        }
-    });
+/// Initialises and returns a [`DownloadTrackerManager`].
+fn setup_download_tracker() -> Data<DownloadTrackerManager> {
+    Data::new(DownloadTrackerManager::new())
 }
 
 /// Starts the application.
@@ -182,7 +165,7 @@ async fn start_application() -> Result<(), SeqError> {
     let database_manager = setup_database(&app_config)?;
     let loaded_pipelines = setup_pipelines(&app_config)?;
     let scheduler = setup_execution_scheduler(&app_config, &database_manager, &loaded_pipelines);
-    setup_temporary_file_manager_scheduler(&app_config);
+    let download_tracker = setup_download_tracker();
 
     // Setup the application.
     Ok(HttpServer::new(move || {
@@ -205,6 +188,7 @@ async fn start_application() -> Result<(), SeqError> {
             .app_data(Data::clone(&loaded_pipelines))
             .app_data(Data::clone(&database_manager))
             .app_data(Data::clone(&scheduler))
+            .app_data(Data::clone(&download_tracker))
             .configure(routing_config)
     })
     .bind(server_address)?

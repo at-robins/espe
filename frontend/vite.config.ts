@@ -5,13 +5,15 @@ import vue from "@vitejs/plugin-vue";
 import { quasar, transformAssetUrls } from "@quasar/vite-plugin";
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     vue({
       template: { transformAssetUrls },
     }),
     quasar({
-      sassVariables: "src/quasar-variables.sass",
+      sassVariables: fileURLToPath(
+        new URL("./src/quasar-variables.sass", import.meta.url)
+      ),
     }),
   ],
   resolve: {
@@ -26,4 +28,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
   },
-});
+  define: {
+    __VUE_PROD_DEVTOOLS__: mode === "development",
+  },
+}));

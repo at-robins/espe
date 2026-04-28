@@ -1,9 +1,12 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 
-use crate::application::error::SeqError;
+use crate::application::{
+    config::Configuration,
+    error::{SeqError, SeqErrorType},
+};
 
 /// The pipeline sub-directory that imports are stored in.
 const IMPORT_DIRECOTRY: &str = "imports";
@@ -14,10 +17,14 @@ const IMPORT_END_TAG: &str = "</espe-import>";
 
 /// The definition of a pipeline step.
 #[derive(Debug, Clone, Getters, PartialEq, Serialize, Deserialize)]
+#[serde(from = "PipelineStepBlueprintSerde")]
 pub struct PipelineStepBlueprint {
-    /// The unique ID of the pipeline step.
+    /// The unique raw ID of the pipeline step.
     #[getset(get = "pub")]
     id: String,
+    /// The unique sanitised ID of the pipeline step which can safely be used as file name.
+    #[getset(get = "pub")]
+    sanitised_id: String,
     /// The name for display.
     #[getset(get = "pub")]
     name: String,
@@ -35,12 +42,48 @@ pub struct PipelineStepBlueprint {
     variables: Vec<PipelineStepVariable>,
 }
 
+/// The definition of a pipeline step.
+#[derive(Deserialize)]
+pub struct PipelineStepBlueprintSerde {
+    /// The unique ID of the pipeline step.
+    id: String,
+    /// The name for display.
+    name: String,
+    /// A description of the pipeline step.
+    description: String,
+    /// The container used to execute the pipeline step.
+    container: String,
+    /// The IDs of pipeline steps this step depends on.
+    dependencies: Vec<String>,
+    /// The variables that can be specified for the pipeline step.
+    variables: Vec<PipelineStepVariable>,
+}
+
+impl From<PipelineStepBlueprintSerde> for PipelineStepBlueprint {
+    fn from(value: PipelineStepBlueprintSerde) -> Self {
+        let hashed_id = Configuration::hash_string(&value.id);
+        Self {
+            id: value.id,
+            sanitised_id: hashed_id,
+            name: value.name,
+            description: value.description,
+            container: value.container,
+            dependencies: value.dependencies,
+            variables: value.variables,
+        }
+    }
+}
+
 /// The definition of a pipeline.
 #[derive(Debug, Clone, Getters, PartialEq, Serialize, Deserialize)]
+#[serde(from = "PipelineBlueprintSerde")]
 pub struct PipelineBlueprint {
-    /// The unique ID of the pipeline.
+    /// The unique raw ID of the pipeline as defined by the blueprint file.
     #[getset(get = "pub")]
     id: String,
+    /// The unique sanitised ID of the pipeline which can be safely used as file name.
+    #[getset(get = "pub")]
+    sanitised_id: String,
     /// The name for display.
     #[getset(get = "pub")]
     name: String,
@@ -56,6 +99,96 @@ pub struct PipelineBlueprint {
     /// The global variables that can be specified for the pipeline.
     #[getset(get = "pub")]
     global_variables: Vec<PipelineStepVariable>,
+}
+
+/// The definition of a pipeline without derived fields for deserialisation.
+#[derive(Deserialize)]
+struct PipelineBlueprintSerde {
+    /// The unique ID of the pipeline.
+    id: String,
+    /// The name for display.
+    name: String,
+    /// The version of the pipeline.
+    version: String,
+    /// A description of the pipeline.
+    description: String,
+    /// The [`PipelineStepBlueprint`] that make up the pipeline.
+    steps: Vec<PipelineStepBlueprint>,
+    /// The global variables that can be specified for the pipeline.
+    global_variables: Vec<PipelineStepVariable>,
+}
+
+impl From<PipelineBlueprintSerde> for PipelineBlueprint {
+    fn from(value: PipelineBlueprintSerde) -> Self {
+        let hashed_id = Configuration::hash_string(&value.id);
+        Self {
+            id: value.id,
+            sanitised_id: hashed_id,
+            name: value.name,
+            version: value.version,
+            description: value.description,
+            steps: value.steps,
+            global_variables: value.global_variables,
+        }
+    }
+}
+
+impl PipelineBlueprint {
+    /// Returns all global variables of the specified [`PipelineStepVariableCategory`].
+    ///
+    /// # Parameters
+    ///
+    /// * `category` - the category of the variable
+    pub fn global_variables_by_category(
+        &self,
+        category: PipelineStepVariableCategory,
+    ) -> Vec<&PipelineStepVariable> {
+        self.global_variables()
+            .iter()
+            .filter(|global_var| global_var.category() == &category)
+            .collect()
+    }
+
+    /// Returns all step variables of the specified [`PipelineStepVariableCategory`].
+    ///
+    /// # Parameters
+    ///
+    /// * `category` - the category of the variable
+    pub fn step_variables_by_category(
+        &self,
+        category: PipelineStepVariableCategory,
+    ) -> Vec<&PipelineStepVariable> {
+        self.steps()
+            .iter()
+            .flat_map(|step| step.variables())
+            .filter(|global_var| global_var.category() == &category)
+            .collect()
+    }
+
+    /// Validates that all pipeline steps have unique IDs.
+    pub fn validate_step_ids(&self) -> Result<(), SeqError> {
+        let mut unique_step_id_map = HashMap::new();
+        for step in self.steps() {
+            if let Some(step_with_duplicate_id) =
+                unique_step_id_map.insert(step.sanitised_id(), step)
+            {
+                return Err(SeqError::new(
+                    "Duplicate pipeline step ID",
+                    SeqErrorType::Conflict,
+                    format!(
+                        "The pipeline {} contains steps with a duplicate \
+                        sanitised ID {}: Step {} and step {}",
+                        self.id(),
+                        step.sanitised_id(),
+                        step.id(),
+                        step_with_duplicate_id.id()
+                    ),
+                    "A pipeline contains invalid steps with duplicate IDs.",
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// The definition of a pipeline in the context of its containing directory.
@@ -210,4 +343,219 @@ pub struct PipelineStepVariableCategoryOption {
     /// The actual variable name.
     #[getset(get = "pub")]
     value: String,
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_pipeline_blueprint_global_variables_by_category() {
+        let test_category = PipelineStepVariableCategory::Global;
+        let steps = Vec::new();
+        let test_var_1 = PipelineStepVariable {
+            id: "1".to_string(),
+            name: "1".to_string(),
+            description: "1".to_string(),
+            category: test_category.clone(),
+            required: Some(false),
+        };
+        let test_var_2 = PipelineStepVariable {
+            id: "2".to_string(),
+            name: "2".to_string(),
+            description: "2".to_string(),
+            category: PipelineStepVariableCategory::Boolean,
+            required: Some(false),
+        };
+        let test_var_3 = PipelineStepVariable {
+            id: "3".to_string(),
+            name: "3".to_string(),
+            description: "3".to_string(),
+            category: test_category.clone(),
+            required: Some(false),
+        };
+        let global_variables = vec![test_var_1.clone(), test_var_2.clone(), test_var_3.clone()];
+        let blueprint: PipelineBlueprint = PipelineBlueprintSerde {
+            id: "Test ID".to_string(),
+            name: "Test name".to_string(),
+            version: "Test version".to_string(),
+            description: "Test description".to_string(),
+            steps,
+            global_variables,
+        }
+        .into();
+        let results = blueprint.global_variables_by_category(test_category);
+        assert_eq!(results.len(), 2);
+        assert!(results.contains(&&test_var_1));
+        assert!(results.contains(&&test_var_3));
+    }
+
+    #[test]
+    fn test_pipeline_blueprint_step_variables_by_category() {
+        let test_category = PipelineStepVariableCategory::Global;
+        let test_var_1 = PipelineStepVariable {
+            id: "s1".to_string(),
+            name: "1".to_string(),
+            description: "1".to_string(),
+            category: test_category.clone(),
+            required: Some(false),
+        };
+        let test_var_2 = PipelineStepVariable {
+            id: "s2".to_string(),
+            name: "2".to_string(),
+            description: "2".to_string(),
+            category: PipelineStepVariableCategory::Boolean,
+            required: Some(false),
+        };
+        let test_var_3 = PipelineStepVariable {
+            id: "s3".to_string(),
+            name: "3".to_string(),
+            description: "3".to_string(),
+            category: test_category.clone(),
+            required: Some(false),
+        };
+        let steps: Vec<PipelineStepBlueprint> = vec![
+            PipelineStepBlueprintSerde {
+                id: "Step 1".to_string(),
+                name: "Step 1".to_string(),
+                description: "Step 1".to_string(),
+                container: "Step 1".to_string(),
+                dependencies: Vec::new(),
+                variables: vec![test_var_1.clone()],
+            }
+            .into(),
+            PipelineStepBlueprintSerde {
+                id: "Step 2".to_string(),
+                name: "Step 2".to_string(),
+                description: "Step 2".to_string(),
+                container: "Step 2".to_string(),
+                dependencies: Vec::new(),
+                variables: vec![test_var_2.clone(), test_var_3.clone()],
+            }
+            .into(),
+        ];
+        let global_variables = vec![
+            PipelineStepVariable {
+                id: "g1".to_string(),
+                name: "1".to_string(),
+                description: "1".to_string(),
+                category: test_category.clone(),
+                required: Some(false),
+            },
+            PipelineStepVariable {
+                id: "g2".to_string(),
+                name: "2".to_string(),
+                description: "2".to_string(),
+                category: PipelineStepVariableCategory::Boolean,
+                required: Some(false),
+            },
+            PipelineStepVariable {
+                id: "g3".to_string(),
+                name: "3".to_string(),
+                description: "3".to_string(),
+                category: test_category.clone(),
+                required: Some(false),
+            },
+        ];
+        let blueprint: PipelineBlueprint = PipelineBlueprintSerde {
+            id: "Test ID".to_string(),
+            name: "Test name".to_string(),
+            version: "Test version".to_string(),
+            description: "Test description".to_string(),
+            steps,
+            global_variables,
+        }
+        .into();
+        let results = blueprint.step_variables_by_category(test_category);
+        assert_eq!(results.len(), 2);
+        assert!(results.contains(&&test_var_1));
+        assert!(results.contains(&&test_var_3));
+    }
+
+    #[test]
+    fn test_pipeline_blueprint_validate_step_ids_valid() {
+        let steps: Vec<PipelineStepBlueprint> = vec![
+            PipelineStepBlueprintSerde {
+                id: "Step 1".to_string(),
+                name: "Step 1".to_string(),
+                description: "Step 1".to_string(),
+                container: "Step 1".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+            PipelineStepBlueprintSerde {
+                id: "Step 2".to_string(),
+                name: "Step 2".to_string(),
+                description: "Step 2".to_string(),
+                container: "Step 2".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+            PipelineStepBlueprintSerde {
+                id: "Step 3".to_string(),
+                name: "Step 3".to_string(),
+                description: "Step 3".to_string(),
+                container: "Step 3".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+        ];
+        let blueprint: PipelineBlueprint = PipelineBlueprintSerde {
+            id: "Test ID".to_string(),
+            name: "Test name".to_string(),
+            version: "Test version".to_string(),
+            description: "Test description".to_string(),
+            steps,
+            global_variables: Vec::new(),
+        }
+        .into();
+        assert!(blueprint.validate_step_ids().is_ok());
+    }
+
+    #[test]
+    fn test_pipeline_blueprint_validate_step_ids_duplicate() {
+        let steps: Vec<PipelineStepBlueprint> = vec![
+            PipelineStepBlueprintSerde {
+                id: "Step 1".to_string(),
+                name: "Step 1".to_string(),
+                description: "Step 1".to_string(),
+                container: "Step 1".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+            PipelineStepBlueprintSerde {
+                id: "Step 2".to_string(),
+                name: "Step 2".to_string(),
+                description: "Step 2".to_string(),
+                container: "Step 2".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+            PipelineStepBlueprintSerde {
+                id: "Step 1".to_string(),
+                name: "Step 3".to_string(),
+                description: "Step 3".to_string(),
+                container: "Step 3".to_string(),
+                dependencies: Vec::new(),
+                variables: Vec::new(),
+            }
+            .into(),
+        ];
+        let blueprint: PipelineBlueprint = PipelineBlueprintSerde {
+            id: "Test ID".to_string(),
+            name: "Test name".to_string(),
+            version: "Test version".to_string(),
+            description: "Test description".to_string(),
+            steps,
+            global_variables: Vec::new(),
+        }
+        .into();
+        assert!(blueprint.validate_step_ids().is_err());
+    }
 }
