@@ -111,12 +111,13 @@ def get_deviance_mask_batched(adata: anndata.AnnData):
         replicates = sample_type_subset.obs[REPLICATE_NAME_KEY].cat.categories
         for replicate in replicates:
             print(f"\t\tCalculating deviance for replicate {replicate}...", flush=True)
-            replicate_subset = adata[adata.obs[SAMPLE_TYPE_KEY] == sample_type]
+            replicate_subset = sample_type_subset[sample_type_subset.obs[SAMPLE_TYPE_KEY] == sample_type]
             if mask_sample_type is None:
                 mask_sample_type = get_deviance_mask_unbatched(replicate_subset)
             else:
-                mask_sample_type = np.logical_and(mask_total, get_deviance_mask_unbatched(replicate_subset))
-        mask_total = np.logical_or(mask_total, mask_sample_type)
+                mask_sample_type = np.logical_and(mask_sample_type, get_deviance_mask_unbatched(replicate_subset))
+        if mask_sample_type is not None:
+            mask_total = np.logical_or(mask_total, mask_sample_type)
     return mask_total
 
 
