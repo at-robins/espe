@@ -12,20 +12,25 @@
           <q-expansion-item expand-separator>
             <template v-slot:header>
               <q-item-section avatar>
-                <q-icon
-                  :name="
-                    hasRequiredGlobalVariable(pipeline)
-                      ? matPriorityHigh
-                      : undefined
-                  "
-                  :color="
-                    hasRequiredGlobalVariable(pipeline) ? 'warning' : 'primary'
-                  "
-                />
-                <q-tooltip v-if="hasRequiredGlobalVariable(pipeline)">
-                  This pipeline contains variables that must be specified for to
-                  enusre proper execution.
-                </q-tooltip>
+                <div v-if="hasRequiredVariables(pipeline.global_variables)">
+                  <div
+                    v-if="areRequiredVariablesSet(pipeline.global_variables)"
+                  >
+                    <q-icon :name="matCheck" color="positive" />
+                    <q-tooltip>
+                      All required variables have been set.
+                    </q-tooltip>
+                  </div>
+                  <div
+                    v-else="areRequiredVariablesSet(pipeline.global_variables)"
+                  >
+                    <q-icon :name="matPriorityHigh" color="warning" />
+                    <q-tooltip>
+                      This pipeline contains variables that must be specified to
+                      enusre proper execution.
+                    </q-tooltip>
+                  </div>
+                </div>
               </q-item-section>
               <q-item-section>
                 <b> Global variables </b>
@@ -68,22 +73,25 @@
           <q-expansion-item expand-separator>
             <template v-slot:header>
               <q-item-section avatar>
-                <q-icon
-                  :name="
-                    hasRequiredStepVariable(pipelineStep)
-                      ? matPriorityHigh
-                      : undefined
-                  "
-                  :color="
-                    hasRequiredStepVariable(pipelineStep)
-                      ? 'warning'
-                      : 'primary'
-                  "
-                />
-                <q-tooltip v-if="hasRequiredStepVariable(pipelineStep)">
-                  This step contains variables that must be specified for the
-                  pipeline to work.
-                </q-tooltip>
+                <div v-if="hasRequiredVariables(pipelineStep.variables)">
+                  <div
+                    v-if="areRequiredVariablesSet(pipelineStep.variables)"
+                  >
+                    <q-icon :name="matCheck" color="positive" />
+                    <q-tooltip>
+                      All required variables have been set.
+                    </q-tooltip>
+                  </div>
+                  <div
+                    v-else="areRequiredVariablesSet(pipelineStep.variables)"
+                  >
+                    <q-icon :name="matPriorityHigh" color="warning" />
+                    <q-tooltip>
+                      This pipeline contains variables that must be specified to
+                      enusre proper execution.
+                    </q-tooltip>
+                  </div>
+                </div>
               </q-item-section>
               <q-item-section>
                 <b>
@@ -131,16 +139,16 @@
 import { ref, type PropType, type Ref, onMounted } from "vue";
 import { symOutlinedVariables } from "@quasar/extras/material-symbols-outlined";
 import {
-  hasRequiredStepVariable,
-  hasRequiredGlobalVariable,
   type PipelineBlueprint,
   type PipelineGlobalVariableUpload,
   type PipelineStepVariableUpload,
+  areRequiredVariablesSet,
+  hasRequiredVariables,
 } from "@/scripts/pipeline-blueprint";
 import EntityPipelineVariable from "@/components/shared/EntityPipelineVariable.vue";
 import type { ErrorResponse, GlobalDataDetails } from "@/scripts/types";
 import axios from "axios";
-import { matPriorityHigh } from "@quasar/extras/material-icons";
+import { matCheck, matPriorityHigh } from "@quasar/extras/material-icons";
 
 const props = defineProps({
   pipeline: {

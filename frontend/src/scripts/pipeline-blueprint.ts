@@ -116,21 +116,40 @@ export function contentAsOptions(
 }
 
 /**
- * Returns `true` if any of the pipeline step variables is required.
+ * Returns `true` if any variables in the array are required to be set before pipeline execution.
  *
- * @param step the step to check for requirements
+ * @param pipeline_variables the variables to check
  */
-export function hasRequiredStepVariable(step: PipelineStepBlueprint): boolean {
-  return step.variables.some((stepVar) => stepVar.required);
+export function hasRequiredVariables(
+  pipeline_variables: PipelineStepBlueprintVariable[]
+): boolean {
+  return (
+    pipeline_variables.some((stepVar) => stepVar.required)
+  );
 }
 
 /**
- * Returns `true` if any of the global pipeline variables is required.
+ * Returns `true` if the variable value has been set.
  *
- * @param pipeline the pipeline to check for requirements
+ * @param pipeline_variable the variable to check
  */
-export function hasRequiredGlobalVariable(
-  pipeline: PipelineBlueprint
+export function isVariableSet(
+  pipeline_variable: PipelineStepBlueprintVariable
 ): boolean {
-  return pipeline.global_variables.some((globalVar) => globalVar.required);
+  return (
+    pipeline_variable.value !== null && pipeline_variable.value !== undefined
+  );
+}
+
+/**
+ * Returns `true` if all variables in the array that are required have been set.
+ *
+ * @param pipeline_variables the variables to check
+ */
+export function areRequiredVariablesSet(
+  pipeline_variables: PipelineStepBlueprintVariable[]
+): boolean {
+  return (
+    !pipeline_variables.some((stepVar) => stepVar.required && !isVariableSet(stepVar))
+  );
 }
