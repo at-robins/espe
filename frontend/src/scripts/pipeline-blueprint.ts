@@ -123,9 +123,7 @@ export function contentAsOptions(
 export function hasRequiredVariables(
   pipeline_variables: PipelineStepBlueprintVariable[]
 ): boolean {
-  return (
-    pipeline_variables.some((stepVar) => stepVar.required)
-  );
+  return pipeline_variables.some((stepVar) => stepVar.required);
 }
 
 /**
@@ -149,7 +147,22 @@ export function isVariableSet(
 export function areRequiredVariablesSet(
   pipeline_variables: PipelineStepBlueprintVariable[]
 ): boolean {
+  return !pipeline_variables.some(
+    (stepVar) => stepVar.required && !isVariableSet(stepVar)
+  );
+}
+
+/**
+ * Returns `true` if all variables in the array that are required have been set.
+ *
+ * @param pipeline_variables the variables to check
+ */
+export function areAllRequiredVariablesSet(
+  pipeline: PipelineBlueprint | null
+): boolean {
   return (
-    !pipeline_variables.some((stepVar) => stepVar.required && !isVariableSet(stepVar))
+    pipeline != null &&
+    areRequiredVariablesSet(pipeline.global_variables) &&
+    pipeline.steps.every((step) => areRequiredVariablesSet(step.variables))
   );
 }
