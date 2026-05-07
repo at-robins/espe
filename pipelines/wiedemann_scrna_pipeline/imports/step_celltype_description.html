@@ -1,0 +1,90 @@
+<style>
+  code {
+    font-family: monospace;
+    font-size: inherit;
+    background: whitesmoke;
+    padding: 0.05rem;
+    border-radius: 0.2rem;
+  }
+</style>
+<p>Scores cells based on marker genes defined in the optional input file <code>celltypes.csv</code>. The file must
+  contain the following 3 columns (for more information see
+  <a href="https://decoupler.readthedocs.io/en/latest/api/generated/decoupler.mt.ulm.html">decoupler ULM net
+    parameter</a>):
+</p>
+<ul>
+  <li>
+    <code>source</code>: the respective cell type / state name
+  </li>
+  <li>
+    <code>target</code>: a gene used to score the cell type or state defined in <code>source</code>
+  </li>
+  <li>
+    <code>weight</code>: the weight of the gene defined in <code>target</code> (between 1.0 [strong positve marker] and
+    -1.0 [strong negative marker])
+  </li>
+</ul>
+</br>
+<p>
+  <b>Output</b><br />
+  Multiple <code>cell_types_{chunk_index}.svg</code> files are created containing UMAPS with the respective ULM scores
+  for cell types / states defined in <code>source</code>.
+</p>
+<p><b>References</b></p>
+<ol>
+  <li>
+    Badia-i-Mompel P., Vélez Santiago J., Braunger J., Geiss C., Dimitrov D., Müller-Dott S., Taus P., Dugourd A.,
+    Holland C.H., Ramirez Flores R.O. and Saez-Rodriguez J. 2022. decoupleR: ensemble of computational methods to infer
+    biological activities from omics data. Bioinformatics Advances.
+    <a href="https://doi.org/10.1093/bioadv/vbac016">
+      https://doi.org/10.1093/bioadv/vbac016
+    </a>
+  </li>
+  <li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev
+    Genet (2023). <a href="https://doi.org/10.1038/s41576-023-00586-w">https://doi.org/10.1038/s41576-023-00586-w</a>
+  </li>
+  <li>
+    Wolf, F. A., Angerer, P., & Theis, F. J. (2018). SCANPY: large-scale
+    single-cell gene expression data analysis. Genome biology, 19(1), 15.
+    <a href="https://doi.org/10.1186/s13059-017-1382-0">
+      https://doi.org/10.1186/s13059-017-1382-0
+    </a>
+  </li>
+  <li>
+    Virshup, I., Rybakov, S., Theis, F. J., Angerer, P., & Wolf, F. A. (2021).
+    anndata: Annotated data (p. 2021.12.16.473007). bioRxiv.
+    <a href="https://doi.org/10.1101/2021.12.16.473007">
+      https://doi.org/10.1101/2021.12.16.473007
+    </a>
+  </li>
+  <li>
+    Hunter, J. D. (2007). Matplotlib: A 2D graphics environment. Computing in
+    Science & Engineering, 9(3), 90–95.
+    <a href="https://doi.org/10.1109/MCSE.2007.55">https://doi.org/10.1109/MCSE.2007.55</a>
+  </li>
+  <li>
+    Waskom, M. L. (2021). seaborn: Statistical data visualization. Journal of
+    Open Source Software, 6(60), 3021.
+    <a href="https://doi.org/10.21105/joss.03021">https://doi.org/10.21105/joss.03021</a>
+  </li>
+  <li>
+    McKinney, W. (2010). Data Structures for Statistical Computing in Python. In
+    S. van der Walt & J. Millman (Hrsg.), Proceedings of the 9th Python in
+    Science Conference (S. 56–61).
+    <a href="https://doi.org/10.25080/Majora-92bf1922-00a">https://doi.org/10.25080/Majora-92bf1922-00a</a>
+  </li>
+  <li>
+    The pandas development team. (2020). pandas-dev/pandas: Pandas (latest)
+    [Software]. Zenodo.
+    <a href="https://doi.org/10.5281/zenodo.3509134">https://doi.org/10.5281/zenodo.3509134</a>
+  </li>
+  <li>
+    Virtanen, P., Gommers, R., Oliphant, T. E., Haberland, M., Reddy, T.,
+    Cournapeau, D., Burovski, E., Peterson, P., Weckesser, W., Bright, J., van
+    der Walt, S. J., Brett, M., Wilson, J., Millman, K. J., Mayorov, N., Nelson,
+    A. R. J., Jones, E., Kern, R., Larson, E., … SciPy 1.0 Contributors. (2020).
+    SciPy 1.0: Fundamental Algorithms for Scientific Computing in Python. Nature
+    Methods, 17, 261–272.
+    <a href="https://doi.org/10.1038/s41592-019-0686-2">https://doi.org/10.1038/s41592-019-0686-2</a>
+  </li>
+</ol>

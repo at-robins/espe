@@ -87,6 +87,14 @@
       "variables": []
     },
     {
+      "id": "celltypes",
+      "name": "Cell type scoring",
+      "description": "<espe-import>step_celltype_description.html</espe-import>",
+      "container": "celltype_ulm",
+      "dependencies": ["clustering_base"],
+      "variables": []
+    },
+    {
       "id": "cluster_resolution_data",
       "name": "Sample clusters",
       "description": "<espe-import>step_cluster_resolution_data_description.html</espe-import>",

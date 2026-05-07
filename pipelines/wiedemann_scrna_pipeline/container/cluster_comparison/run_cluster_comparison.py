@@ -159,37 +159,42 @@ def cluster_statistics(adata, cluster_key, output_folder_path):
     print("\tPlotting data...")
     ordering = adata.obs[SAMPLE_TYPE_KEY].cat.categories.to_numpy()
     sorted(ordering, key=str.casefold)
-    barplot_name = "relative_cluster_frequency.svg"
-    fig, ax = plt.subplots(figsize=(stat_data_frame.shape[0] / 4, 8))
-    sns.barplot(
-        stat_data_frame,
-        x="cluster",
-        y="norm",
-        hue="sample",
-        ax=ax,
-        palette=COLOUR_PALETTE,
-        saturation=1.0,
-        errorbar="se",
-        capsize=0.08,
-        hue_order=ordering,
-    )
-    ax.set_ylim(0, None)
-    ax.grid(False)
-    ax.set(xlabel="Cluster", ylabel="Normalised cell frequency")
-    legend = ax.get_legend()
-    legend.set_title("Condition")
-    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
 
-    ax_width = 2.5
-    for axis in ["top", "bottom", "left", "right"]:
-        ax.spines[axis].set_linewidth(ax_width)
-    ax.tick_params(width=ax_width)
+    chunk_size = 10
+    for chunk_index in range(0, len(clusters), chunk_size):
+        barplot_name = f"relative_cluster_frequency_{chunk_index}.svg"
+        cluster_chunk = clusters[chunk_index : chunk_index + chunk_size]
+        sub_stat_data_frame = stat_data_frame[stat_data_frame["cluster"].isin(cluster_chunk)]
+        fig, ax = plt.subplots(figsize=(sub_stat_data_frame.shape[0] / 4, 8))
+        sns.barplot(
+            sub_stat_data_frame,
+            x="cluster",
+            y="norm",
+            hue="sample",
+            ax=ax,
+            palette=COLOUR_PALETTE,
+            saturation=1.0,
+            errorbar="se",
+            capsize=0.08,
+            hue_order=ordering,
+        )
+        ax.set_ylim(0, None)
+        ax.grid(False)
+        ax.set(xlabel="Cluster", ylabel="Normalised cell frequency")
+        legend = ax.get_legend()
+        legend.set_title("Condition")
+        sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
 
-    fig.tight_layout()
-    fig.savefig(
-        os.path.join(output_folder_path, pathvalidate.sanitize_filename(barplot_name))
-    )
-    plt.close(fig)
+        ax_width = 2.5
+        for axis in ["top", "bottom", "left", "right"]:
+            ax.spines[axis].set_linewidth(ax_width)
+        ax.tick_params(width=ax_width)
+
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(output_folder_path, pathvalidate.sanitize_filename(barplot_name))
+        )
+        plt.close(fig)
 
 
 # Iterates over all sample directories and processes them conserving the directory structure.
