@@ -133,7 +133,7 @@
         </p>
         <p>
           Schenk, R. P., & Wiedemann, G. M. (2024). ESPE: Encapsulated
-          Sequencing Pipeline Engine (0.1).
+          Sequencing Pipeline Engine.
           <a href="https://github.com/at-robins/espe"
             >https://github.com/at-robins/espe</a
           >
