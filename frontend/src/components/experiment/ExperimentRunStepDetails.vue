@@ -60,17 +60,28 @@
           </q-btn>
 
           <q-btn
-            v-if="canBeStarted(selectedStep)"
+            v-if="canBeStarted"
             :icon="matRestartAlt"
             label="Restart step"
             class="q-ml-md"
-            :color="restartingError ? 'negative' : 'positive'"
-            :loading="isRestarting"
+            :color="
+              restartingError.has(selectedStep.id) ? 'negative' : 'positive'
+            "
+            :loading="isRestarting.has(selectedStep.id)"
+            :disable="!areAllVariablesSet"
             @click="restartStep(selectedStep)"
           >
             <q-tooltip>
-              <div v-if="restartingError" class="text-black">
-                <error-popup :error-response="restartingError" />
+              <div
+                v-if="restartingError.has(selectedStep.id)"
+                class="text-black"
+              >
+                <error-popup
+                  :error-response="restartingError.get(selectedStep.id)!"
+                />
+              </div>
+              <div v-else-if="!areAllVariablesSet">
+                All required pipeline variables must be set before execution.
               </div>
               <div v-else>Restarts the experiment execution step.</div>
             </q-tooltip>
@@ -82,11 +93,12 @@
 </template>
 
 <script setup lang="ts">
-import { type ErrorResponse, type ExperimentDetails } from "@/scripts/types";
+import { type ErrorResponse } from "@/scripts/types";
 import axios from "axios";
-import { ref, onMounted, type Ref, computed, type PropType, watch } from "vue";
+import { ref, type PropType, computed } from "vue";
 import ErrorPopup from "@/components/ErrorPopup.vue";
 import {
+  areAllRequiredVariablesSet,
   PipelineStepStatus,
   type PipelineBlueprint,
   type PipelineStepBlueprint,
@@ -94,10 +106,9 @@ import {
 import { symOutlinedTerminal } from "@quasar/extras/material-symbols-outlined";
 import { matDownload, matRestartAlt } from "@quasar/extras/material-icons";
 import ExperimentStepLogs from "./ExperimentStepLogs.vue";
-import Poller from "../shared/Poller.vue";
 
-const isRestarting = ref(false);
-const restartingError: Ref<ErrorResponse | null> = ref(null);
+const isRestarting = ref(new Set<String>([]));
+const restartingError = ref(new Map<String, ErrorResponse>());
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -113,28 +124,19 @@ const props = defineProps({
   },
 });
 
-// Resets the component when the step is switched.
-watch(
-  () => props.selectedStep,
-  () => {
-    isRestarting.value = false;
-    restartingError.value = null;
-  },
-  { immediate: true }
-);
+const areAllVariablesSet = computed(() => {
+  return !!props.pipeline && areAllRequiredVariablesSet(props.pipeline);
+});
 
 /**
  * Returns ```true``` if the specified step can be (re-)started.
  *
- * @param step the step to check
  */
-function canBeStarted(step: PipelineStepBlueprint | null): boolean {
-  if (!props.pipeline) {
+const canBeStarted = computed(() => {
+  if (!props.pipeline || !props.selectedStep) {
     return false;
   }
-  if (!step) {
-    return false;
-  }
+
   const satisfied_dependencies = props.pipeline.steps
     .filter(
       (s) =>
@@ -143,15 +145,15 @@ function canBeStarted(step: PipelineStepBlueprint | null): boolean {
         s.status === PipelineStepStatus.Waiting
     )
     .map((s) => s.id);
-  const isDependecySatisfied = step.dependencies.every((dependency) =>
-    satisfied_dependencies.includes(dependency)
+  const isDependecySatisfied = props.selectedStep.dependencies.every(
+    (dependency) => satisfied_dependencies.includes(dependency)
   );
   return (
-    step.status !== PipelineStepStatus.Running &&
-    step.status !== PipelineStepStatus.Waiting &&
+    props.selectedStep.status !== PipelineStepStatus.Running &&
+    props.selectedStep.status !== PipelineStepStatus.Waiting &&
     isDependecySatisfied
   );
-}
+});
 
 /**
  * Tries to restart the specified step.
@@ -159,9 +161,9 @@ function canBeStarted(step: PipelineStepBlueprint | null): boolean {
  * @param step the step to restart
  */
 function restartStep(step: PipelineStepBlueprint | null) {
-  if (step && !isRestarting.value) {
-    isRestarting.value = true;
-    restartingError.value = null;
+  if (step && !isRestarting.value.has(step.id)) {
+    isRestarting.value.add(step.id);
+    restartingError.value.delete(step.id);
     const config = {
       headers: {
         "content-type": "application/json",
@@ -175,10 +177,10 @@ function restartStep(step: PipelineStepBlueprint | null) {
       )
       .then(() => (step.status = PipelineStepStatus.Waiting))
       .catch((error) => {
-        restartingError.value = error.response.data;
+        restartingError.value.set(step.id, error.response.data);
       })
       .finally(() => {
-        isRestarting.value = false;
+        isRestarting.value.delete(step.id);
       });
   }
 }

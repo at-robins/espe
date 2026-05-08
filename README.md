@@ -34,7 +34,24 @@ Docker was selected as tool for running and managing containers due to its ease 
 
 ## Usage
 
-The easiest way to run the application is by using Docker.
+### Installer
+
+The application can be downloaded from the [release page](https://github.com/at-robins/espe/releases).
+
+1. Install [Docker](https://docs.docker.com/engine/install/).
+
+2. Install the application using the release download and the provided instructions.
+
+3. Optional: Configure the provided ```.env``` file.
+
+4. Run the application.
+
+5. Open a browser and enter [localhost](http://localhost) or your configured server address (see 3).
+
+
+### Docker
+
+The application provides a Dockerfile.
 
 1. Install [Docker](https://docs.docker.com/engine/install/).
 2. Build the container with the following command (requires root privileges):
@@ -158,3 +175,7 @@ Frontend testing:
 cd frontend
 npm run test:unit
 ```
+
+## Cite
+
+Schenk, R. P., & Wiedemann, G. M. (2024). ESPE: Encapsulated Sequencing Pipeline Engine. [https://github.com/at-robins/espe](https://github.com/at-robins/espe)

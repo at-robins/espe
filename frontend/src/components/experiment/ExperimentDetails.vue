@@ -81,10 +81,21 @@
                   color="positive"
                   :loading="isSubmitting"
                   @click="submitExperiment"
+                  :disable="isLocked || !areAllVariablesSet"
                 >
                   <q-tooltip>
-                    Submit the experiment for execution with the specified
-                    pipeline.
+                    <div v-if="isLocked">
+                      The pipeline can only be submitted once all ongoing
+                      downloads are finished.
+                    </div>
+                    <div v-if="!areAllVariablesSet">
+                      All required pipeline variables must be set before
+                      execution.
+                    </div>
+                    <div v-else>
+                      Submit the experiment for execution with the specified
+                      pipeline.
+                    </div>
                   </q-tooltip>
                 </q-btn>
                 <q-btn
@@ -113,9 +124,19 @@
                   color="positive"
                   :loading="isRestarting"
                   @click="restartExperiment"
-                  :disable="isLocked"
+                  :disable="isLocked || !areAllVariablesSet"
                 >
-                  <q-tooltip> Restart the experiment execution. </q-tooltip>
+                  <q-tooltip>
+                    <div v-if="isLocked">
+                      The pipeline can only be restarted once all ongoing
+                      downloads are finished.
+                    </div>
+                    <div v-if="!areAllVariablesSet">
+                      All required pipeline variables must be set before
+                      execution.
+                    </div>
+                    <div v-else>Restart the experiment execution.</div>
+                  </q-tooltip>
                 </q-btn>
               </div>
             </div>
@@ -161,7 +182,10 @@ import { symOutlinedAccountTree } from "@quasar/extras/material-symbols-outlined
 import EntityPipeline from "../shared/EntityPipeline.vue";
 import EntityPipelineVariables from "../shared/EntityPipelineVariables.vue";
 import ExperimentStatusIndicator from "../shared/ExperimentStatusIndicator.vue";
-import type { PipelineBlueprint } from "@/scripts/pipeline-blueprint";
+import {
+  areAllRequiredVariablesSet,
+  type PipelineBlueprint,
+} from "@/scripts/pipeline-blueprint";
 import { ExperimentExecutionStatus } from "@/scripts/types";
 import Poller from "../shared/Poller.vue";
 import {
@@ -191,6 +215,11 @@ const lock_url = computed(() => {
 });
 const status_url = computed(() => {
   return "/api/experiments/" + props.id + "/status";
+});
+const areAllVariablesSet = computed(() => {
+  return (
+    selectedPipeline.value && areAllRequiredVariablesSet(selectedPipeline.value)
+  );
 });
 
 const props = defineProps({

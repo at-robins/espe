@@ -1,6 +1,6 @@
 [package]
 name = "espe"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["at-robins"]
 description = "An encapsulated sequencing pipeline engine to run isolated, reproducible biological workflows."
@@ -19,8 +19,8 @@ actix-multipart = "0.7.2"
 actix-web = {version="4.13.0", features=["openssl"]}
 ammonia = "4.1.2"
 chrono = { version = "0.4.44", features = ["serde"] }
-diesel = { version = "2.3.7", features = ["chrono", "r2d2", "sqlite", "returning_clauses_for_sqlite_3_35"] }
-diesel_migrations = "2.3.1"
+diesel = { version = "2.3.9", features = ["chrono", "r2d2", "sqlite", "returning_clauses_for_sqlite_3_35"] }
+diesel_migrations = "2.3.2"
 dotenv = "0.15.0"
 email_address = "0.2.9"
 env_logger = "0.11.10"
@@ -29,7 +29,7 @@ futures-util = "0.3.32"
 libsqlite3-sys = { version = "0.36", features = ["bundled"] }
 log = "0.4.29"
 getset = "0.1.6"
-openssl = { version = "0.10.78", features = ["vendored"] }
+openssl = { version = "0.10.79", features = ["vendored"] }
 parking_lot = "0.12.5"
 sanitize-filename = "0.6.0"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -37,7 +37,7 @@ serde_json = "1.0.149"
 twox-hash = "2.1.2"
 uuid = { version = "1.23.1", features = ["serde", "v1", "v4"] }
 walkdir = "2.5.0"
-zip = "8.5.1"
+zip = "8.6.0"
 
 [dev-dependencies]
 mime = "0.3.17"
