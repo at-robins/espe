@@ -4,10 +4,10 @@ fn main() {
     // Only build the frontend in release mode to prevent "cargo check" from being blocked.
     if std::env::var("PROFILE").map_or(false, |profile| profile.to_lowercase() == "release") {
         let status_install = npm_command()
-            .arg("install")
+            .arg("ci")
             .current_dir("../frontend/")
             .status()
-            .expect("Failed to execute npm install.");
+            .expect("Failed to execute npm ci.");
         if !status_install.success() {
             panic!("{:?}", status_install);
         }
