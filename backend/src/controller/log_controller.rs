@@ -1,14 +1,8 @@
-use std::{
-    fs::File,
-    io::Read,
-    os::unix::fs::{FileExt, MetadataExt},
-};
-
 use crate::{
     application::{
         config::{Configuration, LogOutputType, LogProcessType},
         database::DatabaseManager,
-        error::SeqError,
+        error::{DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE, SeqError, SeqErrorType},
     },
     model::{
         db::experiment::Experiment,
@@ -18,6 +12,7 @@ use crate::{
     },
 };
 use actix_web::web;
+use positioned_io::{RandomAccessFile, ReadAt, Size};
 
 /// The maximum size of a single log file that is transmitted.
 const MAX_TRANSMISSION_LOG_SIZE: usize = 512 * 1024;
@@ -89,28 +84,58 @@ impl LogFileReader {
         Ok(if !path.exists() {
             None
         } else {
-            let mut file = File::open(&path)?;
-            let file_size = file.metadata()?.size();
+            let file = RandomAccessFile::open(&path).map_err(|err| {
+                SeqError::from(err)
+                    .chain(format!("Failed to open log file \"{}\".", path.display()))
+            })?;
+            let file_size = file
+                .size()
+                .map_err(|err| {
+                    SeqError::from(err)
+                        .chain(format!("Failed to obtain size of log file \"{}\".", path.display()))
+                })?
+                .ok_or(SeqError::new(
+                    "No file size",
+                    SeqErrorType::InternalServerError,
+                    format!("Log file \"{}\" does not have a file size.", path.display()),
+                    DEFAULT_INTERNAL_SERVER_ERROR_EXTERNAL_MESSAGE,
+                ))?;
             if file_size > MAX_TRANSMISSION_LOG_SIZE as u64 {
                 // Trims large log files so they do not block the frontend.
                 log::warn!(
-                    "The log file {} exceeds the limit of {} bytes and is truncated",
+                    "The log file {} exceeds the limit of {} bytes and is truncated.",
                     path.display(),
                     MAX_TRANSMISSION_LOG_SIZE
                 );
-                let mut start_buffer = [0u8; TRANSMISSION_BUFFER_SIZE];
-                let mut end_buffer = [0u8; TRANSMISSION_BUFFER_SIZE];
-                file.read_exact(&mut start_buffer)?;
-                file.read_exact_at(&mut end_buffer, file_size - TRANSMISSION_BUFFER_SIZE as u64)?;
+                let mut start_buffer = vec![0u8; TRANSMISSION_BUFFER_SIZE];
+                let mut end_buffer = vec![0u8; TRANSMISSION_BUFFER_SIZE];
+                file.read_exact_at(0u64, &mut start_buffer).map_err(|err| {
+                    SeqError::from(err).chain(format!(
+                        "Failed to read the start of log file \"{}\".",
+                        path.display()
+                    ))
+                })?;
+                file.read_exact_at(file_size - TRANSMISSION_BUFFER_SIZE as u64, &mut end_buffer)
+                    .map_err(|err| {
+                        SeqError::from(err).chain(format!(
+                            "Failed to read the end of log file \"{}\".",
+                            path.display()
+                        ))
+                    })?;
                 let trimmed_content = format!(
-                    "{}\n\n[ WARNING: The log content exceeded the size limit and has been trimmed. ]\n\n{}", 
+                    "{}\n\n[ WARNING: The log content exceeded the size limit and has been trimmed. ]\n\n{}",
                     String::from_utf8_lossy(&start_buffer),
                     String::from_utf8_lossy(&end_buffer)
                 );
                 Some(trimmed_content)
             } else {
                 // Sends reasonably sized log files completely and handles potential errors.
-                let file_content = std::fs::read(&path)?;
+                let file_content = std::fs::read(&path).map_err(|err| {
+                    SeqError::from(err).chain(format!(
+                        "Failed to read the entire log file \"{}\".",
+                        path.display()
+                    ))
+                })?;
                 match String::from_utf8(file_content) {
                     Ok(value) => Some(value),
                     Err(err) => {

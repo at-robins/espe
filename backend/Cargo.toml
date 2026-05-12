@@ -31,6 +31,7 @@ log = "0.4.29"
 getset = "0.1.6"
 openssl = { version = "0.10.79", features = ["vendored"] }
 parking_lot = "0.12.5"
+positioned-io = "0.3.5"
 sanitize-filename = "0.6.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
