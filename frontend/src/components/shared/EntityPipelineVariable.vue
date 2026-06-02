@@ -93,8 +93,24 @@
         </div>
       </div>
       <div v-if="pipelineVariable.required" class="q-ml-md">
-        <q-icon color="warning" :name="matPriorityHigh" size="md">
+        <q-icon
+          v-if="
+            pipelineVariable.value === null ||
+            pipelineVariable.value === undefined
+          "
+          color="warning"
+          :name="matPriorityHigh"
+          size="md"
+        >
           <q-tooltip>Specifying this variable is required.</q-tooltip>
+        </q-icon>
+        <q-icon
+          v-else
+          color="positive"
+          :name="matCheck"
+          size="md"
+        >
+          <q-tooltip>This required variable has been set.</q-tooltip>
         </q-icon>
       </div>
     </div>
@@ -116,7 +132,7 @@ import {
   isOption,
   isString,
 } from "@/scripts/pipeline-blueprint";
-import { matClose, matPriorityHigh } from "@quasar/extras/material-icons";
+import { matCheck, matClose, matPriorityHigh } from "@quasar/extras/material-icons";
 import type { GlobalDataDetails } from "@/scripts/types";
 
 const props = defineProps({
@@ -204,16 +220,20 @@ function updateModelValueBooleanNumberString(
   newValue: boolean | number | string | null
 ) {
   if (newValue === null) {
+    props.pipelineVariable.value = null;
     emit("update:modelValue", null);
   } else {
+    props.pipelineVariable.value = newValue.toString();
     emit("update:modelValue", newValue.toString());
   }
 }
 
 function updateModelValueGlobal(newValue: GlobalDataDetails | null) {
   if (newValue === null) {
+    props.pipelineVariable.value = null;
     emit("update:modelValue", null);
   } else {
+    props.pipelineVariable.value = newValue.id.toString();
     emit("update:modelValue", newValue.id.toString());
   }
 }
@@ -222,8 +242,10 @@ function updateModelValueOption(
   newValue: PipelineStepBlueprintVariableOption | null
 ) {
   if (newValue === null) {
+    props.pipelineVariable.value = null;
     emit("update:modelValue", null);
   } else {
+    props.pipelineVariable.value = newValue.value.toString();
     emit("update:modelValue", newValue.value.toString());
   }
 }

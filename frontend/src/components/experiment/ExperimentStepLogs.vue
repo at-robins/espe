@@ -44,7 +44,7 @@
 <script setup lang="ts">
 import { type ExperimentStepLogs, type PollerInterface } from "@/scripts/types";
 import SplitLogDisplay from "@/components/shared/SplitLogDisplay.vue";
-import { ref, watch, type Ref, computed } from "vue";
+import { ref, watch, type Ref, computed, nextTick } from "vue";
 import {
   symOutlinedBuildCircle,
   symOutlinedRunCircle,
@@ -65,11 +65,14 @@ watch(
   () => props.stepId,
   () => {
     logs.value = null;
-    // Do not wait for the next update but get the info immediatly after switching steps.
-    if (logPollerReference.value) {
-      logPollerReference.value.pollNow();
-    }
+    // Wait one update cycle to make sure the computed POST data was re-computed.
+    nextTick(() => {
+      if (logPollerReference.value) {
+        logPollerReference.value.pollNow();
+      }
+    });
   },
+  // Do not wait for the next update but get the info immediatly after switching steps.
   { immediate: true }
 );
 
