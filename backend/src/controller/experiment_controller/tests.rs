@@ -12,9 +12,9 @@ use crate::{
         internal::pipeline_blueprint::PipelineStepVariableCategory,
     },
     test_utility::{
-        create_default_experiment, create_default_experiment_execution, create_test_app,
-        TestContext, DEFAULT_EXPERIMENT_ID, DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID,
-        TEST_RESOURCES_PATH,
+        DEFAULT_EXPERIMENT_ID, DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE_STEP_ID, TEST_RESOURCES_PATH,
+        TestContext, create_default_experiment, create_default_experiment_execution,
+        create_test_app,
     },
 };
 
@@ -22,6 +22,7 @@ use actix_web::{
     http::StatusCode,
     test::{self, TestRequest},
 };
+use chrono::{NaiveDate, NaiveTime};
 use diesel::{BoolExpressionMethods, RunQueryDsl};
 
 #[actix_web::test]
@@ -216,12 +217,13 @@ async fn test_get_experiment_pipelines() {
     let mut connection = db_context.get_connection();
     let app = test::init_service(create_test_app(&db_context)).await;
     let id = 42;
+    let pipeline_id = "testing_pipeline";
     let new_experiment_record = Experiment {
         id,
         experiment_name: "Dummy record".to_string(),
         comment: Some("A comment".to_string()),
         mail: Some("a.b@c.de".to_string()),
-        pipeline_id: Some("Dummy ID".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
         creation_time: chrono::Utc::now().naive_local(),
     };
     diesel::insert_into(crate::schema::experiment::table)
@@ -229,23 +231,32 @@ async fn test_get_experiment_pipelines() {
         .execute(&mut connection)
         .unwrap();
     let new_variable_records = vec![
-        NewPipelineStepVariable::new(
-            id,
-            "testing_pipeline",
-            "fastqc",
-            "number",
-            Some("123".to_string()),
-        ),
-        NewPipelineStepVariable::new(
-            id,
-            "testing_pipeline",
-            "fastqc",
-            "string",
-            Some("abc".to_string()),
-        ),
+        NewPipelineStepVariable::new(id, pipeline_id, "fastqc", "number", Some("123".to_string())),
+        NewPipelineStepVariable::new(id, pipeline_id, "fastqc", "string", Some("abc".to_string())),
     ];
     diesel::insert_into(crate::schema::pipeline_step_variable::table)
         .values(&new_variable_records)
+        .execute(&mut connection)
+        .unwrap();
+
+    let mut new_execution = NewExperimentExecution::new_with_status(
+        id,
+        pipeline_id,
+        "fastqc",
+        ExecutionStatus::Waiting,
+    );
+    let time_start = NaiveDateTime::new(
+        NaiveDate::from_ymd_opt(1871, 1, 1).unwrap(),
+        NaiveTime::from_hms_opt(12, 12, 12).unwrap(),
+    );
+    let time_end = NaiveDateTime::new(
+        NaiveDate::from_ymd_opt(1871, 1, 1).unwrap(),
+        NaiveTime::from_hms_opt(16, 16, 16).unwrap(),
+    );
+    new_execution.set_start_time(Some(time_start.clone()));
+    new_execution.set_end_time(Some(time_end.clone()));
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
         .execute(&mut connection)
         .unwrap();
 
@@ -257,7 +268,7 @@ async fn test_get_experiment_pipelines() {
     let fetched_data: Vec<ExperimentPipelineBlueprint> = test::read_body_json(resp).await;
     assert_eq!(fetched_data.len(), 1);
     let pipeline = &fetched_data[0];
-    assert_eq!(pipeline.id(), "testing_pipeline");
+    assert_eq!(pipeline.id(), pipeline_id);
     assert_eq!(pipeline.name(), "Testing pipeline");
     assert_eq!(pipeline.description(), "This pipeline is for testing purposes.");
     assert_eq!(pipeline.global_variables().len(), 1);
@@ -272,6 +283,9 @@ async fn test_get_experiment_pipelines() {
     assert_eq!(step.name(), "FastQC");
     assert_eq!(step.description(), "Performs a quality control.");
     assert_eq!(step.container(), "fastqc");
+    assert_eq!(step.status(), &Some("Waiting".to_string()));
+    assert_eq!(step.time_start(), &Some(time_start.to_string()));
+    assert_eq!(step.time_end(), &Some(time_end.to_string()));
     assert_eq!(step.dependencies(), &vec!["123", "456"]);
     assert_eq!(step.variables().len(), 5);
     assert_eq!(step.variables()[0].id(), "bool");
@@ -312,6 +326,166 @@ async fn test_get_experiment_pipelines() {
     assert_eq!(step.variables()[4].category(), &PipelineStepVariableCategory::String);
     assert_eq!(step.variables()[4].required(), &None);
     assert_eq!(step.variables()[4].value(), &Some("abc".to_string()));
+}
+
+#[actix_web::test]
+async fn test_get_experiment_pipeline_run() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let id = 42;
+    let pipeline_id = "testing_pipeline";
+    let new_experiment_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: Some(pipeline_id.to_string()),
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let new_variable_records = vec![
+        NewPipelineStepVariable::new(id, pipeline_id, "fastqc", "number", Some("123".to_string())),
+        NewPipelineStepVariable::new(id, pipeline_id, "fastqc", "string", Some("abc".to_string())),
+    ];
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&new_variable_records)
+        .execute(&mut connection)
+        .unwrap();
+
+    let mut new_execution = NewExperimentExecution::new_with_status(
+        id,
+        pipeline_id,
+        "fastqc",
+        ExecutionStatus::Waiting,
+    );
+    let time_start = NaiveDateTime::new(
+        NaiveDate::from_ymd_opt(1871, 1, 1).unwrap(),
+        NaiveTime::from_hms_opt(12, 12, 12).unwrap(),
+    );
+    let time_end = NaiveDateTime::new(
+        NaiveDate::from_ymd_opt(1871, 1, 1).unwrap(),
+        NaiveTime::from_hms_opt(16, 16, 16).unwrap(),
+    );
+    new_execution.set_start_time(Some(time_start.clone()));
+    new_execution.set_end_time(Some(time_end.clone()));
+    diesel::insert_into(crate::schema::experiment_execution::table)
+        .values(&new_execution)
+        .execute(&mut connection)
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/experiments/{}/run", id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let fetched_data: Option<ExperimentPipelineBlueprint> = test::read_body_json(resp).await;
+    assert!(fetched_data.is_some());
+    let pipeline = fetched_data.unwrap();
+    assert_eq!(pipeline.id(), pipeline_id);
+    assert_eq!(pipeline.name(), "Testing pipeline");
+    assert_eq!(pipeline.description(), "This pipeline is for testing purposes.");
+    assert_eq!(pipeline.global_variables().len(), 1);
+    assert_eq!(pipeline.global_variables()[0].id(), "global_number");
+    assert_eq!(pipeline.global_variables()[0].name(), "Global number");
+    assert_eq!(pipeline.global_variables()[0].description(), "A global number field.");
+    assert_eq!(pipeline.global_variables()[0].category(), &PipelineStepVariableCategory::Number);
+    assert_eq!(pipeline.global_variables()[0].required(), &Some(true));
+    assert_eq!(pipeline.steps().len(), 1);
+    let step = &pipeline.steps()[0];
+    assert_eq!(step.id(), "fastqc");
+    assert_eq!(step.name(), "FastQC");
+    assert_eq!(step.description(), "Performs a quality control.");
+    assert_eq!(step.container(), "fastqc");
+    assert_eq!(step.status(), &Some("Waiting".to_string()));
+    assert_eq!(step.time_start(), &Some(time_start.to_string()));
+    assert_eq!(step.time_end(), &Some(time_end.to_string()));
+    assert_eq!(step.dependencies(), &vec!["123", "456"]);
+    assert_eq!(step.variables().len(), 5);
+    assert_eq!(step.variables()[0].id(), "bool");
+    assert_eq!(step.variables()[0].name(), "Boolean");
+    assert_eq!(step.variables()[0].description(), "A boolean checkbox.");
+    assert_eq!(step.variables()[0].category(), &PipelineStepVariableCategory::Boolean);
+    assert_eq!(step.variables()[0].required(), &Some(true));
+    assert_eq!(step.variables()[0].value(), &None);
+    assert_eq!(step.variables()[1].id(), "global");
+    assert_eq!(step.variables()[1].name(), "Global");
+    assert_eq!(step.variables()[1].description(), "A global data reference.");
+    assert_eq!(step.variables()[1].category(), &PipelineStepVariableCategory::Global);
+    assert_eq!(step.variables()[1].required(), &Some(false));
+    assert_eq!(step.variables()[1].value(), &None);
+    assert_eq!(step.variables()[2].id(), "number");
+    assert_eq!(step.variables()[2].name(), "Number");
+    assert_eq!(step.variables()[2].description(), "A number field.");
+    assert_eq!(step.variables()[2].category(), &PipelineStepVariableCategory::Number);
+    assert_eq!(step.variables()[2].required(), &None);
+    assert_eq!(step.variables()[2].value(), &Some("123".to_string()));
+    assert_eq!(step.variables()[3].id(), "option");
+    assert_eq!(step.variables()[3].name(), "Option");
+    assert_eq!(step.variables()[3].description(), "An option dropdown.");
+    if let PipelineStepVariableCategory::Option(options) = step.variables()[3].category() {
+        assert_eq!(options.len(), 2);
+        assert_eq!(options[0].name(), "Option 1");
+        assert_eq!(options[0].value(), "option1");
+        assert_eq!(options[1].name(), "Option 2");
+        assert_eq!(options[1].value(), "option2");
+    } else {
+        panic!("Not an option variable!");
+    }
+    assert_eq!(step.variables()[3].required(), &None);
+    assert_eq!(step.variables()[3].value(), &None);
+    assert_eq!(step.variables()[4].id(), "string");
+    assert_eq!(step.variables()[4].name(), "String");
+    assert_eq!(step.variables()[4].description(), "A string text field.");
+    assert_eq!(step.variables()[4].category(), &PipelineStepVariableCategory::String);
+    assert_eq!(step.variables()[4].required(), &None);
+    assert_eq!(step.variables()[4].value(), &Some("abc".to_string()));
+}
+
+#[actix_web::test]
+async fn test_get_experiment_pipeline_run_none() {
+    // Use a reference to the context, so the context is not dropped early
+    // and messes up test context folder deletion.
+    let mut db_context = TestContext::new();
+    db_context.set_pipeline_folder(format!("{}/pipelines", TEST_RESOURCES_PATH));
+    let mut connection = db_context.get_connection();
+    let app = test::init_service(create_test_app(&db_context)).await;
+    let id = 42;
+    let pipeline_id = "testing_pipeline";
+    let new_experiment_record = Experiment {
+        id,
+        experiment_name: "Dummy record".to_string(),
+        comment: Some("A comment".to_string()),
+        mail: Some("a.b@c.de".to_string()),
+        pipeline_id: None,
+        creation_time: chrono::Utc::now().naive_local(),
+    };
+    diesel::insert_into(crate::schema::experiment::table)
+        .values(&new_experiment_record)
+        .execute(&mut connection)
+        .unwrap();
+    let new_variable_records = vec![
+        NewPipelineStepVariable::new(id, pipeline_id, "fastqc", "number", Some("123".to_string())),
+        NewPipelineStepVariable::new(id, pipeline_id, "fastqc", "string", Some("abc".to_string())),
+    ];
+    diesel::insert_into(crate::schema::pipeline_step_variable::table)
+        .values(&new_variable_records)
+        .execute(&mut connection)
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/experiments/{}/run", id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let fetched_data: Option<ExperimentPipelineBlueprint> = test::read_body_json(resp).await;
+    assert!(fetched_data.is_none());
 }
 
 #[actix_web::test]
@@ -1239,9 +1413,11 @@ async fn test_post_execute_experiment() {
         .values(&required_step_variable)
         .execute(&mut connection)
         .unwrap();
-    assert!(ExperimentExecution::get_by_experiment(experiment_id, &mut connection)
-        .unwrap()
-        .is_empty());
+    assert!(
+        ExperimentExecution::get_by_experiment(experiment_id, &mut connection)
+            .unwrap()
+            .is_empty()
+    );
     let req = test::TestRequest::post()
         .uri(&format!("/api/experiments/{}", experiment_id))
         .to_request();

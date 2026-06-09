@@ -7,7 +7,7 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, QueryDsl, Queryable,
     RunQueryDsl, SqliteConnection,
 };
-use getset::Getters;
+use getset::{Getters, Setters};
 
 #[derive(Identifiable, Queryable, Insertable, PartialEq, Debug)]
 #[diesel(table_name = experiment_execution)]
@@ -28,8 +28,6 @@ const EXECUTION_STATUS_FAILED: &str = "Failed";
 const EXECUTION_STATUS_FINISHED: &str = "Finished";
 const EXECUTION_STATUS_RUNNING: &str = "Running";
 const EXECUTION_STATUS_WAITING: &str = "Waiting";
-// const EXECUTION_STATI_NOT_FINISHED: [ExecutionStatus; 2] =
-//     [ExecutionStatus::Running, ExecutionStatus::Waiting];
 const EXECUTION_STATI_NOT_FINISHED: [&str; 2] =
     [EXECUTION_STATUS_RUNNING, EXECUTION_STATUS_WAITING];
 
@@ -144,6 +142,27 @@ impl ExperimentExecution {
     ) -> Result<Vec<ExperimentExecution>, diesel::result::Error> {
         crate::schema::experiment_execution::table
             .filter(crate::schema::experiment_execution::experiment_id.eq(experiment_id))
+            .load::<ExperimentExecution>(connection)
+    }
+
+    /// Returns all entities that belong to the specified experiment and pipeline.
+    ///
+    /// # Parameters
+    ///
+    /// * `experiemnt_id` - the ID of the experiment
+    /// * `pipeline_id` - the ID of the pipeline
+    /// * `connection` - the database connection
+    pub fn get_by_experiment_and_pipeline<T: Into<String>>(
+        experiment_id: i32,
+        pipeline_id: T,
+        connection: &mut SqliteConnection,
+    ) -> Result<Vec<ExperimentExecution>, diesel::result::Error> {
+        crate::schema::experiment_execution::table
+            .filter(
+                crate::schema::experiment_execution::experiment_id
+                    .eq(experiment_id)
+                    .and(crate::schema::experiment_execution::pipeline_id.eq(pipeline_id.into())),
+            )
             .load::<ExperimentExecution>(connection)
     }
 
@@ -266,7 +285,7 @@ impl ExperimentExecution {
     }
 }
 
-#[derive(Insertable, PartialEq, Debug, Getters)]
+#[derive(Insertable, PartialEq, Debug, Getters, Setters)]
 #[diesel(table_name = experiment_execution)]
 /// A new experiment execution database record.
 pub struct NewExperimentExecution {
@@ -278,9 +297,9 @@ pub struct NewExperimentExecution {
     pipeline_step_id: String,
     #[getset(get = "pub")]
     execution_status: String,
-    #[getset(get = "pub")]
+    #[getset(get = "pub", set = "pub")]
     start_time: Option<NaiveDateTime>,
-    #[getset(get = "pub")]
+    #[getset(get = "pub", set = "pub")]
     end_time: Option<NaiveDateTime>,
     #[getset(get = "pub")]
     creation_time: NaiveDateTime,
@@ -402,9 +421,11 @@ mod tests {
             .get_result(&mut connection)
             .unwrap();
         // Dummy record setup.
-        assert!(ExperimentExecution::get_by_experiment(experiment_id_0, &mut connection)
-            .unwrap()
-            .is_empty());
+        assert!(
+            ExperimentExecution::get_by_experiment(experiment_id_0, &mut connection)
+                .unwrap()
+                .is_empty()
+        );
         let number_of_records = 42;
         let new_records_expected: Vec<ExperimentExecution> = (0..number_of_records)
             .map(|id| ExperimentExecution {
@@ -445,6 +466,72 @@ mod tests {
     }
 
     #[test]
+    fn test_get_by_experiment_and_pipeline() {
+        // Use a reference to the context, so the context is not dropped early
+        // and messes up test context folder deletion.
+        let context = TestContext::new();
+        let mut connection = context.get_connection();
+        // Create a dummy experiments.
+        let experiment_0 = NewExperiment::new("0".to_string());
+        let experiment_1 = NewExperiment::new("1".to_string());
+        let experiment_id_0: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_0)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let experiment_id_1: i32 = diesel::insert_into(crate::schema::experiment::table)
+            .values(&experiment_1)
+            .returning(crate::schema::experiment::id)
+            .get_result(&mut connection)
+            .unwrap();
+        let pipeline_id_0 = "testing_pipeline";
+        // Dummy record setup.
+        assert!(
+            ExperimentExecution::get_by_experiment_and_pipeline(experiment_id_0, pipeline_id_0, &mut connection)
+                .unwrap()
+                .is_empty()
+        );
+        let number_of_records = 42;
+        let new_records_expected: Vec<ExperimentExecution> = (0..number_of_records)
+            .map(|id| ExperimentExecution {
+                id,
+                experiment_id: experiment_id_0,
+                pipeline_id: pipeline_id_0.to_string(),
+                pipeline_step_id: id.to_string(),
+                execution_status: ExecutionStatus::Waiting.into(),
+                start_time: None,
+                end_time: None,
+                creation_time: chrono::Utc::now().naive_local(),
+            })
+            .collect();
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_expected)
+            .execute(&mut connection)
+            .unwrap();
+        let new_records_other: Vec<ExperimentExecution> = (0..number_of_records)
+            .map(|id| ExperimentExecution {
+                id: number_of_records + id,
+                experiment_id: experiment_id_1,
+                pipeline_id: id.to_string(),
+                pipeline_step_id: id.to_string(),
+                execution_status: ExecutionStatus::Waiting.into(),
+                start_time: None,
+                end_time: None,
+                creation_time: chrono::Utc::now().naive_local(),
+            })
+            .collect();
+        diesel::insert_into(crate::schema::experiment_execution::table)
+            .values(&new_records_other)
+            .execute(&mut connection)
+            .unwrap();
+        assert_eq!(
+            new_records_expected,
+            ExperimentExecution::get_by_experiment_and_pipeline(experiment_id_0, pipeline_id_0, &mut connection).unwrap()
+        );
+        assert!(ExperimentExecution::get_by_experiment_and_pipeline(experiment_id_1, pipeline_id_0, &mut connection).unwrap().is_empty())
+    }
+
+    #[test]
     fn test_get_all() {
         // Use a reference to the context, so the context is not dropped early
         // and messes up test context folder deletion.
@@ -464,9 +551,11 @@ mod tests {
             .get_result(&mut connection)
             .unwrap();
         // Dummy record setup.
-        assert!(ExperimentExecution::get_all(&mut connection)
-            .unwrap()
-            .is_empty());
+        assert!(
+            ExperimentExecution::get_all(&mut connection)
+                .unwrap()
+                .is_empty()
+        );
         let number_of_records = 42;
         let new_records_expected: Vec<ExperimentExecution> = (0..number_of_records)
             .map(|id| ExperimentExecution {
@@ -511,9 +600,11 @@ mod tests {
             .get_result(&mut connection)
             .unwrap();
         // Dummy record setup.
-        assert!(ExperimentExecution::get_all(&mut connection)
-            .unwrap()
-            .is_empty());
+        assert!(
+            ExperimentExecution::get_all(&mut connection)
+                .unwrap()
+                .is_empty()
+        );
         let number_of_records = 42;
         let new_records_all: Vec<ExperimentExecution> = (0..number_of_records)
             .map(|id| ExperimentExecution {
@@ -564,16 +655,20 @@ mod tests {
             .get_result(&mut connection)
             .unwrap();
         // Dummy record setup.
-        assert!(!ExperimentExecution::has_experiment_execution_entries(
-            experiment_id_0,
-            &mut connection
-        )
-        .unwrap());
-        assert!(!ExperimentExecution::has_experiment_execution_entries(
-            experiment_id_1,
-            &mut connection
-        )
-        .unwrap());
+        assert!(
+            !ExperimentExecution::has_experiment_execution_entries(
+                experiment_id_0,
+                &mut connection
+            )
+            .unwrap()
+        );
+        assert!(
+            !ExperimentExecution::has_experiment_execution_entries(
+                experiment_id_1,
+                &mut connection
+            )
+            .unwrap()
+        );
         let number_of_records = 42;
         let new_records_all: Vec<ExperimentExecution> = (0..number_of_records)
             .map(|id| ExperimentExecution {
@@ -591,16 +686,17 @@ mod tests {
             .values(&new_records_all)
             .execute(&mut connection)
             .unwrap();
-        assert!(ExperimentExecution::has_experiment_execution_entries(
-            experiment_id_0,
-            &mut connection
-        )
-        .unwrap());
-        assert!(!ExperimentExecution::has_experiment_execution_entries(
-            experiment_id_1,
-            &mut connection
-        )
-        .unwrap());
+        assert!(
+            ExperimentExecution::has_experiment_execution_entries(experiment_id_0, &mut connection)
+                .unwrap()
+        );
+        assert!(
+            !ExperimentExecution::has_experiment_execution_entries(
+                experiment_id_1,
+                &mut connection
+            )
+            .unwrap()
+        );
     }
 
     #[test]
@@ -637,9 +733,11 @@ mod tests {
             creation_time: chrono::Utc::now().naive_local(),
         })
         .collect();
-        assert!(ExperimentExecution::get_by_status(ExecutionStatus::Finished, &mut connection)
-            .unwrap()
-            .is_empty());
+        assert!(
+            ExperimentExecution::get_by_status(ExecutionStatus::Finished, &mut connection)
+                .unwrap()
+                .is_empty()
+        );
         diesel::insert_into(crate::schema::experiment_execution::table)
             .values(&new_records_expected)
             .execute(&mut connection)
@@ -899,66 +997,86 @@ mod tests {
             .execute(&mut connection)
             .unwrap();
         // Correct pipeline ID.
-        assert!(ExperimentExecution::is_executed_with_pipeline(
-            experiment_id_all,
-            experiment_id_all.to_string(),
-            &mut connection
-        )
-        .unwrap());
-        assert!(ExperimentExecution::is_executed_with_pipeline(
-            experiment_id_waiting,
-            experiment_id_waiting.to_string(),
-            &mut connection
-        )
-        .unwrap());
-        assert!(ExperimentExecution::is_executed_with_pipeline(
-            experiment_id_running,
-            experiment_id_running.to_string(),
-            &mut connection
-        )
-        .unwrap());
-        assert!(!ExperimentExecution::is_executed_with_pipeline(
-            experiment_id_not_executed,
-            experiment_id_not_executed.to_string(),
-            &mut connection
-        )
-        .unwrap());
-        assert!(!ExperimentExecution::is_executed_with_pipeline(
-            experiment_id_empty,
-            experiment_id_empty.to_string(),
-            &mut connection
-        )
-        .unwrap());
+        assert!(
+            ExperimentExecution::is_executed_with_pipeline(
+                experiment_id_all,
+                experiment_id_all.to_string(),
+                &mut connection
+            )
+            .unwrap()
+        );
+        assert!(
+            ExperimentExecution::is_executed_with_pipeline(
+                experiment_id_waiting,
+                experiment_id_waiting.to_string(),
+                &mut connection
+            )
+            .unwrap()
+        );
+        assert!(
+            ExperimentExecution::is_executed_with_pipeline(
+                experiment_id_running,
+                experiment_id_running.to_string(),
+                &mut connection
+            )
+            .unwrap()
+        );
+        assert!(
+            !ExperimentExecution::is_executed_with_pipeline(
+                experiment_id_not_executed,
+                experiment_id_not_executed.to_string(),
+                &mut connection
+            )
+            .unwrap()
+        );
+        assert!(
+            !ExperimentExecution::is_executed_with_pipeline(
+                experiment_id_empty,
+                experiment_id_empty.to_string(),
+                &mut connection
+            )
+            .unwrap()
+        );
         // Wrong pipeline ID.
-        assert!(!ExperimentExecution::is_executed_with_pipeline(
-            experiment_id_all,
-            (experiment_id_all + 1).to_string(),
-            &mut connection
-        )
-        .unwrap());
-        assert!(!ExperimentExecution::is_executed_with_pipeline(
-            experiment_id_waiting,
-            (experiment_id_waiting + 1).to_string(),
-            &mut connection
-        )
-        .unwrap());
-        assert!(!ExperimentExecution::is_executed_with_pipeline(
-            experiment_id_running,
-            (experiment_id_running + 1).to_string(),
-            &mut connection
-        )
-        .unwrap());
-        assert!(!ExperimentExecution::is_executed_with_pipeline(
-            experiment_id_not_executed,
-            (experiment_id_not_executed + 1).to_string(),
-            &mut connection
-        )
-        .unwrap());
-        assert!(!ExperimentExecution::is_executed_with_pipeline(
-            experiment_id_empty,
-            (experiment_id_empty + 1).to_string(),
-            &mut connection
-        )
-        .unwrap());
+        assert!(
+            !ExperimentExecution::is_executed_with_pipeline(
+                experiment_id_all,
+                (experiment_id_all + 1).to_string(),
+                &mut connection
+            )
+            .unwrap()
+        );
+        assert!(
+            !ExperimentExecution::is_executed_with_pipeline(
+                experiment_id_waiting,
+                (experiment_id_waiting + 1).to_string(),
+                &mut connection
+            )
+            .unwrap()
+        );
+        assert!(
+            !ExperimentExecution::is_executed_with_pipeline(
+                experiment_id_running,
+                (experiment_id_running + 1).to_string(),
+                &mut connection
+            )
+            .unwrap()
+        );
+        assert!(
+            !ExperimentExecution::is_executed_with_pipeline(
+                experiment_id_not_executed,
+                (experiment_id_not_executed + 1).to_string(),
+                &mut connection
+            )
+            .unwrap()
+        );
+        assert!(
+            !ExperimentExecution::is_executed_with_pipeline(
+                experiment_id_empty,
+                (experiment_id_empty + 1).to_string(),
+                &mut connection
+            )
+            .unwrap()
+        );
     }
 }

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     application::{
         config::{Configuration, LogProcessType},
@@ -16,7 +14,10 @@ use crate::{
         },
         exchange::{
             experiment_details::ExperimentDetails,
-            experiment_pipeline::ExperimentPipelineBlueprint,
+            experiment_pipeline::{
+                ExperimentPipelineBlueprint, ExperimentPipelineStepBlueprintMetadata,
+                ExperimentPipelineStepBlueprintTaggedMetadata,
+            },
             pipeline_variable_upload::{PipelineGlobalVariableUpload, PipelineStepVariableUpload},
         },
     },
@@ -30,7 +31,7 @@ use crate::{
         validation_service::{validate_comment, validate_entity_name, validate_mail},
     },
 };
-use actix_web::{web, HttpResponse};
+use actix_web::{HttpResponse, web};
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, QueryDsl};
 use parking_lot::Mutex;
@@ -263,31 +264,42 @@ pub async fn get_experiment_pipelines(
     id: web::Path<i32>,
 ) -> Result<web::Json<Vec<ExperimentPipelineBlueprint>>, SeqError> {
     let experiment_id: i32 = id.into_inner();
-    let mut connection = database_manager.database_connection()?;
+    let mut connection = database_manager.database_connection().map_err(|err| {
+        err.chain(format!(
+            "Loading pipelines for experiment {} failed. Database connection could not be obtained.",
+            experiment_id
+        ))
+    })?;
     Experiment::exists_err(experiment_id, &mut connection).map_err(|err| {
         err.chain(format!(
             "Loading pipelines for experiment {} failed. Experiment does not exist.",
             experiment_id
         ))
     })?;
-    let all_experiment_stati =
-        ExperimentExecution::get_by_experiment(experiment_id, &mut connection)?;
+    let mut all_experiment_metadata: Vec<ExperimentPipelineStepBlueprintTaggedMetadata> =
+        ExperimentExecution::get_by_experiment(experiment_id, &mut connection)
+            .map_err(|err| {
+                SeqError::from(err).chain(format!(
+                    "Loading pipelines for experiment {} failed. The run execution data could not be loaded.",
+                    experiment_id
+                ))
+            })?
+            .into_iter()
+            .map(|execution| execution.into())
+            .collect();
     let mut experiment_pipelines = Vec::new();
     for pipeline in pipelines.pipelines() {
         let values_global = crate::model::db::pipeline_global_variable::PipelineGlobalVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
         let values_step = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
-        let stati: HashMap<String, String> = all_experiment_stati
-            .iter()
-            .filter(|execution| &execution.pipeline_id == pipeline.pipeline().id())
-            .map(|execution| {
-                (execution.pipeline_step_id.clone(), execution.execution_status.clone())
-            })
-            .collect();
+        let metadata = ExperimentPipelineStepBlueprintMetadata::extract_metadata_map(
+            pipeline.pipeline().id(),
+            &mut all_experiment_metadata,
+        );
         experiment_pipelines.push(ExperimentPipelineBlueprint::from_internal(
             pipeline.pipeline(),
             values_global,
             values_step,
-            stati,
+            metadata,
         ));
     }
     Ok(web::Json(experiment_pipelines))
@@ -299,24 +311,53 @@ pub async fn get_experiment_pipeline_run(
     id: web::Path<i32>,
 ) -> Result<web::Json<Option<ExperimentPipelineBlueprint>>, SeqError> {
     let experiment_id: i32 = id.into_inner();
-    let mut connection = database_manager.database_connection()?;
-    Experiment::exists_err(experiment_id, &mut connection)?;
-    let experiment = Experiment::get(experiment_id, &mut connection)?;
+    let mut connection = database_manager.database_connection().map_err(|err| {
+        err.chain(format!(
+            "Loading pipeline for experiment {} failed. Database connection could not be obtained.",
+            experiment_id
+        ))
+    })?;
+    Experiment::exists_err(experiment_id, &mut connection).map_err(|err| {
+        err.chain(format!(
+            "Loading pipeline for experiment {} failed. Experiment does not exist.",
+            experiment_id
+        ))
+    })?;
+    let experiment = Experiment::get(experiment_id, &mut connection).map_err(|err| {
+        SeqError::from(err).chain(format!(
+            "Loading pipelines for experiment {} failed. Experiment data could not be loaded.",
+            experiment_id
+        ))
+    })?;
     let experiment_pipeline = if let Some(pipeline_id) = experiment.pipeline_id {
         if let Some(pipeline) = pipelines.get(&pipeline_id) {
             let values_global = crate::model::db::pipeline_global_variable::PipelineGlobalVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
             let values_step = crate::model::db::pipeline_step_variable::PipelineStepVariable::get_values_by_experiment_and_pipeline(experiment_id, pipeline.pipeline().id(), &mut connection)?;
-            let stati: HashMap<String, String> =
-                ExperimentExecution::get_by_experiment(experiment_id, &mut connection)?
-                    .into_iter()
-                    .filter(|execution| &execution.pipeline_id == &pipeline_id)
-                    .map(|execution| (execution.pipeline_step_id, execution.execution_status))
-                    .collect();
+            let mut experiment_metadata: Vec<ExperimentPipelineStepBlueprintTaggedMetadata> =
+                ExperimentExecution::get_by_experiment_and_pipeline(
+                    experiment_id,
+                    &pipeline_id,
+                    &mut connection,
+                )
+                .map_err(|err| {
+                    SeqError::from(err).chain(format!(
+                        "Loading pipeline {} for experiment {} failed. \
+                        The run execution data could not be loaded.",
+                        pipeline_id, experiment_id
+                    ))
+                })?
+                .into_iter()
+                .map(|execution| execution.into())
+                .collect();
+            let metadata = ExperimentPipelineStepBlueprintMetadata::extract_metadata_map(
+                pipeline.pipeline().id(),
+                &mut experiment_metadata,
+            );
             Some(ExperimentPipelineBlueprint::from_internal(
                 pipeline.pipeline(),
                 values_global,
                 values_step,
-                stati,
+                metadata,
             ))
         } else {
             return Err(SeqError::new(
@@ -669,11 +710,18 @@ pub async fn post_execute_experiment_step(
         .all(|dependency| satisfied_dependencies.contains(&dependency));
     if !are_dependencies_satisfied {
         return Err(SeqError::new(
-                        "Invalid run",
-                        SeqErrorType::BadRequestError,
-                        format!("The experiment {} is missing dependencies for execution of pipeline {} step {}.\nRequired dependencies: {:?}\nSatisfied dependencies: {:?}", experiment_id, pipeline.id(), step.id(), step.dependencies(), satisfied_dependencies),
-                        "The requested run parameters are invalid.",
-                    ));
+            "Invalid run",
+            SeqErrorType::BadRequestError,
+            format!(
+                "The experiment {} is missing dependencies for execution of pipeline {} step {}.\nRequired dependencies: {:?}\nSatisfied dependencies: {:?}",
+                experiment_id,
+                pipeline.id(),
+                step.id(),
+                step.dependencies(),
+                satisfied_dependencies
+            ),
+            "The requested run parameters are invalid.",
+        ));
     }
 
     // Checks if the required variables are set.
@@ -707,11 +755,16 @@ pub async fn post_execute_experiment_step(
         {
             // Error if the step is currently scheduled for execution.
             return Err(SeqError::new(
-                            "Invalid run",
-                            SeqErrorType::BadRequestError,
-                            format!("The experiment {} pipeline {} step {} is already scheduled for execution and can thus not be restarted.", experiment_id, pipeline.id(), step.id()),
-                            "The requested run parameters are invalid.",
-                        ));
+                "Invalid run",
+                SeqErrorType::BadRequestError,
+                format!(
+                    "The experiment {} pipeline {} step {} is already scheduled for execution and can thus not be restarted.",
+                    experiment_id,
+                    pipeline.id(),
+                    step.id()
+                ),
+                "The requested run parameters are invalid.",
+            ));
         }
         // Deletes the output folder and run logs, but keeps the build logs
         // as the build process might be cached / skipped.
