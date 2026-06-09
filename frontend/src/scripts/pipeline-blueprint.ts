@@ -17,6 +17,8 @@ export type PipelineStepBlueprint = {
   dependencies: string[];
   variables: PipelineStepBlueprintVariable[];
   status: PipelineStepStatus | null | undefined;
+  time_start: string | null | undefined;
+  time_end: string | null | undefined;
 };
 
 export type PipelineStepBlueprintVariable = {
