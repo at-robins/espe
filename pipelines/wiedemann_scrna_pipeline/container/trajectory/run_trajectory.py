@@ -69,6 +69,21 @@ def key_cluster_pseudotime(obs_name, pseudotime_key):
     return f"{pseudotime_key}_{cluster_name_to_cluster(obs_name)}"
 
 
+def add_trajectories_to_plot(plot_axis, trajectory_data):
+    """
+    Adds the trajectories to the specified plot / axis.
+    """
+    edges = np.array(trajectory_data.nonzero()).T
+    for edge in edges:
+        sns.lineplot(
+            x=centroids[edge, 0],
+            y=centroids[edge, 1],
+            sort=False,
+            color="black",
+            linewidth=1,
+            ax=plot_axis,
+        )
+
 print("Loading cluster tree data...", flush=True)
 adata = anndata.read_h5ad(os.path.join(INPUT_FOLDER, "cluster_relation.h5ad"))
 print("Calculating diffusion maps...", flush=True)
@@ -129,16 +144,7 @@ for obs_name in adata.obs:
                 return_fig=False,
                 ax=ax_monocole_principal,
             )
-            edges = np.array(mst.nonzero()).T
-            for edge in edges:
-                sns.lineplot(
-                    x=centroids[edge, 0],
-                    y=centroids[edge, 1],
-                    sort=False,
-                    color="black",
-                    linewidth=1,
-                    ax=ax_monocole_principal,
-                )
+            add_trajectories_to_plot(ax_monocole_principal, mst)
             ax_monocole_principal.set_title("Principal graph")
             fig_monocel_principal.savefig(
                 os.path.join(MOUNT_PATHS["output"], f"monocle_principal_{cluster}.svg")
@@ -154,29 +160,24 @@ for obs_name in adata.obs:
                 return_fig=False,
                 ax=ax_monocole_cellstate,
             )
-            edges = np.array(mst.nonzero()).T
-            for edge in edges:
-                sns.lineplot(
-                    x=centroids[edge, 0],
-                    y=centroids[edge, 1],
-                    sort=False,
-                    color="black",
-                    linewidth=1,
-                    ax=ax_monocole_cellstate,
-                )
-            ax_monocole_cellstate.set_title("Principal graph with ceLtb4r1ll states")
+            add_trajectories_to_plot(ax_monocole_cellstate, mst)
+            ax_monocole_cellstate.set_title("Principal graph with cell states")
             fig_monocel_cellstate.savefig(
                 os.path.join(MOUNT_PATHS["output"], f"monocle_cellstate_{cluster}.svg")
             )
             plt.close(fig_monocel_cellstate)
 
-            fig_monocel_pseudotime = sc.pl.umap(
+            fig_monocel_pseudotime, ax_monocel_pseudotime = plt.subplots(figsize=(8, 6))
+            sc.pl.umap(
                 adata,
                 color=key_monocle_pseudotime,
                 legend_loc="on data",
                 show=False,
-                return_fig=True,
+                return_fig=False,
+                ax=ax_monocel_pseudotime
             )
+            add_trajectories_to_plot(ax_monocel_pseudotime, mst)
+            ax_monocel_pseudotime.set_title("Principal graph with pseudotime")
             fig_monocel_pseudotime.savefig(
                 os.path.join(MOUNT_PATHS["output"], f"monocle_pseudotime_{cluster}.svg")
             )

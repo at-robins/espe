@@ -9,6 +9,7 @@ RUN yes | pip install seaborn==0.13.2 --exists-action i
 RUN yes | pip install pathvalidate==3.3.1 --exists-action i
 RUN yes | pip install squidpy==1.6.6 --exists-action i
 RUN yes | pip install git+https://github.com/bioturing-org/py-monocle.git@a0d77b63309af6939cb0a8799471e543fa328ac8
+RUN yes | pip install setuptools==81.0.0 --exists-action i --force-reinstall
 
 COPY run_trajectory.py /run.py
 ENTRYPOINT ["python", "run.py"]

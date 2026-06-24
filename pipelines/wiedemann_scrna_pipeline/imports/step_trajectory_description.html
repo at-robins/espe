@@ -7,15 +7,34 @@
     border-radius: .2rem;
   }
 </style>
-<p>Merges all samples and labels them with according sample information.</p>
+<p>Computes pseudotime and inferres trajectories as well as PAGA.</p>
 <p>
   <b>Output</b><br />
-  A single <code>merged.h5ad</code> file is generated containing all relevant sample information.
+  A single <code>diffusion_pseudotime_umap.svg</code> plot visualising the diffusion pseudotime is generated.
+  Per clustering the following files are generated:
 </p>
+<ul>
+  <li><code>monocle_cellstate_{number of clusters}.svg</code>: UMAP visualising inferred cell states.</li>
+  <li><code>monocle_dge_{number of clusters}.svg</code>: UMAPs of Monocle3 inferred differentially expressed genes.</li>
+  <li><code>monocle_differential_gene_expression_{number of clusters}.csv</code>: Tabular representation Monocle3
+    inferred differentially expressed genes.</li>
+
+  <li><code>monocle_principal_{number of clusters}.svg</code>: Principle plot ontop the UMAP showing clusters.</li>
+  <li><code>monocle_pseudotime_{number of clusters}.svg</code>: Principle plot ontop the UMAP showing pseudotime.</li>
+  <li><code>paga_compare_{number of clusters}.svg</code>: UMAP showing clusters next to the respective PAGA
+    representation.</li>
+  <li><code>paga_graph_{number of clusters}.svg</code>: Raw PAGA representation of the clustering.</li>
+</ul>
 <p>
   <b>References</b>
 </p>
 <ol>
+  <li>
+    BioTuring. (2025). py-monocle (Version a0d77b6) [Computer software].
+    <a href="https://github.com/bioturing-org/py-monocle">
+      https://github.com/bioturing-org/py-monocle
+    </a>
+  </li>
   <li>Heumos, L., Schaar, A.C., Lance, C. et al. Best practices for single-cell analysis across modalities. Nat Rev
     Genet (2023). <a href="https://doi.org/10.1038/s41576-023-00586-w">https://doi.org/10.1038/s41576-023-00586-w</a>
   </li>
