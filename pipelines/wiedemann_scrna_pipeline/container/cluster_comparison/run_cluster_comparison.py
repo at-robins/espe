@@ -156,7 +156,19 @@ def cluster_statistics(adata, cluster_key, output_folder_path):
 
     stat_data_frame["norm"] = stat_data_frame.apply(normalise_values, axis=1)
 
-    print("\tPlotting data...")
+    print("\tSaving data...", flush=True)
+    stat_data_frame.to_csv(
+        path_or_buf=os.path.join(
+            output_folder_path,
+            pathvalidate.sanitize_filename("relative_cluster_frequency.csv"),
+        ),
+        sep=",",
+        encoding="utf-8",
+        header=True,
+        index=False,
+    )
+
+    print("\tPlotting data...", flush=True)
     ordering = adata.obs[SAMPLE_TYPE_KEY].cat.categories.to_numpy()
     sorted(ordering, key=str.casefold)
 
@@ -164,7 +176,9 @@ def cluster_statistics(adata, cluster_key, output_folder_path):
     for chunk_index in range(0, len(clusters), chunk_size):
         barplot_name = f"relative_cluster_frequency_{chunk_index}.svg"
         cluster_chunk = clusters[chunk_index : chunk_index + chunk_size]
-        sub_stat_data_frame = stat_data_frame[stat_data_frame["cluster"].isin(cluster_chunk)]
+        sub_stat_data_frame = stat_data_frame[
+            stat_data_frame["cluster"].isin(cluster_chunk)
+        ]
         fig, ax = plt.subplots(figsize=(sub_stat_data_frame.shape[0] / 4, 8))
         sns.barplot(
             sub_stat_data_frame,
@@ -192,7 +206,9 @@ def cluster_statistics(adata, cluster_key, output_folder_path):
 
         fig.tight_layout()
         fig.savefig(
-            os.path.join(output_folder_path, pathvalidate.sanitize_filename(barplot_name))
+            os.path.join(
+                output_folder_path, pathvalidate.sanitize_filename(barplot_name)
+            )
         )
         plt.close(fig)
 
